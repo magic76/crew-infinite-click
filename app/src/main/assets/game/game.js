@@ -54,6 +54,18 @@
     state.world.addChild(c);state.target=c;state.targetCore=core;state.targetLabel=label;
   }
 
+  function renderTargetPalette(plan){
+    if(!state.targetCore)return;
+    const world=plan&&GameWorldCatalog.WORLDS[plan.world];
+    const accent=world&&world.accent!=null?world.accent:0xff416c;
+    const secondary=world&&world.secondary!=null?world.secondary:0xffffff;
+    state.targetCore.clear();
+    state.targetCore.circle(0,0,31).fill({color:accent,alpha:.96});
+    state.targetCore.circle(-8,-9,7).fill({color:secondary,alpha:.22});
+    state.targetCore.circle(0,0,42).stroke({color:secondary,width:2,alpha:.34});
+    if(state.targetLabel&&world&&world.accent!=null)state.targetLabel.style.fill=0xffffff;
+  }
+
   function wireRuntime(){
     state.audio=new AudioMoodPlayer();
     state.primitiveHost=new PrimitiveHostRuntime({
@@ -76,7 +88,7 @@
       onInteractionDirective:(directive,context)=>routeDirective(directive,context)
     });
     state.aggregator=new GeminiEventAggregator({windowMs:500,onFlush:sendDirectiveToNative});
-    state.runtime.startSession("NEON_RIFT");
+    state.runtime.startSession();
     state.runtime.fallback({type:"SESSION_START"});
     renderBackground();
     const event={type:"SESSION_START",special:true};
@@ -187,7 +199,7 @@
 
   function applyValidatedPlanToTarget(plan,rule){
     if(!plan||state.signatureMoments.isActive())return;
-    clearDecoys();
+    clearDecoys();renderTargetPalette(plan);
     const behavior=String(plan.targetBehavior||"STILL").toUpperCase(),s=screen(),safe=safeBounds();
     state.target.visible=true;state.target.alpha=behavior==="HIDE"?.18:1;
     state.targetLabel.text=behavior==="HIDE"?"?":"TOUCH";
@@ -222,8 +234,28 @@
   }
 
   function renderBackground(){
-    if(!state.bg)return;const s=screen(),world=state.runtime&&state.runtime.currentPlan&&GameWorldCatalog.WORLDS[state.runtime.currentPlan.world];
-    const color=world&&world.bg!=null?world.bg:0x05070d;state.bg.clear().rect(0,0,s.width,s.height).fill({color,alpha:1});
+    if(!state.bg)return;
+    const s=screen(),plan=state.runtime&&state.runtime.currentPlan,world=plan&&GameWorldCatalog.WORLDS[plan.world];
+    const color=world&&world.bg!=null?world.bg:0x05070d,g=state.bg;g.clear().rect(0,0,s.width,s.height).fill({color,alpha:1});
+    if(!world)return;
+    // Static, zero-allocation world identity. These shapes are redrawn only on resize/plan change.
+    const a=world.accent,secondary=world.secondary,id=world.id;
+    if(id==="SPRING_BLOOM"){
+      g.circle(s.width*.18,s.height*.22,Math.max(s.width,s.height)*.24).fill({color:a,alpha:.035});
+      g.circle(s.width*.78,s.height*.72,Math.max(s.width,s.height)*.2).fill({color:secondary,alpha:.035});
+    }else if(id==="SUMMER_STORM"){
+      for(let i=0;i<4;i++)g.rect(-s.width*.1,s.height*(.12+i*.23),s.width*1.2,24+i*8).fill({color:i%2?a:secondary,alpha:.025+i*.008});
+    }else if(id==="AUTUMN_DECAY"){
+      g.circle(s.width*.15,s.height*.78,s.width*.34).fill({color:a,alpha:.04});
+      g.circle(s.width*.9,s.height*.18,s.width*.28).fill({color:secondary,alpha:.028});
+    }else if(id==="WINTER_FROST"){
+      for(let i=0;i<5;i++)g.circle(s.width*(.14+i*.2),s.height*(.18+(i%2)*.5),26+i*8).stroke({color:i%2?a:secondary,width:1,alpha:.08});
+    }else if(id==="VOID_CHAMBER"){
+      g.circle(s.width*.5,s.height*.5,Math.min(s.width,s.height)*.34).stroke({color:a,width:2,alpha:.05});
+      g.circle(s.width*.5,s.height*.5,Math.min(s.width,s.height)*.18).fill({color:secondary,alpha:.025});
+    }else{
+      for(let i=0;i<5;i++)g.rect(s.width*(.08+i*.19),0,1+(i%2),s.height).fill({color:i%2?a:secondary,alpha:.025});
+    }
   }
 
   function resizeScene(){

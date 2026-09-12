@@ -72,9 +72,13 @@
         const mood=this.currentPlan?this.currentPlan.audioMood:"GLITCH";
         this.audio.play(mood,"click",.12+feedback.intensity*.28);
       }
-      if(this.fx&&feedback.burstScale>0&&Number.isFinite(e.x)&&Number.isFinite(e.y)){
-        const count=Math.max(0,Math.round(6*feedback.burstScale));
-        if(count>0)this.fx.burst(e.x,e.y,count,.38+feedback.burstScale*.38);
+      if(this.fx){
+        if(typeof this.fx.reactToPlayerEvent==="function"){
+          this.fx.reactToPlayerEvent(e,this.getPrimaryTarget(),this.currentPlan,this.currentSensoryState);
+        }else if(feedback.burstScale>0&&Number.isFinite(e.x)&&Number.isFinite(e.y)){
+          const count=Math.max(0,Math.round(6*feedback.burstScale));
+          if(count>0)this.fx.burst(e.x,e.y,count,.38+feedback.burstScale*.38);
+        }
       }
 
       const shouldNew=this.shouldRequestNewSituation();

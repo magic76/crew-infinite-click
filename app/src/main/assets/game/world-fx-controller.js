@@ -12,7 +12,7 @@
   class WorldFxController {
     constructor(app,options){
       const o=options||{};
-      this.app=app;this.world=null;this.worldDef=null;
+      this.app=app;this.world=null;this.worldDef=null;this.lastReactionAt=0;
       this.pool=o.particlePool||new global.ParticlePool(120);
       this.particles=[];
       this.sensory={density:0,densityName:"QUIET",ambientTarget:0,burstMultiplier:0,motion:.4,visualEffect:"NONE"};
@@ -36,7 +36,9 @@
       const next=catalog.WORLDS[worldId]||catalog.WORLDS.NEON_RIFT;
       const changed=!this.worldDef||this.worldDef.id!==next.id;
       this.world=next.id;this.worldDef=next;setBackground(this.app,next.bg);
-      if(changed)this._reconcileAmbient(Number(this.sensory.ambientTarget)||0);
+      // World identity must not inherit ambient particles from the previous world.
+      // Recycle them, then redraw the same pooled objects using the new world's palette/shape/motion.
+      if(changed){this._clearAmbient();this._reconcileAmbient(Number(this.sensory.ambientTarget)||0);}
       return changed;
     }
 
@@ -45,7 +47,7 @@
       const changed=this.setWorld(plan.world,plan.intensity);
       const x=target&&Number.isFinite(target.x)?target.x:this._size().width/2;
       const y=target&&Number.isFinite(target.y)?target.y:this._size().height/2;
-      if(changed&&this.sensory.density>=2)this.echoRings(x,y,.9);
+      if(changed)this._worldTransition(x,y,plan.intensity);
       if(this.sensory.density>0)this.playEffect(this.sensory.visualEffect,x,y,plan.intensity,this.sensory);
       if(this.sensory.density===3)this.crowdBurst(x,y,plan.intensity);
     }
@@ -63,6 +65,62 @@
         ECHO_RINGS:()=>this.echoRings(x,y,k),SPOTLIGHT:()=>this.spotlight(x,y,k),SOFT_FADE:()=>this.softFade(k)
       };
       (map[e]||map.SOFT_FADE)();
+    }
+
+    /**
+     * Cheap local world feedback. This replaces the old generic tap burst so each world
+     * keeps a recognizable feel without bringing back a tap-count phase loop.
+     */
+    reactToPlayerEvent(event,target,plan,sensoryState){
+      if(plan&&plan.world&&(!this.worldDef||this.worldDef.id!==plan.world))this.setWorld(plan.world,plan.intensity);
+      if(sensoryState)this.sensory=Object.assign({},this.sensory,sensoryState);
+      const density=clamp(Number(this.sensory.density)||0,0,3);
+      if(density===0||!this.worldDef)return 0;
+      const type=String(event&&event.type||"").toUpperCase();
+      if(type==="HOLD_PROGRESS"||type==="DRAG_MOVE"||type==="RELEASE")return 0;
+      const now=(global.performance&&global.performance.now)?global.performance.now():Date.now();
+      const gap=density===1?115:(density===2?85:60);
+      if(now-this.lastReactionAt<gap)return 0;
+      this.lastReactionAt=now;
+
+      const size=this._size();
+      let x=target&&Number.isFinite(target.x)?target.x:size.width/2;
+      let y=target&&Number.isFinite(target.y)?target.y:size.height/2;
+      if(event&&Number.isFinite(event.x))x=Math.abs(event.x)<=1?event.x*size.width:event.x;
+      if(event&&Number.isFinite(event.y))y=Math.abs(event.y)<=1?event.y*size.height:event.y;
+      const strength=density===1?.42:(density===2?.68:.92);
+      const special=["HOLD_COMPLETE","WAIT_SUCCESS","WAIT_BROKEN","RELEASE_EARLY","SLICE"].includes(type);
+
+      switch(this.worldDef.id){
+        case "SPRING_BLOOM":
+          this.petalBloom(x,y,special?strength*1.25:strength); if(special)this.ring(x,y,.45); break;
+        case "SUMMER_STORM":
+          this.rainBurst(x,y,strength); if(special)this.shockwave(x,y,.5+strength*.35); break;
+        case "AUTUMN_DECAY":
+          this.leafFall(x,y,strength); if(special)this.dustDissolve(x,y,.5+strength*.3); break;
+        case "WINTER_FROST":
+          this.frostPulse(x,y,strength); if(special)this.freezeCrack(x,y,.45+strength*.4); break;
+        case "VOID_CHAMBER":
+          this.voidSuction(x,y,strength); if(special&&density>=2)this.blackoutReveal(x,y,.22); break;
+        case "NEON_RIFT":
+        default:
+          this.pixelScatter(x,y,strength); if(special||density>=2)this.glitchBars(.35+strength*.35); break;
+      }
+      return 1;
+    }
+
+    _worldTransition(x,y,strength){
+      if(!this.worldDef)return;
+      const k=clamp(Number(strength)||.5,.25,1);
+      // World changes are meaningful beats, so even a QUIET world gets one cheap identity cue.
+      switch(this.worldDef.id){
+        case "SPRING_BLOOM": this.ring(x,y,.65); if(this.sensory.density>0)this.petalBloom(x,y,.55); break;
+        case "SUMMER_STORM": this.stormFlash(.45+k*.25); break;
+        case "AUTUMN_DECAY": this.ring(x,y,.5); if(this.sensory.density>0)this.leafFall(x,y,.5); break;
+        case "WINTER_FROST": this.frostPulse(x,y,.65); break;
+        case "VOID_CHAMBER": this.blackoutReveal(x,y,.18+k*.12); break;
+        case "NEON_RIFT": default: this.neonSlice(.45+k*.2); break;
+      }
     }
 
     // Retained legacy effect vocabulary as a pooled effect library. These are no longer
@@ -137,9 +195,42 @@
       if(!this.worldDef||amb.length>=target)return;
       const s=this._size();
       for(let i=amb.length;i<target;i++){
-        this._spawn(g=>circle(g,1.2+Math.random()*2.4,Math.random()<.7?this.worldDef.accent:this.worldDef.secondary,.12+Math.random()*.2),
-          {x:Math.random()*s.width,y:Math.random()*s.height,vx:(Math.random()-.5)*8,vy:4+Math.random()*10,life:1,decay:0},true);
+        const state=this._ambientState(s);
+        this._spawn(g=>this._drawAmbient(g),state,true);
       }
+    }
+
+    _drawAmbient(g){
+      const d=this.worldDef||catalog.WORLDS.NEON_RIFT,c=Math.random()<.68?d.accent:d.secondary,a=.13+Math.random()*.19;
+      switch(d.particle){
+        case "petal":
+          circle(g,2.6+Math.random()*1.8,c,a); circle(g,2+Math.random()*1.4,c,a*.7); g.scale.x=.65; g.scale.y=1.25; break;
+        case "spark":
+          rect(g,-1,-5,2,10+Math.random()*8,c,a+.08); break;
+        case "leaf":
+          rect(g,-3,-1.5,6+Math.random()*3,3,c,a+.04); g.rotation=(Math.random()-.5)*.8; break;
+        case "snow":
+          ring(g,2+Math.random()*2,c,1,a+.08); break;
+        case "dust":
+          circle(g,1+Math.random()*2,c,a); break;
+        case "pixel":
+        default:
+          rect(g,-2,-2,3+Math.random()*3,3+Math.random()*3,c,a+.04); break;
+      }
+    }
+
+    _ambientState(s){
+      const motion=(this.worldDef&&this.worldDef.motion)||"float";
+      const x=Math.random()*s.width,y=Math.random()*s.height,state={x,y,baseX:x,baseY:y,vx:0,vy:0,life:1,decay:0,motion,phase:Math.random()*Math.PI*2};
+      if(motion==="fall"){state.vx=(Math.random()-.5)*8;state.vy=11+Math.random()*14;}
+      else if(motion==="drift"){state.vx=(Math.random()-.5)*6;state.vy=3+Math.random()*7;}
+      else if(motion==="burst"){state.vx=(Math.random()-.5)*10;state.vy=8+Math.random()*16;}
+      else if(motion==="float"){state.vx=(Math.random()-.5)*7;state.vy=(Math.random()-.5)*5;}
+      return state;
+    }
+
+    _clearAmbient(){
+      for(let i=this.particles.length-1;i>=0;i--)if(this.particles[i].ambient){this.pool.release(this.particles[i].view);this.particles.splice(i,1);}
     }
 
     _tick(delta){
@@ -149,7 +240,13 @@
         g.x+=p.vx*dt;g.y+=p.vy*dt;p.vy+=p.gravity*dt;
         if(p.rotationSpeed)g.rotation+=p.rotationSpeed*dt;
         if(p.ambient){
-          if(g.x<0)g.x=s.width;if(g.x>s.width)g.x=0;if(g.y<0)g.y=s.height;if(g.y>s.height)g.y=0;
+          if(p.motion==="orbit"){
+            p.phase=(p.phase||0)+dt*.35;g.x=p.baseX+Math.cos(p.phase)*8;g.y=p.baseY+Math.sin(p.phase)*8;
+          }else if(p.motion==="jitter"){
+            p.phase=(p.phase||0)+dt*5;g.x=p.baseX+Math.sin(p.phase*1.7)*2.2;g.y=p.baseY+Math.cos(p.phase*2.1)*1.6;
+          }else{
+            if(g.x<0)g.x=s.width;if(g.x>s.width)g.x=0;if(g.y<0)g.y=s.height;if(g.y>s.height)g.y=0;
+          }
           continue;
         }
         p.life-=dt*p.decay;g.alpha=clamp(p.life,0,1);
