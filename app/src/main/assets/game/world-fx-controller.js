@@ -68,6 +68,42 @@
     }
 
     /**
+     * Density-independent micro feedback for a physical tap.
+     * QUIET may suppress ambience, but it must never suppress click feel.
+     * Uses only the preallocated particle pool and caps itself at 2..6 particles.
+     */
+    tapAccent(x,y,streak){
+      if(!this.worldDef)this.setWorld("NEON_RIFT",.35);
+      if(!this.worldDef)return 0;
+      const size=this._size();
+      const px=Math.abs(Number(x))<=1?Number(x)*size.width:Number(x);
+      const py=Math.abs(Number(y))<=1?Number(y)*size.height:Number(y);
+      const combo=clamp(Math.max(1,Number(streak)||1),1,8);
+      const n=Math.min(6,2+Math.floor((combo-1)/2));
+      let made=0;
+      for(let i=0;i<n;i++){
+        const a=(Math.PI*2*i/n)+(Math.random()-.5)*.55;
+        const spd=(52+Math.random()*72)*(1+combo*.035);
+        const color=i%3===0?this.worldDef.secondary:this.worldDef.accent;
+        const world=this.worldDef.id;
+        const p=this._spawn(g=>{
+          if(world==="SUMMER_STORM") rect(g,-1,-5,2,10+Math.random()*7,color,.72);
+          else if(world==="AUTUMN_DECAY") { rect(g,-3,-2,6+Math.random()*3,4,color,.68); g.rotation=(Math.random()-.5)*.8; }
+          else if(world==="WINTER_FROST") ring(g,2+Math.random()*2,color,1.2,.78);
+          else if(world==="NEON_RIFT") rect(g,-2,-2,4+Math.random()*2,4+Math.random()*2,color,.78);
+          else circle(g,1.8+Math.random()*2.4,color,.72);
+        },{
+          x:px,y:py,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd-(world==="SUMMER_STORM"?18:0),
+          gravity:world==="SPRING_BLOOM"||world==="AUTUMN_DECAY"?34:10,
+          life:.24+Math.random()*.18,decay:1,rotationSpeed:(Math.random()-.5)*2.4,
+          scaleDecay:world==="VOID_CHAMBER"?.9:0
+        });
+        if(p)made++;
+      }
+      return made;
+    }
+
+    /**
      * Cheap local world feedback. This replaces the old generic tap burst so each world
      * keeps a recognizable feel without bringing back a tap-count phase loop.
      */

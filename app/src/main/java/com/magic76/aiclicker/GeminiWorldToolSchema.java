@@ -20,7 +20,7 @@ public final class GeminiWorldToolSchema {
             p.put("targetBehavior",enumString("Primary target behavior.","STILL","ESCAPE","SPLIT","PULSE","HIDE"));
             p.put("ruleTwist",enumString("Optional temporary rule.","NONE","WAIT_TO_WIN","TAP_THE_SHADOW","FOLLOW_THE_SOUND","DONT_TOUCH_CENTER","LEFT_RIGHT_REVERSED"));
             p.put("experienceIntent",enumString("High-level intent.","TEASE","TEST_PATIENCE","MISDIRECT","CHASE","SEARCH","TRUST_TEST","PREDICT","SURPRISE","RECOVER"));
-            p.put("signatureMoment",enumString("Rare exclusive micro-game. Usually NONE.","NONE","FLASHLIGHT_HUNT","SCREEN_SHATTER"));
+            p.put("signatureMoment",enumString("Rare exclusive micro-game. Usually NONE.","NONE","FLASHLIGHT_HUNT"));
 
             JSONObject cp=new JSONObject()
                     .put("interaction",enumString("Primary input.","TAP","HOLD","DRAG","SLICE","WAIT"))

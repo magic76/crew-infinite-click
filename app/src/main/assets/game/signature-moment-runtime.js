@@ -238,8 +238,9 @@
         onGameEvent:(event)=>{this.onGameEvent(event);if(event&&event.type==="SIGNATURE_COMPLETE")this._finishCompleted();}
       });
       let moment=null;
-      if(key==="SCREEN_SHATTER")moment=new ScreenShatterMoment(base);
-      else if(key==="FLASHLIGHT_HUNT")moment=new FlashlightHuntMoment(base);
+      // SCREEN_SHATTER is deliberately disabled. No runtime path may activate it.
+      if(key==="SCREEN_SHATTER")return false;
+      if(key==="FLASHLIGHT_HUNT")moment=new FlashlightHuntMoment(base);
       else return false;
       this.current=moment;this.currentId=key;
       if(!moment.start()){this.current=null;this.currentId="NONE";return false;}

@@ -10,8 +10,8 @@ android {
         applicationId 'com.magic76.aiclicker'
         minSdk 26
         targetSdk 35
-        versionCode 374
-        versionName '0.37.4-runtime-cleanup'
+        versionCode 376
+        versionName '0.37.6-no-shatter-click-juice-v3'
     }
 
     buildTypes {

@@ -68,11 +68,13 @@
       const feedback=this.sensory.feedbackForPlayerEvent(e,this.currentPlan);
       // Pointer-down already gives the immediate tactile tap. Avoid a second haptic on TAP/RELEASE.
       if(this.haptics&&feedback.hapticCue!=="NONE"&&type!=="TAP"&&type!=="RELEASE")this.haptics.perform(feedback.hapticCue,feedback.intensity);
-      if(this.audio){
+      // Pointer-down owns TAP juice so sensory density can never make tapping feel dead.
+      // Semantic events still get audio/fx here, but TAP/RELEASE do not double-fire.
+      if(this.audio&&type!=="TAP"&&type!=="RELEASE"){
         const mood=this.currentPlan?this.currentPlan.audioMood:"GLITCH";
         this.audio.play(mood,"click",.12+feedback.intensity*.28);
       }
-      if(this.fx){
+      if(this.fx&&type!=="TAP"&&type!=="RELEASE"){
         if(typeof this.fx.reactToPlayerEvent==="function"){
           this.fx.reactToPlayerEvent(e,this.getPrimaryTarget(),this.currentPlan,this.currentSensoryState);
         }else if(feedback.burstScale>0&&Number.isFinite(e.x)&&Number.isFinite(e.y)){
@@ -105,7 +107,9 @@
     applyAiPlan(rawPlan) {
       if(this._signatureActive())return {ok:false,reason:"signature_active",signatureMoment:this.signatureMoments.currentId||"UNKNOWN"};
       const previousWorld=this.currentPlan&&this.currentPlan.world;
-      const plan=this.director.sanitizePlan(rawPlan||{});
+      const safeRaw=Object.assign({},rawPlan||{});
+      if(String(safeRaw.signatureMoment||"").toUpperCase()==="SCREEN_SHATTER")safeRaw.signatureMoment="NONE";
+      const plan=this.director.sanitizePlan(safeRaw);
       const sensoryState=this.sensory.resolve(plan);
       const composition=this.composer.compose(plan.composition||{},{
         world:plan.world,density:sensoryState.density,experienceIntent:plan.experienceIntent

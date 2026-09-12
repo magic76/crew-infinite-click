@@ -8,6 +8,6 @@
   global.runScreenShatterDemo=function(signatureRuntime){
     if(!signatureRuntime&&global.PixiGameDebug&&global.PixiGameDebug.signature)signatureRuntime=global.PixiGameDebug.signature();
     if(!signatureRuntime||typeof signatureRuntime.start!=="function")throw new Error("SignatureMomentRuntime instance required");
-    return signatureRuntime.start("SCREEN_SHATTER",{waitDurationMs:3200});
+    return false; // SCREEN_SHATTER retired: intentionally unavailable even in debug.
   };
 })(window);

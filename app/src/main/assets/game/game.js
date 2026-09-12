@@ -8,7 +8,8 @@
     pools:null,ripples:[],decoys:[],fx:null,audio:null,primitiveHost:null,signatureMoments:null,runtime:null,aggregator:null,
     safe:{left:0,top:0,right:0,bottom:0},language:"zh-TW",lastInputAt:performance.now(),idleStage:0,
     nextTurnId:1,stateVersion:1,pendingGameTurnId:0,pendingGameEvent:null,geminiPending:false,
-    frame:{fps:60,lastMs:performance.now(),accMs:0,frames:0,lastLog:0}
+    frame:{fps:60,lastMs:performance.now(),accMs:0,frames:0,lastLog:0},
+    tapJuice:{lastAt:0,streak:0}
   };
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const hex=v=>typeof v==="number"?v:Number.parseInt(String(v||"#ffffff").replace("#",""),16)||0xffffff;
@@ -106,17 +107,48 @@
       state.primitiveHost.pointerDown(p.x,p.y);
     });
     stage.on("pointermove",e=>{if(!state.signatureMoments.isActive()){const p=e.global;state.primitiveHost.pointerMove(p.x,p.y);}});
-    stage.on("pointerup",e=>{if(!state.signatureMoments.isActive()){const p=e.global;state.primitiveHost.pointerUp(p.x,p.y);}});
-    stage.on("pointerupoutside",e=>{if(!state.signatureMoments.isActive()){const p=e.global;state.primitiveHost.pointerUp(p.x,p.y);}});
+    stage.on("pointerup",e=>{if(!state.signatureMoments.isActive()){const p=e.global;localReleaseFeedback();state.primitiveHost.pointerUp(p.x,p.y);}});
+    stage.on("pointerupoutside",e=>{if(!state.signatureMoments.isActive()){const p=e.global;localReleaseFeedback();state.primitiveHost.pointerUp(p.x,p.y);}});
   }
 
   function localTouchFeedback(x,y){
+    const t=performance.now(),gap=state.tapJuice.lastAt?t-state.tapJuice.lastAt:9999;
+    state.tapJuice.streak=gap<240?Math.min(8,state.tapJuice.streak+1):1;state.tapJuice.lastAt=t;
+    const streak=state.tapJuice.streak,power=clamp((streak-1)/7,0,1);
+    const s=screen(),px=x*s.width,py=y*s.height;
+    const world=state.runtime&&state.runtime.currentPlan&&GameWorldCatalog.WORLDS[state.runtime.currentPlan.world];
+    const accent=world&&world.accent!=null?world.accent:0xffffff;
+    const secondary=world&&world.secondary!=null?world.secondary:0xffffff;
+
+    // Physical click response is an invariant, independent of sensoryDensity.
     const pool=state.pools.ripples,g=pool.acquire(state.gameplay);if(g){
-      const s=screen();g.circle(0,0,11).stroke({color:state.runtime&&state.runtime.currentPlan?hex((GameWorldCatalog.WORLDS[state.runtime.currentPlan.world]||{}).accent):0xffffff,width:2,alpha:.55});
-      g.x=x*s.width;g.y=y*s.height;state.ripples.push({g,life:.34,max:.34});
+      g.circle(0,0,9+power*3).stroke({color:accent,width:2.2+power*.8,alpha:.82});
+      g.x=px;g.y=py;state.ripples.push({g,life:.28,max:.28,growth:2.7+power*.7,alpha:.82});
     }
-    const density=state.runtime&&state.runtime.currentSensoryState?Number(state.runtime.currentSensoryState.density)||0:0;
-    if(density>0&&window.GameHaptics)window.GameHaptics.perform("SOFT_TAP",density===1?.12:.2);
+    if(streak>=4){
+      const g2=pool.acquire(state.gameplay);if(g2){
+        g2.circle(0,0,5).stroke({color:secondary,width:1.4,alpha:.44});
+        g2.x=px;g2.y=py;state.ripples.push({g:g2,life:.22,max:.22,growth:3.5,alpha:.44});
+      }
+    }
+
+    if(state.target){
+      const squash=.88-power*.055;state.target.scale.set(squash);
+      state.target.rotation=(Math.random()-.5)*(.045+power*.055);
+      if(state.targetCore)state.targetCore.alpha=1;
+    }
+    if(window.GameHaptics)window.GameHaptics.perform("SOFT_TAP",.16+power*.14);
+    if(state.audio&&state.runtime&&state.runtime.currentPlan){
+      state.audio.play(state.runtime.currentPlan.audioMood||"GLITCH","click",.20+power*.18);
+    }
+    if(state.fx&&typeof state.fx.tapAccent==="function")state.fx.tapAccent(px,py,streak);
+  }
+
+  function localReleaseFeedback(){
+    if(!state.target)return;
+    const power=clamp((state.tapJuice.streak-1)/7,0,1);
+    const rebound=1.055+power*.035;
+    if(state.target.scale.x<rebound)state.target.scale.set(rebound);
   }
 
   function handleSemanticEvent(raw){
@@ -267,11 +299,13 @@
   function tick(t){
     const dt=Math.min(50,Number(t.deltaMS)||16.67);state.primitiveHost&&state.primitiveHost.tick(dt);
     for(let i=state.ripples.length-1;i>=0;i--){
-      const r=state.ripples[i];r.life-=dt/1000;const p=1-r.life/r.max;r.g.scale.set(1+p*2.4);r.g.alpha=clamp(r.life/r.max,0,1)*.65;
+      const r=state.ripples[i];r.life-=dt/1000;const p=1-r.life/r.max;r.g.scale.set(1+p*(r.growth||2.4));r.g.alpha=clamp(r.life/r.max,0,1)*(r.alpha||.65);
       if(r.life<=0){state.pools.ripples.release(r.g);state.ripples.splice(i,1);}
     }
     if(state.target&&state.primitiveHost&&state.primitiveHost.interaction!=="HOLD"){
-      const desired=1+Math.sin(performance.now()/450)*.025;state.target.scale.x+=(desired-state.target.scale.x)*.08;state.target.scale.y=state.target.scale.x;
+      const desired=1+Math.sin(performance.now()/450)*.025;state.target.scale.x+=(desired-state.target.scale.x)*.16;state.target.scale.y=state.target.scale.x;
+      state.target.rotation+=(0-state.target.rotation)*.18;
+      if(state.targetCore)state.targetCore.alpha+=(.96-state.targetCore.alpha)*.14;
     }
     const idle=performance.now()-state.lastInputAt;
     if(!state.signatureMoments.isActive()){

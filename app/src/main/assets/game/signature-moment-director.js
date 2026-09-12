@@ -24,7 +24,10 @@
       return{id,reason:this.lastSignatureEvent===this.firstEventMin?"first_signature_guarantee":"signature_cadence"};
     }
     recordStarted(id){if(id&&this.history[this.history.length-1]!==id){this.history.push(id);if(this.history.length>4)this.history.shift();}}
-    _pickNext(){const last=this.history[this.history.length-1];if(!last)return"SCREEN_SHATTER";return last==="SCREEN_SHATTER"?"FLASHLIGHT_HUNT":"SCREEN_SHATTER";}
+    _pickNext(){
+      // SCREEN_SHATTER is intentionally retired: it interrupted flow and felt like a stall.
+      return "FLASHLIGHT_HUNT";
+    }
     _counts(e){const t=String(e.type||"").toUpperCase();return["TAP","DRAG_END","RELEASE_EARLY","HOLD_COMPLETE","WAIT_BROKEN","WAIT_SUCCESS","SLICE"].includes(t)||e.special===true;}
   }
   global.SignatureMomentDirector=SignatureMomentDirector;
