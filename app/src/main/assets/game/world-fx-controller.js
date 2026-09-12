@@ -42,7 +42,8 @@
       this.worldDef=null;
       this.particles=[];
       this.maxAmbient=42;
-      this.sensory={density:1,ambientTarget:8,burstMultiplier:0.6,motion:1,brightness:1,visualEffect:"SOFT_FADE"};
+      this.sensory={density:1,ambientTarget:4,burstMultiplier:0.38,motion:1,brightness:1,visualEffect:"SOFT_FADE"};
+      this.previousDensity=1;
       this.ambient=new global.PIXI.Container();
       this.foreground=new global.PIXI.Container();
       // Decorative effects must never steal clicks from gameplay targets.
@@ -59,8 +60,22 @@
     }
 
     setSensoryState(state) {
+      const before=Number(this.sensory&&this.sensory.density)||0;
       this.sensory=Object.assign({},this.sensory,state||{});
-      this._reconcileAmbient(Math.max(0,Math.min(this.maxAmbient,Number(this.sensory.ambientTarget)||0)));
+      const after=Number(this.sensory&&this.sensory.density)||0;
+      const ambientTarget=Number.isFinite(Number(this.sensory.ambientTarget))?Number(this.sensory.ambientTarget):0;
+
+      // The contrast itself is an effect. QUIET must actually become visually empty.
+      if (after===0) {
+        this._clearTransient();
+        this._reconcileAmbient(0);
+      } else {
+        this._reconcileAmbient(Math.max(0,Math.min(this.maxAmbient,ambientTarget)));
+      }
+
+      // Entering CHAOS gets a short unmistakable screen-wide accent.
+      if (after===3 && before<3) this.chaosAccent();
+      this.previousDensity=after;
     }
 
     setWorld(worldId,intensity) {
@@ -84,7 +99,12 @@
       const y=target&&Number.isFinite(target.y)?target.y:this._centerY();
 
       if (changed && this.sensory.density>=2) this.echoRings(this._centerX(),this._centerY(),2);
-      this.playEffect(this.sensory.visualEffect,x,y,plan.intensity,this.sensory);
+      if (this.sensory.density===0) {
+        // Do not decorate QUIET. The empty frame is intentional.
+      } else {
+        this.playEffect(this.sensory.visualEffect,x,y,plan.intensity,this.sensory);
+        if (this.sensory.density===3) this.crowdBurst(x,y,plan.intensity);
+      }
 
       // Situation cue remains small; the sensory effect above is the main visual language.
       if (this.sensory.density<=1) {
@@ -95,6 +115,7 @@
 
     playEffect(effect,x,y,strength,state) {
       const e=effect||"SOFT_FADE";
+      if (e==="NONE") return;
       const s=state||this.sensory;
       const k=Math.max(0.2,Math.min(1.6,(Number(strength)||0.45)*(0.65+(Number(s.burstMultiplier)||0.6))));
       switch (e) {
@@ -123,8 +144,10 @@
       if (!this.worldDef) this.setWorld("NEON_RIFT",0.4);
       const size=this._viewSize();
       const point=global.GameSafeArea?global.GameSafeArea.clampPoint(x,y,size.width,size.height,{padding:24}):{x,y};
-      const multiplier=Number(this.sensory.burstMultiplier)||0.6;
-      const n=Math.min(24,Math.max(2,Math.round((count||7)*multiplier)));
+      const rawMultiplier=Number(this.sensory.burstMultiplier);
+      const multiplier=Number.isFinite(rawMultiplier)?Math.max(0,rawMultiplier):0.6;
+      if (multiplier<=0 || Number(this.sensory.density)===0) return;
+      const n=Math.min(40,Math.max(1,Math.round((count||7)*multiplier)));
       for (let i=0;i<n;i++) {
         const g=new global.PIXI.Graphics();
         fillCircle(g,0,0,2.2+Math.random()*4.2,this.worldDef.accent,0.68);
@@ -296,6 +319,46 @@
       this.foreground.addChild(g); this.particles.push({view:g,vx:0,vy:0,life:1,decay:0.08,ambient:false});
     }
 
+
+    chaosAccent() {
+      if (!this.worldDef) this.setWorld("NEON_RIFT",0.6);
+      const size=this._viewSize();
+      const g=new global.PIXI.Graphics();
+      fillRect(g,0,0,size.width,size.height,this.worldDef.accent,0.12);
+      this.foreground.addChild(g);
+      this.particles.push({view:g,vx:0,vy:0,life:1,decay:0.14,ambient:false});
+      this.echoRings(size.width/2,size.height/2,1.4);
+    }
+
+    crowdBurst(x,y,strength) {
+      if (!this.worldDef) this.setWorld("NEON_RIFT",0.7);
+      const size=this._viewSize();
+      const count=30+Math.floor(Math.random()*12);
+      for (let i=0;i<count;i++) {
+        const g=new global.PIXI.Graphics();
+        const w=10+Math.random()*24, h=6+Math.random()*14;
+        const color=Math.random()<0.5?this.worldDef.accent:this.worldDef.secondary;
+        fillRect(g,-w/2,-h/2,w,h,color,0.18+Math.random()*0.24);
+        g.x=Math.random()*size.width; g.y=Math.random()*size.height;
+        g.rotation=(Math.random()-0.5)*0.5;
+        this.foreground.addChild(g);
+        const dx=(g.x-x), dy=(g.y-y), len=Math.max(1,Math.hypot(dx,dy));
+        const push=(0.25+Math.random()*0.9)*(0.8+(Number(strength)||0.5));
+        this.particles.push({view:g,vx:(dx/len)*push,vy:(dy/len)*push,life:1,decay:0.035+Math.random()*0.025,ambient:false,rotationSpeed:(Math.random()-0.5)*0.05});
+      }
+    }
+
+    _clearTransient() {
+      for (let i=this.particles.length-1;i>=0;i--) {
+        const p=this.particles[i];
+        if (p.ambient) continue;
+        const v=p.view;
+        if (v&&v.parent) v.parent.removeChild(v);
+        if (v&&typeof v.destroy==="function") v.destroy();
+        this.particles.splice(i,1);
+      }
+      this._clearContainer(this.foreground);
+    }
     _reconcileAmbient(target) {
       if (!this.worldDef) return;
       target=Math.round(Math.max(0,Math.min(this.maxAmbient,target)));
@@ -355,7 +418,7 @@
 
     _count(calm,active,impact) {
       const d=Math.max(0,Math.min(3,Number(this.sensory.density)||0));
-      if (d===0) return Math.max(1,Math.round(calm*0.45));
+      if (d===0) return 0;
       if (d===1) return calm;
       if (d===2) return active;
       return impact;

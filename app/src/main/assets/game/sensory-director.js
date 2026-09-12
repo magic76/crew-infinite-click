@@ -1,12 +1,12 @@
 (function (global) {
   "use strict";
 
-  const DENSITY = { CALM:0, LIGHT:1, ACTIVE:2, IMPACT:3 };
-  const DENSITY_NAME = ["CALM","LIGHT","ACTIVE","IMPACT"];
-  const AMBIENT_TARGET = [2,8,18,34];
-  const BURST_MULTIPLIER = [0.22,0.60,1.0,1.55];
-  const CREATION_ACTION_BUDGET = [1,2,5,8];
-  const RECOMMENDED_VISIBLE_INTERACTIVE = [2,6,14,26];
+  const DENSITY = { QUIET:0, NORMAL:1, BUSY:2, CHAOS:3, CALM:0, LIGHT:1, ACTIVE:2, IMPACT:3 };
+  const DENSITY_NAME = ["QUIET","NORMAL","BUSY","CHAOS"];
+  const AMBIENT_TARGET = [0,4,26,42];
+  const BURST_MULTIPLIER = [0.0,0.38,1.45,2.35];
+  const CREATION_ACTION_BUDGET = [1,2,7,10];
+  const RECOMMENDED_VISIBLE_INTERACTIVE = [1,4,18,34];
 
   const EFFECTS_BY_WORLD = {
     SPRING_BLOOM:["PETAL_BLOOM","ECHO_RINGS","SPOTLIGHT","SOFT_FADE"],
@@ -32,8 +32,7 @@
   }
 
   function nowMs() {
-    return global.performance && typeof global.performance.now === "function"
-      ? global.performance.now() : Date.now();
+    return global.performance&&typeof global.performance.now==="function"?global.performance.now():Date.now();
   }
 
   class SensoryDirector {
@@ -41,13 +40,13 @@
       const o=options||{};
       this.rng=typeof o.rng==="function"?o.rng:Math.random;
       this.now=typeof o.now==="function"?o.now:nowMs;
-      this.impactCooldownMs=Number(o.impactCooldownMs)||9000;
-      this.recoveryMs=Number(o.recoveryMs)||2600;
+      this.impactCooldownMs=Number(o.impactCooldownMs)||8500;
+      this.recoveryMs=Number(o.recoveryMs)||3200;
       this.lastImpactAt=-Infinity;
       this.recoveryUntil=0;
       this.recentDensity=[];
       this.recentEffects=[];
-      this.lastState=this._state(0,"SOFT_FADE","NONE",0,0,0);
+      this.lastState=this._state(0,"NONE","NONE",0,0,0);
       this.lastTapHapticAt=-Infinity;
     }
 
@@ -56,29 +55,29 @@
       const now=this.now();
       let requested=this._requestedDensity(p);
 
-      // Recovery after a climax is mandatory. The game must become sparse again.
-      if (now < this.recoveryUntil) requested=Math.min(requested,DENSITY.LIGHT);
+      // After CHAOS, force an obvious visual drop instead of hovering at medium density.
+      if (now<this.recoveryUntil) requested=DENSITY.QUIET;
 
-      // Never allow repeated climaxes. Downgrade to ACTIVE if impact is still cooling down.
-      if (requested===DENSITY.IMPACT && now-this.lastImpactAt<this.impactCooldownMs) {
-        requested=DENSITY.ACTIVE;
+      // Never stack climaxes.
+      if (requested===DENSITY.CHAOS && now-this.lastImpactAt<this.impactCooldownMs) {
+        requested=DENSITY.BUSY;
       }
 
-      // If the last few situations were already dense, force breathing room.
-      const denseCount=this.recentDensity.slice(-3).filter(v=>v>=DENSITY.ACTIVE).length;
-      if (denseCount>=2 && requested>=DENSITY.ACTIVE) requested=DENSITY.LIGHT;
+      // Two dense states in the recent history means the next one should breathe.
+      const denseCount=this.recentDensity.slice(-3).filter(v=>v>=DENSITY.BUSY).length;
+      if (denseCount>=2 && requested>=DENSITY.BUSY) requested=DENSITY.NORMAL;
 
-      // WAIT/HIDE should usually feel sparse even when the AI asks for intensity.
-      if ((p.situation==="WAIT"||p.situation==="HIDE") && requested>DENSITY.LIGHT && clamp(p.surpriseLevel,0,1,0)<0.9) {
-        requested=DENSITY.LIGHT;
+      // WAIT/HIDE are deliberately sparse unless this is a rare reveal setup.
+      if ((p.situation==="WAIT"||p.situation==="HIDE") && requested>DENSITY.NORMAL && clamp(p.surpriseLevel,0,1,0)<0.9) {
+        requested=DENSITY.QUIET;
       }
 
-      if (requested===DENSITY.IMPACT) {
+      if (requested===DENSITY.CHAOS) {
         this.lastImpactAt=now;
         this.recoveryUntil=now+this.recoveryMs;
       }
 
-      const visualEffect=this._pickVisualEffect(p.world,p.visualEffect,p.situation,requested);
+      const visualEffect=requested===DENSITY.QUIET?"NONE":this._pickVisualEffect(p.world,p.visualEffect,p.situation,requested);
       const hapticCue=this._pickPlanHaptic(p,requested);
 
       let motion=requested;
@@ -86,15 +85,9 @@
       let haptic=requested===0?0:Math.min(requested,2);
       let brightness=requested;
 
-      if (p.situation==="WAIT") { motion=Math.min(motion,1); audio=Math.min(audio,1); }
+      if (p.situation==="WAIT") { motion=0; audio=0; }
       if (p.situation==="HIDE") { brightness=Math.max(0,brightness-1); }
-
-      // Sensory budget: when visuals are maxed, audio/haptics cannot also stay maxed.
-      if (requested===DENSITY.IMPACT) {
-        audio=Math.min(audio,2);
-        haptic=Math.min(haptic,2);
-      }
-      if (motion===3) audio=Math.min(audio,2);
+      if (requested===DENSITY.CHAOS) { audio=2; haptic=2; }
 
       const state=this._state(requested,visualEffect,hapticCue,motion,audio,brightness);
       this._rememberDensity(requested);
@@ -104,16 +97,20 @@
     }
 
     feedbackForPlayerEvent(event,plan) {
-      const state=this.lastState||this._state(0,"SOFT_FADE","NONE",0,0,0);
+      const state=this.lastState||this._state(0,"NONE","NONE",0,0,0);
       const now=this.now();
       const e=event||{};
       const world=(plan&&plan.world)||"NEON_RIFT";
 
+      if (state.density===DENSITY.QUIET) {
+        return {hapticCue:"NONE",intensity:0,burstScale:0};
+      }
+
       // Haptics are intentionally absent on many taps so tactile contrast remains meaningful.
-      const chance=[0.08,0.42,0.62,0.30][state.density]||0.2;
-      const cooldown=state.density>=2?180:280;
+      const chance=[0.0,0.32,0.58,0.34][state.density]||0.2;
+      const cooldown=state.density>=2?190:320;
       if (now-this.lastTapHapticAt<cooldown || this.rng()>chance) {
-        return { hapticCue:"NONE", intensity:0, burstScale:state.burstMultiplier*0.75 };
+        return { hapticCue:"NONE", intensity:0, burstScale:state.burstMultiplier*0.72 };
       }
       this.lastTapHapticAt=now;
 
@@ -125,7 +122,7 @@
 
       return {
         hapticCue:cue,
-        intensity:state.density===0?0.15:(state.density===1?0.28:0.45),
+        intensity:state.density===1?0.24:0.46,
         burstScale:state.burstMultiplier
       };
     }
@@ -135,13 +132,13 @@
       return {
         currentDensity:this.lastState.density,
         currentDensityName:this.lastState.densityName,
-        impactAvailable:now-this.lastImpactAt>=this.impactCooldownMs && now>=this.recoveryUntil,
+        chaosAvailable:now-this.lastImpactAt>=this.impactCooldownMs && now>=this.recoveryUntil,
         recoveryActive:now<this.recoveryUntil,
         recentDensity:this.recentDensity.slice(-4).map(v=>DENSITY_NAME[v]),
         recentVisualEffects:this.recentEffects.slice(-3),
         recommendedMaxVisibleInteractive:this.lastState.recommendedMaxVisibleInteractive,
         creationActionBudget:this.lastState.creationActionBudget,
-        instruction:"Contrast matters more than constant spectacle. Prefer CALM/LIGHT after dense moments. IMPACT is rare."
+        instruction:"Make density changes obvious. QUIET should look almost empty; BUSY should clearly multiply motion/objects; CHAOS is a short punch, then drop to QUIET."
       };
     }
 
@@ -151,17 +148,17 @@
       }
       const surprise=clamp(plan.surpriseLevel,0,1,0.3);
       const intensity=clamp(plan.intensity,0,1,0.45);
-      if (surprise>=0.88 && intensity>=0.65) return DENSITY.IMPACT;
-      if (surprise>=0.55 || intensity>=0.64) return DENSITY.ACTIVE;
-      if (surprise<=0.2 && intensity<=0.4) return DENSITY.CALM;
-      return DENSITY.LIGHT;
+      if (surprise>=0.86 && intensity>=0.62) return DENSITY.CHAOS;
+      if (surprise>=0.50 || intensity>=0.60) return DENSITY.BUSY;
+      if (surprise<=0.26 && intensity<=0.48) return DENSITY.QUIET;
+      return DENSITY.NORMAL;
     }
 
     _pickVisualEffect(world,requested,situation,density) {
       const pool=(EFFECTS_BY_WORLD[world]||EFFECTS_BY_WORLD.NEON_RIFT).slice();
-      if (requested && requested!=="AUTO" && pool.includes(requested) && !this.recentEffects.slice(-2).includes(requested)) return requested;
-      if (situation==="MIRROR" && !this.recentEffects.slice(-2).includes("MIRROR_SPLIT")) return "MIRROR_SPLIT";
-      if (situation==="REVEAL" && density<=1 && !this.recentEffects.slice(-2).includes("SPOTLIGHT")) return "SPOTLIGHT";
+      if (requested&&requested!=="AUTO"&&pool.includes(requested)&&!this.recentEffects.slice(-2).includes(requested)) return requested;
+      if (situation==="MIRROR"&&!this.recentEffects.slice(-2).includes("MIRROR_SPLIT")) return "MIRROR_SPLIT";
+      if (situation==="REVEAL"&&density<=1&&!this.recentEffects.slice(-2).includes("SPOTLIGHT")) return "SPOTLIGHT";
       let candidates=pool.filter(x=>!this.recentEffects.slice(-2).includes(x));
       if (!candidates.length) candidates=pool;
       return candidates[Math.floor(this.rng()*candidates.length)]||"SOFT_FADE";
@@ -169,7 +166,7 @@
 
     _pickPlanHaptic(plan,density) {
       if (density===0) return "NONE";
-      if (plan.hapticCue && plan.hapticCue!=="AUTO" && plan.hapticCue!=="IMPACT") return plan.hapticCue;
+      if (plan.hapticCue&&plan.hapticCue!=="AUTO"&&plan.hapticCue!=="IMPACT") return plan.hapticCue;
       if (density===3) return "IMPACT";
       if (plan.situation==="PREDICT") return "HEARTBEAT";
       if (plan.situation==="FAKE_ENDING") return "WARNING";
@@ -179,7 +176,7 @@
     _state(density,visualEffect,hapticCue,motion,audio,brightness) {
       return {
         density,
-        densityName:DENSITY_NAME[density]||"CALM",
+        densityName:DENSITY_NAME[density]||"QUIET",
         ambientTarget:AMBIENT_TARGET[density],
         burstMultiplier:BURST_MULTIPLIER[density],
         motion:clamp(motion,0,3,0),
@@ -194,7 +191,7 @@
     }
 
     _rememberDensity(v) { this.recentDensity.push(v); if (this.recentDensity.length>8) this.recentDensity.shift(); }
-    _rememberEffect(v) { if (!v) return; this.recentEffects.push(v); if (this.recentEffects.length>6) this.recentEffects.shift(); }
+    _rememberEffect(v) { if (!v||v==="NONE") return; this.recentEffects.push(v); if (this.recentEffects.length>6) this.recentEffects.shift(); }
   }
 
   SensoryDirector.DENSITY=DENSITY;

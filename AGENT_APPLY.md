@@ -1,73 +1,51 @@
-# AI Infinite Click 0.33 — Local Agent Apply Guide
+# AI Infinite Click 0.34 — Local Agent Apply Guide
 
-This is a **cumulative** integration package. If 0.32 is already applied, preserve it and merge the 0.33 pieces. If the project is still on 0.31, apply the 0.32 safe-area/world files in this package first, then the 0.33 sensory changes below.
+Apply this on top of the user's latest working 0.33 tree. Do not rebuild the project or replace working Gemini/Pixi/GameRuntime infrastructure.
 
-Do not rebuild the product architecture. Keep the existing GameRuntime, Pixi bootstrap, score/state, Gemini Live socket/audio path, action validator, and local immediate-response path.
-
-## 1. Copy Java files
-
-Copy these into the app's actual Java package and change the placeholder package declaration:
-
-```text
-android/SafeAreaInsetsController.java
-android/WorldExperiencePlan.java
-android/GeminiWorldToolSchema.java
-android/HapticEngine.java
-android/HapticJavascriptBridge.java
-```
-
-Replace:
-
-```java
-package com.crewpocket.aiclicker.v033;
-```
-
-with the current app package.
-
-## 2. Android vibration permission
-
-Add this to `AndroidManifest.xml` if it does not already exist:
-
-```xml
-<uses-permission android:name="android.permission.VIBRATE" />
-```
-
-This is a normal permission; there is no runtime permission dialog.
-
-## 3. Register the native haptic bridge
-
-On the **local game WebView only**, after WebView creation:
-
-```java
-HapticEngine hapticEngine = new HapticEngine(this);
-gameWebView.addJavascriptInterface(
-    new HapticJavascriptBridge(hapticEngine),
-    "AndroidHaptics"
-);
-```
-
-Security requirement: this JavaScript interface is intended for bundled/trusted game content. Do not leave this interface enabled on arbitrary external web pages.
-
-Do not call `Vibrator` directly from random gameplay code. Route tactile effects through `HapticEngine` so cadence and pattern semantics stay centralized.
-
-## 4. Keep the 0.32 real safe-area integration
+## 1. Preserve existing architecture
 
 Keep:
 
-```java
-SafeAreaInsetsController.attach(
-    this,
-    topHudView,
-    captionView,
-    gameWebView
-);
+- one Gemini Live WebSocket/session;
+- existing PCM audio playback;
+- existing `apply_world_experience` synchronous function response path;
+- GameRuntime as authoritative state/action validator;
+- 0.32 Android safe-area integration;
+- 0.33 native HapticEngine;
+- current score/profile/state persistence.
+
+Do **not** create a second agent loop.
+
+## 2. Copy/merge files
+
+Web:
+
+```text
+web/conversation-director.js          NEW
+web/experience-runtime.js             UPDATED
+web/sensory-director.js               UPDATED
+web/world-fx-controller.js             UPDATED
+web/contrast-debug.js                 NEW (debug only)
 ```
 
-Top HUD and caption must use actual WindowInsets. Interactive Pixi targets must use `GameSafeArea`; ambient VFX may remain edge-to-edge.
+Android:
 
-## 5. JS load order
+```text
+android/GeminiConversationPolicy.java NEW
+android/GeminiWorldToolSchema.java    UPDATED
+```
 
-Load before existing gameplay boot code:
+The other Java files are cumulative copies from 0.33. Change the placeholder package:
+
+```java
+package com.crewpocket.aiclicker.v034;
+```
+
+to the app's real package.
+
+## 3. JS load order
+
+Production:
 
 ```html
 <link rel="stylesheet" href="safe-area.css">
@@ -75,298 +53,273 @@ Load before existing gameplay boot code:
 <script src="world-catalog.js"></script>
 <script src="experience-director.js"></script>
 <script src="sensory-director.js"></script>
+<script src="conversation-director.js"></script>
 <script src="haptic-bridge.js"></script>
 <script src="audio-mood-player.js"></script>
 <script src="world-fx-controller.js"></script>
 <script src="experience-runtime.js"></script>
 ```
 
-If bundled, preserve equivalent import order.
+`contrast-debug.js` must not be loaded in release unless the project already has a guarded dev-tools bundle.
 
-## 6. Create one SensoryDirector
-
-When creating the existing 0.32 ExperienceRuntime:
+## 4. Create ConversationDirector inside the existing ExperienceRuntime
 
 ```js
-const sensory = new SensoryDirector();
-const audioMood = new AudioMoodPlayer();
-const worldFx = new WorldFxController(pixiApp);
+const conversation = new ConversationDirector({
+  profileAccessor: () => gameRuntime.getPlayerProfile?.() || {}
+});
 
 const experience = new ExperienceRuntime({
-  gameRuntime: window.gameRuntime,
+  gameRuntime,
   director,
   sensory,
+  conversation,
   fx: worldFx,
   audio: audioMood,
   haptics: window.GameHaptics,
-  profileAccessor: () => window.gameRuntime?.getPlayerProfile?.() || {},
+  profileAccessor: () => gameRuntime.getPlayerProfile?.() || {},
   getPrimaryTarget: () => {
-    const target = window.gameRuntime?.getElement?.("main_button");
-    return target ? { x: target.x, y: target.y } : null;
+    const target = gameRuntime.getElement?.("main_button");
+    return target ? {x:target.x,y:target.y} : null;
   },
-  onRuleTwist: (rule, plan) => window.gameRuntime?.setTemporaryRule?.(rule, plan),
+  onRuleTwist: (rule,plan) => gameRuntime.setTemporaryRule?.(rule,plan),
   onSpeech: (speech) => window.setCaption?.(speech)
 });
 ```
 
-Do not create a second scheduler/agent loop.
+## 5. Route every player event through the new mode
 
-## 7. Immediate tap path
-
-Every click/drag/timeout must still react locally before Gemini latency:
+Existing immediate local call remains:
 
 ```js
-experience.onPlayerEvent({
-  type: "click",
+const aiContext = experience.onPlayerEvent({
+  type:"click",
   targetId,
   x,
   y,
-  totalClicks: gameRuntime.totalClicks
+  totalClicks:gameRuntime.totalClicks,
+  correct,
+  ignoredWarning
 });
 ```
 
-0.33 behavior:
+Then inspect:
 
-- local particle response is scaled by current density;
-- audio clicks are probabilistic at low density;
-- many ordinary taps intentionally produce no vibration;
-- HapticEngine has an additional short cooldown.
-
-Do not add unconditional `navigator.vibrate()` or `Vibrator.vibrate()` calls elsewhere.
-
-## 8. Sensory density is Runtime authority
-
-Density meanings:
-
-```text
-0 CALM
-1 LIGHT
-2 ACTIVE
-3 IMPACT
+```js
+const mode = aiContext.interaction.mode;
 ```
 
-Hard rules already implemented in `SensoryDirector`:
+### SILENT
 
-```text
-IMPACT cooldown:       9000 ms
-post-impact recovery:  2600 ms
-2 dense of last 3:     next dense request -> LIGHT
-WAIT/HIDE:             normally <= LIGHT
-```
-
-Do not remove these limits because the model asks for a stronger scene.
-
-## 9. Real element-count variation
-
-0.33 limits creation/duplication actions by density:
-
-```text
-CALM   -> 1 create/duplicate action per plan
-LIGHT  -> 2
-ACTIVE -> 5
-IMPACT -> 8
-```
-
-Recommended visible interactive counts sent to Gemini:
-
-```text
-CALM   2
-LIGHT  6
-ACTIVE 14
-IMPACT 26
-```
-
-This is in addition to the existing global GameRuntime `max elements = 50` validation.
-
-Do not bypass the existing validator. The sensory limiter is a second, stricter layer for pacing.
-
-## 10. Expanded VFX
-
-`WorldFxController` now accepts a `SensoryState` and dynamically reconciles ambient particle count.
-
-New effect vocabulary:
-
-```text
-PETAL_BLOOM
-STORM_FLASH
-RAIN_BURST
-LEAF_FALL
-DUST_DISSOLVE
-FREEZE_CRACK
-FROST_PULSE
-VOID_SUCTION
-GRAVITY_WELL
-BLACKOUT_REVEAL
-GLITCH_BARS
-NEON_SLICE
-PIXEL_SCATTER
-MIRROR_SPLIT
-SHOCKWAVE
-ECHO_RINGS
-SPOTLIGHT
-SOFT_FADE
-```
-
-Reuse existing polished 0.31/0.32 effect implementations where they are better. The new controller is a reference implementation, not a reason to throw away working effects.
-
-Important: visual density changes must be visible. Do not leave a permanent high particle emitter running underneath CALM mode.
-
-## 11. Haptic language by world
-
-Default tactile texture:
-
-```text
-SPRING_BLOOM -> SOFT_TAP
-SUMMER_STORM -> THUNDER
-AUTUMN_DECAY -> DRY_DOUBLE
-WINTER_FROST -> ICE_TICK
-VOID_CHAMBER -> VOID_PULL
-NEON_RIFT -> DIGITAL_TRIPLE
-```
-
-Special semantic cues:
-
-```text
-correct       -> CORRECT
-wrong         -> WRONG
-warning       -> WARNING
-prediction    -> HEARTBEAT
-rare climax   -> IMPACT
-```
-
-Do not vibrate every tap. Absence of vibration is part of the design.
-
-## 12. Gemini schema upgrade
-
-Keep the same existing Live function name:
-
-```text
-apply_world_experience
-```
-
-Do not create another Gemini function just for VFX or haptics.
-
-The schema now optionally accepts:
-
-```json
-{
-  "sensoryDensity": 0,
-  "visualEffect": "AUTO",
-  "hapticCue": "AUTO"
+```js
+if (mode === "SILENT") {
+  return; // no network/model event
 }
 ```
 
-These are **requests**, not commands. `SensoryDirector` can downgrade/replace them.
+This is intentional. Constant speech becomes noise too.
 
-Keep the existing synchronous function-response flow after local apply.
+### BANTER
 
-## 13. Gemini game-master prompt addition
+Send a compact event to the **already-open** Gemini Live session.
 
-Append this to the existing 0.32 game prompt:
+Use `GeminiConversationPolicy.buildTurnText("BANTER", compactContext)` or equivalent existing JSON/message builder.
 
-```text
-Sensory contrast is part of the game. Do not make every situation visually busy.
-Prefer CALM or LIGHT for ordinary moments. Use ACTIVE for meaningful pressure and IMPACT only for rare climaxes.
-After a visually dense moment, deliberately create breathing room.
-Silence, stillness, empty space, and no vibration are valid game effects.
-Do not request maximum visual + audio + haptic intensity together.
-Use world-appropriate visual effects. Prefer AUTO if unsure.
-Do not repeat the same visual effect back-to-back.
-```
-
-Do not rely on prompt compliance for safety/pacing; Runtime enforcement remains authoritative.
-
-## 14. Context sent to Gemini
-
-`experience.aiContext(...)` now includes:
-
-```json
-{
-  "sensory": {
-    "currentDensity": 1,
-    "currentDensityName": "LIGHT",
-    "impactAvailable": false,
-    "recoveryActive": true,
-    "recentDensity": ["ACTIVE", "IMPACT", "LIGHT"],
-    "recentVisualEffects": ["STORM_FLASH", "SPOTLIGHT"],
-    "recommendedMaxVisibleInteractive": 6,
-    "creationActionBudget": 2
-  }
-}
-```
-
-Keep this compact. Do not send full visual history.
-
-## 15. Desired rhythm
-
-The runtime should naturally produce patterns resembling:
+Critical instruction:
 
 ```text
-CALM -> LIGHT -> LIGHT -> ACTIVE -> CALM -> ACTIVE -> IMPACT -> CALM
+SPEAK ONLY.
+Do not call any function/tool.
+Do not change the UI.
+One short natural reaction to the player's behavior.
 ```
 
-Not:
+Examples of the desired personality:
 
 ```text
-ACTIVE -> ACTIVE -> IMPACT -> ACTIVE -> IMPACT -> IMPACT
+「你真的每顆都要按是不是？」
+「……你又選這顆。」
+「你現在是在懷疑我嗎？」
+「好啦，這次真的不騙你。」
+「一、二——欸，你太快了。」
 ```
 
-This rhythm matters more than maximizing the number of effects.
+Do not hard-code these lines; they illustrate tone only.
 
-## 16. Device verification
+### GAME_TURN
 
-### Haptics
+Send the compact event with mode `GAME_TURN`.
 
-- ordinary taps sometimes have no haptic;
-- `IMPACT` is short and distinct, not a long buzz;
-- two impacts cannot fire within ~9 seconds;
-- after impact the next few seconds feel quieter;
-- Winter / Neon / Void tactile patterns feel distinguishable;
-- disabling system vibration does not crash the app;
-- device without vibrator does not crash the app.
+Instruction:
 
-### Visual density
+```text
+React briefly in voice, then call apply_world_experience exactly once.
+The line should be a setup/punchline, not a narration of the visual effect.
+```
 
-- CALM looks genuinely sparse;
-- LIGHT is the normal baseline;
-- ACTIVE feels busier without becoming unreadable;
-- IMPACT is obvious but brief;
-- ambient particle count actually decreases after dense moments;
-- AI cannot create a swarm of buttons during CALM because creation actions are trimmed;
-- clickable targets remain inside safe bounds.
+When the tool call arrives:
 
-### Audio
+1. sanitize/apply through the existing Runtime;
+2. send the existing synchronous `toolResponse.functionResponses` acknowledgement;
+3. let the same Live session continue its audio response.
 
-- CALM can be silent;
-- click sound is not guaranteed on every tap;
-- maximum visuals do not simultaneously force maximum audio volume/density.
+Do not open another WebSocket.
 
-### Regression
+## 6. Avoid double speech
 
-- no WebView reload;
-- score/state persist;
-- existing action validator remains the final authority;
-- no raw JS/HTML execution path added;
-- Gemini voice/session remains one existing Live session;
-- synchronous tool response still returns after local plan apply.
+With Gemini Live AUDIO active, do not separately synthesize `plan.speech` with another TTS path.
 
-## 17. Automated tests
+`plan.speech` in 0.34 is optional and should be used only for:
+
+- caption fallback;
+- offline/local-director fallback;
+- logging/debug.
+
+If output transcription from Gemini Live is available, feed the final spoken line into:
+
+```js
+experience.recordSpokenLine(transcript);
+```
+
+This improves repeat avoidance.
+
+## 7. Add idle banter polling
+
+Use one cheap local timer (not another agent loop):
+
+```js
+setInterval(() => {
+  const ctx = experience.pollIdle(gameRuntime.getCompactSnapshot?.() || {});
+  if (!ctx) return;
+  sendExistingGeminiLiveEvent(ctx); // BANTER only
+}, 500);
+```
+
+Default idle beats:
+
+```text
+~4.3s -> first possible voice-only reaction
+~9.0s -> second possible voice-only reaction
+```
+
+There are no repeated idle messages after stage 2 until player activity resets the idle state.
+
+## 8. Stronger visual contrast
+
+0.34 density values:
+
+```text
+0 QUIET   ambient 0   create/duplicate budget 1   recommended interactive 1
+1 NORMAL  ambient 4   create/duplicate budget 2   recommended interactive 4
+2 BUSY    ambient 26  create/duplicate budget 7   recommended interactive 18
+3 CHAOS   ambient 42  create/duplicate budget 10  recommended interactive 34
+```
+
+Behavior requirements:
+
+- QUIET means truly quiet: zero ambient particles, no click burst, no decorative plan VFX.
+- BUSY must be obviously more populated than NORMAL.
+- CHAOS should visibly transform the frame for a short beat.
+- after CHAOS, `SensoryDirector` forces about 3.2s of QUIET.
+- do not keep a permanent particle emitter underneath QUIET.
+
+The global GameRuntime max-elements safety limit remains authoritative.
+
+## 9. Important VFX bug fixed
+
+0.33 had code equivalent to:
+
+```js
+const multiplier = Number(this.sensory.burstMultiplier) || 0.6;
+```
+
+That makes a valid `0` fall back to `0.6`, so QUIET still emits particles.
+
+0.34 explicitly preserves zero and returns before spawning burst particles.
+
+Do not reintroduce `|| default` for numeric fields where zero is meaningful.
+
+## 10. Situation timing
+
+Old 0.33:
+
+```text
+10-30s
+```
+
+0.34:
+
+```text
+minimum ~6.5s
+maximum ~18s
+```
+
+This does not mean speech waits 6.5 seconds. BANTER happens independently between game turns.
+
+## 11. Gemini system prompt
+
+Append `GeminiConversationPolicy.systemPromptAppendix()` to the existing game-host system instruction.
+
+Key policy:
+
+```text
+You are the mischievous host of an infinite click game, not an assistant.
+Most spoken reactions are short and conversational.
+Observe behavior; tease, predict, question, fake-reassure, or pause.
+Do not narrate obvious UI changes.
+For BANTER: voice only, no tool.
+For GAME_TURN: react briefly, call apply_world_experience exactly once.
+```
+
+Do not make the AI hostile, insulting, or exhausting.
+
+## 12. Debug contrast verification
+
+In a dev build only, load:
+
+```html
+<script src="contrast-debug.js"></script>
+```
+
+Then from console/debug bridge:
+
+```js
+runSensoryContrastDemo(experience)
+```
+
+You must visually see four distinct beats:
+
+```text
+QUIET -> almost empty
+NORMAL -> restrained
+BUSY -> clearly dense/moving
+CHAOS -> unmistakable full-frame burst
+then -> empty QUIET
+```
+
+If BUSY looks like NORMAL on the actual phone, increase presentation scale/effect size in the existing renderer; do not weaken the director again.
+
+## 13. Tests
 
 Run:
 
 ```bash
 node tests/experience-director.test.js
 node tests/sensory-director.test.js
+node tests/conversation-director.test.js
 node tests/experience-runtime.test.js
 ./gradlew assembleDebug
 ```
 
-Expected JS output:
+Then real-device checks:
 
-```text
-experience-director tests passed
-sensory-director tests passed
-experience-runtime sensory budget tests passed
-```
-
-Fix compile errors and run on a real Android device before declaring 0.33 complete.
+1. rapid taps do not cause continuous overlapping voice;
+2. some taps intentionally receive no speech/no haptic;
+3. many ordinary events produce voice-only banter without UI changes;
+4. idle 4-5 seconds can trigger one natural voice reaction;
+5. BANTER never calls `apply_world_experience`;
+6. GAME_TURN calls it exactly once and the tool response unblocks Live audio;
+7. QUIET has zero ambient/click particles;
+8. BUSY and CHAOS are obviously different from NORMAL on-device;
+9. after CHAOS the screen becomes sparse instead of remaining busy;
+10. safe-area and max-elements validation remain intact.

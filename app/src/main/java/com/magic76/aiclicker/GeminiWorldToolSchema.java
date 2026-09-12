@@ -15,7 +15,7 @@ public final class GeminiWorldToolSchema {
                     "SPRING_BLOOM", "SUMMER_STORM", "AUTUMN_DECAY", "WINTER_FROST", "VOID_CHAMBER", "NEON_RIFT"));
             properties.put("mood", enumString("Emotional tone. Keep it playful rather than hostile.",
                     "PLAYFUL", "EERIE", "CALM", "CHAOTIC"));
-            properties.put("situation", enumString("Gameplay situation for roughly the next 10-30 seconds.",
+            properties.put("situation", enumString("Gameplay situation for roughly the next 6-18 seconds; speech-only banter can happen between game turns.",
                     "CHASE", "DECOY", "WAIT", "PREDICT", "MIRROR", "HIDE", "REVEAL", "FAKE_ENDING"));
             properties.put("audioMood", enumString("Sound palette matching the world.",
                     "ORGANIC", "STORM", "DRY", "GLASS", "COSMIC", "GLITCH"));
@@ -24,13 +24,13 @@ public final class GeminiWorldToolSchema {
             properties.put("ruleTwist", enumString("Optional temporary rule. Prefer NONE most of the time.",
                     "NONE", "WAIT_TO_WIN", "TAP_THE_SHADOW", "FOLLOW_THE_SOUND", "DONT_TOUCH_CENTER", "LEFT_RIGHT_REVERSED"));
             properties.put("speech", new JSONObject().put("type", "STRING")
-                    .put("description", "One short teasing line, max 140 characters. Never insult the player."));
+                    .put("description", "Optional short setup/punchline caption, max 140 characters. Live voice is primary; never narrate the effect or insult the player."));
             properties.put("intensity", new JSONObject().put("type", "NUMBER").put("minimum", 0).put("maximum", 1));
             properties.put("surpriseLevel", new JSONObject().put("type", "NUMBER").put("minimum", 0).put("maximum", 1));
 
             // These are requests only. SensoryDirector is authoritative and may downgrade them.
             properties.put("sensoryDensity", new JSONObject().put("type", "NUMBER").put("minimum", 0).put("maximum", 3)
-                    .put("description", "Requested density: 0 CALM, 1 LIGHT, 2 ACTIVE, 3 IMPACT. Use 0/1 often; 3 rarely."));
+                    .put("description", "Requested density: 0 QUIET, 1 NORMAL, 2 BUSY, 3 CHAOS. Make contrast obvious; use 0/1 often and 3 rarely."));
             properties.put("visualEffect", enumString("Optional world-appropriate effect. Prefer AUTO when unsure.",
                     "AUTO", "PETAL_BLOOM", "STORM_FLASH", "RAIN_BURST", "LEAF_FALL", "DUST_DISSOLVE",
                     "FREEZE_CRACK", "FROST_PULSE", "VOID_SUCTION", "GRAVITY_WELL", "BLACKOUT_REVEAL",
@@ -62,7 +62,7 @@ public final class GeminiWorldToolSchema {
             params.put("type", "OBJECT");
             params.put("properties", properties);
             params.put("required", new JSONArray().put("world").put("mood").put("situation")
-                    .put("audioMood").put("targetBehavior").put("speech").put("intensity").put("surpriseLevel"));
+                    .put("audioMood").put("targetBehavior").put("intensity").put("surpriseLevel"));
         } catch (Exception ignored) {}
 
         JSONObject declaration = new JSONObject();

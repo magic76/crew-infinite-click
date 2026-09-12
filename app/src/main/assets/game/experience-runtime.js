@@ -7,43 +7,77 @@
       this.gameRuntime=o.gameRuntime||null;
       this.director=o.director||new global.ExperienceDirector({profileAccessor:o.profileAccessor});
       this.sensory=o.sensory||new global.SensoryDirector();
+      this.conversation=o.conversation||new global.ConversationDirector({profileAccessor:o.profileAccessor});
       this.fx=o.fx||null;
       this.audio=o.audio||null;
       this.haptics=o.haptics||global.GameHaptics||null;
       this.getPrimaryTarget=typeof o.getPrimaryTarget==="function"?o.getPrimaryTarget:()=>null;
       this.onRuleTwist=typeof o.onRuleTwist==="function"?o.onRuleTwist:()=>{};
       this.onSpeech=typeof o.onSpeech==="function"?o.onSpeech:()=>{};
+      this.onInteractionDirective=typeof o.onInteractionDirective==="function"?o.onInteractionDirective:()=>{};
       this.currentPlan=null;
-      this.currentSensoryState=this.sensory.resolve({world:"NEON_RIFT",situation:"WAIT",intensity:0.18,surpriseLevel:0.08,sensoryDensity:0});
+      this.currentSensoryState=this.sensory.resolve({world:"NEON_RIFT",situation:"WAIT",intensity:0.12,surpriseLevel:0.06,sensoryDensity:0});
       this.currentSituationStartedAt=0;
-      this.currentSituationMinMs=10000;
-      this.currentSituationMaxMs=30000;
+      // 0.34 shortens the old 10-30s lock. Speech can happen between game turns.
+      this.currentSituationMinMs=6500;
+      this.currentSituationMaxMs=18000;
     }
 
     startSession(preferredWorld) {
       const world=this.director.startSession(preferredWorld);
       if (this.fx) {
-        this.fx.setWorld(world,0.22);
+        this.fx.setWorld(world,0.18);
         this.fx.setSensoryState(this.currentSensoryState);
       }
       if (this.audio&&typeof this.audio.setSensoryState==="function") this.audio.setSensoryState(this.currentSensoryState);
       return world;
     }
 
+    /**
+     * Immediate local feedback + routing decision.
+     * Return value contains `interaction.mode`: SILENT | BANTER | GAME_TURN.
+     * Caller should NOT contact Gemini for SILENT.
+     */
     onPlayerEvent(event) {
-      const feedback=this.sensory.feedbackForPlayerEvent(event,this.currentPlan);
-      if (this.haptics && feedback.hapticCue!=="NONE") this.haptics.perform(feedback.hapticCue,feedback.intensity);
+      const e=event||{};
+      const feedback=this.sensory.feedbackForPlayerEvent(e,this.currentPlan);
+      if (this.haptics&&feedback.hapticCue!=="NONE") this.haptics.perform(feedback.hapticCue,feedback.intensity);
 
       if (this.audio) {
         const mood=this.currentPlan?this.currentPlan.audioMood:"GLITCH";
-        this.audio.play(mood,"click",0.18+feedback.intensity*0.3);
+        this.audio.play(mood,"click",0.12+feedback.intensity*0.28);
       }
 
-      if (this.fx && event && Number.isFinite(event.x) && Number.isFinite(event.y)) {
-        const count=Math.max(2,Math.round(5*feedback.burstScale));
-        this.fx.burst(event.x,event.y,count,0.45+feedback.burstScale*0.35);
+      if (this.fx&&feedback.burstScale>0&&Number.isFinite(e.x)&&Number.isFinite(e.y)) {
+        const count=Math.max(1,Math.round(6*feedback.burstScale));
+        this.fx.burst(e.x,e.y,count,0.38+feedback.burstScale*0.38);
       }
-      return this.director.contextForAi(event||{},this._surpriseLevelForEvent(event));
+
+      const surprise=this._surpriseLevelForEvent(e);
+      const shouldNew=this.shouldRequestNewSituation();
+      const interaction=this.conversation.routePlayerEvent(e,{shouldRequestNewSituation:shouldNew,currentPlan:this.currentPlan,sensory:this.currentSensoryState});
+      const context=this.director.contextForAi(e,surprise);
+      context.interaction=interaction;
+      context.conversation=this.conversation.contextForAi(interaction,e);
+      context.sensory=this.sensory.contextForAi();
+      this.onInteractionDirective(interaction,context);
+      return context;
+    }
+
+    /** Poll from a cheap local timer, e.g. every 500ms. Returns null or a BANTER context. */
+    pollIdle(gameSnapshot) {
+      const interaction=this.conversation.pollIdle({currentPlan:this.currentPlan,sensory:this.currentSensoryState});
+      if (!interaction) return null;
+      const event=interaction.event||{type:"idle"};
+      const context=this.aiContext(event,gameSnapshot||{});
+      context.interaction=interaction;
+      context.conversation=this.conversation.contextForAi(interaction,event);
+      this.onInteractionDirective(interaction,context);
+      return context;
+    }
+
+    recordSpokenLine(text) {
+      this.conversation.recordSpeech(text);
     }
 
     applyAiPlan(rawPlan) {
@@ -63,24 +97,28 @@
       if (this.audio) {
         if (typeof this.audio.setSensoryState==="function") this.audio.setSensoryState(sensoryState);
         const cue=previousWorld&&previousWorld!==plan.world?"worldChange":(plan.situation==="REVEAL"?"reveal":((plan.situation==="DECOY"||plan.situation==="FAKE_ENDING")?"trap":"click"));
-        this.audio.play(plan.audioMood,cue,Math.min(1,plan.intensity*(0.55+sensoryState.audio*0.18)));
+        this.audio.play(plan.audioMood,cue,Math.min(1,plan.intensity*(0.48+sensoryState.audio*0.19)));
       }
 
-      if (this.haptics && sensoryState.hapticCue!=="NONE") {
-        const hapticIntensity=sensoryState.density===3?0.78:(sensoryState.density===2?0.52:0.28);
+      if (this.haptics&&sensoryState.hapticCue!=="NONE") {
+        const hapticIntensity=sensoryState.density===3?0.82:(sensoryState.density===2?0.52:0.24);
         this.haptics.perform(sensoryState.hapticCue,hapticIntensity);
       }
 
       this.onRuleTwist(plan.ruleTwist,plan);
-      if (plan.speech) this.onSpeech(plan.speech,plan);
+      if (plan.speech) {
+        this.onSpeech(plan.speech,plan);
+        this.conversation.recordSpeech(plan.speech);
+      }
 
       let applied=[], rejected=[];
       const sensoryLimitedActions=this._limitActionsForSensory(plan.actions,sensoryState);
       rejected=rejected.concat(sensoryLimitedActions.rejected);
-      if (this.gameRuntime && typeof this.gameRuntime.applyActions==="function") {
+      if (this.gameRuntime&&typeof this.gameRuntime.applyActions==="function") {
         const result=this.gameRuntime.applyActions(sensoryLimitedActions.allowed)||{};
-        applied=result.applied||[]; rejected=result.rejected||[];
-      } else if (this.gameRuntime && typeof this.gameRuntime.applyAction==="function") {
+        applied=result.applied||[];
+        rejected=rejected.concat(result.rejected||[]);
+      } else if (this.gameRuntime&&typeof this.gameRuntime.applyAction==="function") {
         for (const action of sensoryLimitedActions.allowed) {
           try { const ok=this.gameRuntime.applyAction(action); (ok?applied:rejected).push(action); }
           catch (_) { rejected.push(action); }
@@ -110,7 +148,7 @@
       if (elapsed<this.currentSituationMinMs) return false;
       if (elapsed>=this.currentSituationMaxMs) return true;
       const t=(elapsed-this.currentSituationMinMs)/(this.currentSituationMaxMs-this.currentSituationMinMs);
-      return Math.random()<t*0.08;
+      return Math.random()<0.06+t*0.18;
     }
 
     aiContext(event,gameSnapshot) {
@@ -120,14 +158,14 @@
       ctx.instruction=[
         "Keep the current world coherent for several situations.",
         "Do not repeat either of the last two situations unless surpriseLevel >= 0.9.",
-        "Make only small incremental UI actions.",
-        "Contrast matters more than spectacle: use CALM/LIGHT often, ACTIVE sometimes, IMPACT rarely.",
-        "After an IMPACT, deliberately reduce visual/audio/haptic density.",
+        "Make only small validated UI actions.",
+        "Visual contrast must be obvious: QUIET is almost empty, NORMAL is restrained, BUSY is clearly crowded/moving, CHAOS is a rare short punch.",
+        "After CHAOS, drop hard to QUIET instead of staying medium-busy.",
+        "Speech is personality, not narration: tease, observe, predict, question, or fake-reassure. Never describe the visual effect literally.",
         "Background visuals may be full screen, but clickable targets must stay inside safe interactive bounds."
       ].join(" ");
       return ctx;
     }
-
 
     _limitActionsForSensory(actions,state) {
       const list=Array.isArray(actions)?actions:[];
@@ -148,10 +186,10 @@
 
     _surpriseLevelForEvent(event) {
       const totalClicks=Number(event&&(event.totalClicks||event.clickCount))||0;
-      const cycle=totalClicks%11;
-      if (cycle===0&&totalClicks>0) return 0.82+Math.random()*0.15;
-      if (cycle>=6) return 0.42+Math.random()*0.16;
-      return 0.14+Math.random()*0.16;
+      const cycle=totalClicks%13;
+      if (cycle===0&&totalClicks>0) return 0.86+Math.random()*0.12;
+      if (cycle>=8) return 0.46+Math.random()*0.16;
+      return 0.12+Math.random()*0.18;
     }
   }
 
