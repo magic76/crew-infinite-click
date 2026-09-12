@@ -9,7 +9,7 @@
     safe:{left:0,top:0,right:0,bottom:0},language:"zh-TW",lastInputAt:performance.now(),idleStage:0,
     nextTurnId:1,stateVersion:1,pendingGameTurnId:0,pendingGameEvent:null,geminiPending:false,
     frame:{fps:60,lastMs:performance.now(),accMs:0,frames:0,lastLog:0},
-    tapJuice:{lastAt:0,streak:0}
+    tapJuice:{lastAt:0,streak:0,lastFrenzyAt:0,heat:0}
   };
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const hex=v=>typeof v==="number"?v:Number.parseInt(String(v||"#ffffff").replace("#",""),16)||0xffffff;
@@ -113,41 +113,58 @@
 
   function localTouchFeedback(x,y){
     const t=performance.now(),gap=state.tapJuice.lastAt?t-state.tapJuice.lastAt:9999;
-    state.tapJuice.streak=gap<240?Math.min(8,state.tapJuice.streak+1):1;state.tapJuice.lastAt=t;
-    const streak=state.tapJuice.streak,power=clamp((streak-1)/7,0,1);
+    if(gap<285){
+      state.tapJuice.streak=Math.min(20,state.tapJuice.streak+1);
+      state.tapJuice.heat=clamp(state.tapJuice.heat+.13,0,1);
+    }else{
+      state.tapJuice.streak=1;
+      state.tapJuice.heat=Math.max(.08,state.tapJuice.heat*.35);
+    }
+    state.tapJuice.lastAt=t;
+    const streak=state.tapJuice.streak,power=clamp((streak-1)/12,0,1),heat=state.tapJuice.heat;
     const s=screen(),px=x*s.width,py=y*s.height;
     const world=state.runtime&&state.runtime.currentPlan&&GameWorldCatalog.WORLDS[state.runtime.currentPlan.world];
     const accent=world&&world.accent!=null?world.accent:0xffffff;
     const secondary=world&&world.secondary!=null?world.secondary:0xffffff;
 
-    // Physical click response is an invariant, independent of sensoryDensity.
+    // Tap feel is never gated by sensoryDensity. The old pre-cleanup build felt good because
+    // every physical tap produced a dense local response; v4 restores that density with pools.
     const pool=state.pools.ripples,g=pool.acquire(state.gameplay);if(g){
-      g.circle(0,0,9+power*3).stroke({color:accent,width:2.2+power*.8,alpha:.82});
-      g.x=px;g.y=py;state.ripples.push({g,life:.28,max:.28,growth:2.7+power*.7,alpha:.82});
+      g.circle(0,0,10+power*5).stroke({color:accent,width:2.5+power*1.5,alpha:.90});
+      g.x=px;g.y=py;state.ripples.push({g,life:.30,max:.30,growth:3.0+power*1.0,alpha:.90});
     }
-    if(streak>=4){
+    if(streak>=3){
       const g2=pool.acquire(state.gameplay);if(g2){
-        g2.circle(0,0,5).stroke({color:secondary,width:1.4,alpha:.44});
-        g2.x=px;g2.y=py;state.ripples.push({g:g2,life:.22,max:.22,growth:3.5,alpha:.44});
+        g2.circle(0,0,5+power*4).stroke({color:secondary,width:1.5+power*.7,alpha:.54});
+        g2.x=px;g2.y=py;state.ripples.push({g:g2,life:.24,max:.24,growth:4.0+power*.8,alpha:.54});
       }
     }
 
     if(state.target){
-      const squash=.88-power*.055;state.target.scale.set(squash);
-      state.target.rotation=(Math.random()-.5)*(.045+power*.055);
+      const squash=.84-power*.10;state.target.scale.set(squash);
+      state.target.rotation=(Math.random()-.5)*(.06+power*.10);
       if(state.targetCore)state.targetCore.alpha=1;
     }
-    if(window.GameHaptics)window.GameHaptics.perform("SOFT_TAP",.16+power*.14);
+    if(window.GameHaptics)window.GameHaptics.perform(streak>=8?"DIGITAL_TRIPLE":"SOFT_TAP",.20+power*.22);
     if(state.audio&&state.runtime&&state.runtime.currentPlan){
-      state.audio.play(state.runtime.currentPlan.audioMood||"GLITCH","click",.20+power*.18);
+      const mood=state.runtime.currentPlan.audioMood||"GLITCH";
+      if(typeof state.audio.playClick==="function")state.audio.playClick(mood,.28+power*.30,streak);
+      else state.audio.play(mood,"click",.28+power*.30);
     }
     if(state.fx&&typeof state.fx.tapAccent==="function")state.fx.tapAccent(px,py,streak);
+
+    // Rapid tapping creates escalating effects without restoring the old fixed tap-count phase loop.
+    // Cooldown is time-based, so the player can hammer the screen without allocating unbounded work.
+    if(streak>=4&&state.fx&&typeof state.fx.tapFrenzyAccent==="function"&&t-state.tapJuice.lastFrenzyAt>=230){
+      state.tapJuice.lastFrenzyAt=t;
+      state.fx.tapFrenzyAccent(px,py,streak,heat);
+    }
   }
 
   function localReleaseFeedback(){
     if(!state.target)return;
-    const power=clamp((state.tapJuice.streak-1)/7,0,1);
-    const rebound=1.055+power*.035;
+    const power=clamp((state.tapJuice.streak-1)/12,0,1);
+    const rebound=1.075+power*.075;
     if(state.target.scale.x<rebound)state.target.scale.set(rebound);
   }
 
@@ -303,7 +320,8 @@
       if(r.life<=0){state.pools.ripples.release(r.g);state.ripples.splice(i,1);}
     }
     if(state.target&&state.primitiveHost&&state.primitiveHost.interaction!=="HOLD"){
-      const desired=1+Math.sin(performance.now()/450)*.025;state.target.scale.x+=(desired-state.target.scale.x)*.16;state.target.scale.y=state.target.scale.x;
+      const desired=1+Math.sin(performance.now()/450)*.025;
+      if(performance.now()-state.tapJuice.lastAt>420)state.tapJuice.heat=Math.max(0,state.tapJuice.heat-dt/1800);state.target.scale.x+=(desired-state.target.scale.x)*.16;state.target.scale.y=state.target.scale.x;
       state.target.rotation+=(0-state.target.rotation)*.18;
       if(state.targetCore)state.targetCore.alpha+=(.96-state.targetCore.alpha)*.14;
     }
@@ -351,7 +369,7 @@
       else if(msg.op==="geminiLiveReady"&&state.runtime&&!state.signatureMoments.isActive()){
         const event={type:"LIVE_READY",special:true};
         const context=state.runtime.aiContext(event,diagnostics());
-        const directive={mode:"GAME_TURN",reason:"live_ready",delivery:"TEASE",instruction:"You are live now. Give one short in-character line and choose the next high-level experience."};
+        const directive={mode:"GAME_TURN",reason:"live_ready",delivery:"DRY",voiceWanted:false,instruction:"You are live now. Quietly choose the next high-level experience; do not speak unless explicitly requested."};
         state.aggregator.push(event,directive,context,{immediate:true});
       }
       else if(msg.op==="reset"){

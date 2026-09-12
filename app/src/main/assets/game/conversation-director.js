@@ -12,8 +12,8 @@
       const o=options||{};
       this.rng=typeof o.rng==="function"?o.rng:Math.random;this.now=typeof o.now==="function"?o.now:nowMs;
       this.profileAccessor=typeof o.profileAccessor==="function"?o.profileAccessor:()=>({});
-      this.minSpeechGapMs=Number(o.minSpeechGapMs)||1050;
-      this.minGameTurnGapMs=Number(o.minGameTurnGapMs)||6200;
+      this.minSpeechGapMs=Number(o.minSpeechGapMs)||4800;
+      this.minGameTurnGapMs=Number(o.minGameTurnGapMs)||7200;
       this.firstIdleMs=Number(o.firstIdleMs)||3500;this.secondIdleMs=Number(o.secondIdleMs)||7600;
       this.lastSpeechAt=-Infinity;this.lastGameTurnAt=-Infinity;this.lastActivityAt=this.now();
       this.tapBurst=[];this.idleStage=0;this.recentModes=[];this.recentSpeech=[];this.recentDelivery=[];
@@ -25,27 +25,28 @@
       this.idleStage=0;
       if(t==="TAP")this._rememberTap(now);
 
+      const burst=this._tapsInWindow(now,1500),notable=this._notableEvent(e);
       const due=!!o.forceGameTurn||(!!o.shouldRequestNewSituation&&now-this.lastGameTurnAt>=this.minGameTurnGapMs);
       if(due){
         this.lastGameTurnAt=now;
-        return this._rememberMode(this._directive(MODE.GAME_TURN,"situation_due",e,o));
+        // Ordinary world evolution should usually happen silently. Voice is punctuation, not narration.
+        const voiceWanted=!!o.forceVoice||notable||burst>=8;
+        return this._rememberMode(this._directive(MODE.GAME_TURN,"situation_due",e,Object.assign({},o,{voiceWanted})));
       }
 
       // High-frequency progress/move events are intentionally local-only.
       if(t==="HOLD_PROGRESS"||t==="DRAG_MOVE")return this._rememberMode(this._directive(MODE.SILENT,"high_frequency_local",e,o));
       if(now-this.lastSpeechAt<this.minSpeechGapMs)return this._rememberMode(this._directive(MODE.SILENT,"speech_cooldown",e,o));
 
-      const notable=this._notableEvent(e),burst=this._tapsInWindow(now,1500);
-      let chance=.64;
-      if(notable)chance+=.18;
-      if(burst>=4)chance+=.12;
-      if(["HOLD_START","RELEASE_EARLY","HOLD_COMPLETE","WAIT_BROKEN","WAIT_SUCCESS","SLICE","IDLE_STAGE"].includes(t))chance+=.12;
-      if(t==="RELEASE"||t==="DRAG_START"||t==="DRAG_END")chance-=.16;
-      if(this.recentModes.slice(-2).every(x=>x===MODE.BANTER))chance-=.34;
-      chance=Math.max(.12,Math.min(.88,chance));
+      // Normal taps are not conversation prompts. Wait until behavior becomes worth commenting on.
+      if(t==="TAP"&&!notable&&burst<6)return this._rememberMode(this._directive(MODE.SILENT,"tap_is_gameplay",e,o));
+      if(t==="RELEASE"||t==="DRAG_START"||t==="DRAG_END")return this._rememberMode(this._directive(MODE.SILENT,"low_value_event",e,o));
+
+      let chance=notable?.62:(burst>=10?.55:(burst>=6?.32:.10));
+      if(this.recentModes.slice(-2).every(x=>x===MODE.BANTER))chance*=.35;
       if(this.rng()<chance){
         this.lastSpeechAt=now;
-        return this._rememberMode(this._directive(MODE.BANTER,notable?"react_to_behavior":"light_banter",e,o));
+        return this._rememberMode(this._directive(MODE.BANTER,notable?"react_to_behavior":"rapid_tap_punchline",e,Object.assign({},o,{voiceWanted:true})));
       }
       return this._rememberMode(this._directive(MODE.SILENT,"intentional_silence",e,o));
     }
@@ -87,23 +88,24 @@
       let instruction="";
       if(mode===MODE.BANTER){
         instruction=[
-          "BANTER ONLY. Speak one short reactive line. Do not call a tool and do not change gameplay.",
-          "You are a mischievous character playing with the person, not a narrator or assistant.",
-          "Prefer 2-9 words. Examples of energy: Again? Seriously? Wait. Nope. Don't let go. I knew you'd do that. Okay... that was actually good.",
+          "BANTER ONLY. Speak one line only when there is an actual observation worth saying. Do not call a tool and do not change gameplay.",
+          "Sound like a smart, dry friend watching over the player's shoulder -- not a game mascot, host, narrator, or children's character.",
+          "Underreact. No fake excitement, no generic praise, no filler such as wow/haha/hehe/awesome. Prefer a specific dry observation about what the person just did.",
+          "For zh-TW, use natural Taiwan Mandarin, not translated English meme phrasing. Keep it conversational and adult.",
           "Never state obvious visuals such as 'the button moved' or 'there are three buttons'.",
           "DELIVERY="+delivery+".",
           observations.length?"PLAYER READ: "+observations.join("; ")+".":""
         ].filter(Boolean).join(" ");
       } else if(mode===MODE.GAME_TURN){
         instruction=[
-          "GAME TURN. Speak one short setup/punchline, then call apply_world_experience exactly once.",
+          (options&&options.voiceWanted)?"GAME TURN. If you have a genuinely sharp observation, speak one short line, then call apply_world_experience exactly once.":"GAME TURN. Do not speak. Silently call apply_world_experience exactly once.",
           "Choose intent/composition only. Never generate code, frame data or particle coordinates.",
-          "Do not narrate obvious visuals. DELIVERY="+delivery+".",
+          "Do not narrate obvious visuals. No generic praise or fake excitement. DELIVERY="+delivery+".",
           observations.length?"PLAYER READ: "+observations.join("; ")+".":""
         ].filter(Boolean).join(" ");
       } else instruction="SILENT TURN. Local runtime only; do not send to Gemini.";
       this._rememberDelivery(delivery);
-      return {mode,reason,event:event||{},instruction,observations,delivery};
+      return {mode,reason,event:event||{},instruction,observations,delivery,voiceWanted:mode===MODE.BANTER?true:!!(options&&options.voiceWanted)};
     }
 
     _deliveryFor(event,reason,burst){

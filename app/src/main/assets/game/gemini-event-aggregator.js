@@ -39,7 +39,7 @@
       this.directive=null;this.context=null;
       const summary=this._summarize(events);
       this.flushCount++;
-      const payload={mode:directive.mode,reason:directive.reason||"aggregated",delivery:directive.delivery||"TEASE",instruction:directive.instruction||"",context,behavior:summary};
+      const payload={mode:directive.mode,reason:directive.reason||"aggregated",delivery:directive.delivery||"DRY",voiceWanted:directive.mode==="BANTER"?true:directive.voiceWanted===true,instruction:directive.instruction||"",context,behavior:summary};
       this.onFlush(payload);
       return payload;
     }

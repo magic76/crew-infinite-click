@@ -3,7 +3,7 @@
 
   class AudioMoodPlayer {
     constructor() {
-      this.ctx=null;this.enabled=true;this.lastAt=0;this.voiceActive=false;this.activeNodes=new Set();
+      this.ctx=null;this.enabled=true;this.lastAt=0;this.lastClickAt=0;this.voiceActive=false;this.activeNodes=new Set();
       this.sensory={audio:1,density:1};
     }
     setSensoryState(state){this.sensory=state||this.sensory;}
@@ -15,6 +15,19 @@
     }
     stopAll(){
       for(const osc of Array.from(this.activeNodes)){try{osc.stop();}catch(_){}this.activeNodes.delete(osc);}
+    }
+
+    playClick(mood,intensity,combo){
+      if(this.voiceActive)return;
+      this.unlock();if(!this.ctx||!this.enabled)return;
+      const nowMs=performance.now();if(nowMs-this.lastClickAt<42)return;this.lastClickAt=nowMs;
+      const c=Math.max(1,Math.min(20,Number(combo)||1)),i=Math.max(.05,Math.min(1,Number(intensity)||.4));
+      const pack={ORGANIC:[510,390,"triangle"],STORM:[190,105,"sawtooth"],DRY:[360,245,"triangle"],GLASS:[840,1110,"sine"],COSMIC:[170,82,"sine"],GLITCH:[620,310,"square"]};
+      const spec=pack[mood]||pack.GLITCH,pitch=1+Math.min(.34,(c-1)*.022),dur=.042+Math.min(.026,c*.0015);
+      const osc=this.ctx.createOscillator(),gain=this.ctx.createGain();osc.type=spec[2];
+      osc.frequency.setValueAtTime(spec[0]*pitch,this.ctx.currentTime);osc.frequency.exponentialRampToValueAtTime(Math.max(40,spec[1]*pitch),this.ctx.currentTime+dur);
+      gain.gain.setValueAtTime(.0001,this.ctx.currentTime);gain.gain.exponentialRampToValueAtTime(.022+i*.028,this.ctx.currentTime+.005);gain.gain.exponentialRampToValueAtTime(.0001,this.ctx.currentTime+dur);
+      osc.connect(gain);gain.connect(this.ctx.destination);this.activeNodes.add(osc);osc.onended=()=>this.activeNodes.delete(osc);osc.start();osc.stop(this.ctx.currentTime+dur+.01);
     }
     play(mood,cue,intensity){
       if(this.voiceActive)return;

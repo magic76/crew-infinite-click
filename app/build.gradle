@@ -10,8 +10,8 @@ android {
         applicationId 'com.magic76.aiclicker'
         minSdk 26
         targetSdk 35
-        versionCode 376
-        versionName '0.37.6-no-shatter-click-juice-v3'
+        versionCode 377
+        versionName '0.37.7-frenzy-v4'
     }
 
     buildTypes {

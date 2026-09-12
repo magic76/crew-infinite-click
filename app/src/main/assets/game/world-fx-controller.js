@@ -78,28 +78,68 @@
       const size=this._size();
       const px=Math.abs(Number(x))<=1?Number(x)*size.width:Number(x);
       const py=Math.abs(Number(y))<=1?Number(y)*size.height:Number(y);
-      const combo=clamp(Math.max(1,Number(streak)||1),1,8);
-      const n=Math.min(6,2+Math.floor((combo-1)/2));
+      const combo=clamp(Math.max(1,Number(streak)||1),1,20);
+      // Pre-cleanup shipped 18-36 particles per tap. Restore the perceived density, but use
+      // short-lived pooled particles so rapid tapping remains bounded and smooth.
+      const n=Math.min(18,8+Math.floor(combo*.5));
       let made=0;
       for(let i=0;i<n;i++){
-        const a=(Math.PI*2*i/n)+(Math.random()-.5)*.55;
-        const spd=(52+Math.random()*72)*(1+combo*.035);
-        const color=i%3===0?this.worldDef.secondary:this.worldDef.accent;
+        const a=(Math.PI*2*i/n)+(Math.random()-.5)*.72;
+        const spd=(70+Math.random()*115)*(1+combo*.025);
+        const color=i%4===0?0xffffff:(i%3===0?this.worldDef.secondary:this.worldDef.accent);
         const world=this.worldDef.id;
         const p=this._spawn(g=>{
-          if(world==="SUMMER_STORM") rect(g,-1,-5,2,10+Math.random()*7,color,.72);
-          else if(world==="AUTUMN_DECAY") { rect(g,-3,-2,6+Math.random()*3,4,color,.68); g.rotation=(Math.random()-.5)*.8; }
-          else if(world==="WINTER_FROST") ring(g,2+Math.random()*2,color,1.2,.78);
-          else if(world==="NEON_RIFT") rect(g,-2,-2,4+Math.random()*2,4+Math.random()*2,color,.78);
-          else circle(g,1.8+Math.random()*2.4,color,.72);
+          if(world==="SUMMER_STORM") rect(g,-1,-6,2,12+Math.random()*9,color,.80);
+          else if(world==="AUTUMN_DECAY") { rect(g,-3,-2,6+Math.random()*4,4+Math.random()*2,color,.76); g.rotation=(Math.random()-.5)*1.1; }
+          else if(world==="WINTER_FROST") ring(g,2+Math.random()*3,color,1.3,.84);
+          else if(world==="NEON_RIFT") rect(g,-2,-2,4+Math.random()*3,4+Math.random()*3,color,.86);
+          else if(world==="VOID_CHAMBER") ring(g,1.5+Math.random()*2.5,color,1.1,.76);
+          else circle(g,2+Math.random()*3.1,color,.80);
         },{
-          x:px,y:py,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd-(world==="SUMMER_STORM"?18:0),
-          gravity:world==="SPRING_BLOOM"||world==="AUTUMN_DECAY"?34:10,
-          life:.24+Math.random()*.18,decay:1,rotationSpeed:(Math.random()-.5)*2.4,
-          scaleDecay:world==="VOID_CHAMBER"?.9:0
+          x:px,y:py,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd-(world==="SUMMER_STORM"?24:0),
+          gravity:world==="SPRING_BLOOM"||world==="AUTUMN_DECAY"?46:14,
+          life:.22+Math.random()*.20,decay:1,rotationSpeed:(Math.random()-.5)*3.2,
+          scaleDecay:world==="VOID_CHAMBER"?1.15:0
         });
         if(p)made++;
       }
+      return made;
+    }
+
+    /**
+     * Time-gated rapid-tap punctuation. This is deliberately NOT a tap-count phase machine:
+     * the current world decides the vocabulary and the caller supplies heat/streak only.
+     */
+    tapFrenzyAccent(x,y,streak,heat){
+      if(!this.worldDef)this.setWorld("NEON_RIFT",.5);
+      if(!this.worldDef)return 0;
+      const size=this._size(),combo=clamp(Number(streak)||1,1,20),h=clamp(Number(heat)||0,0,1);
+      const px=Math.abs(Number(x))<=1?Number(x)*size.width:Number(x);
+      const py=Math.abs(Number(y))<=1?Number(y)*size.height:Number(y);
+      const world=this.worldDef.id,accent=this.worldDef.accent,secondary=this.worldDef.secondary;
+      let made=0;
+      const spawn=(draw,state)=>{if(this._spawn(draw,state))made++;};
+
+      // One punchy local ring on every frenzy beat.
+      spawn(g=>ring(g,18+combo*1.4,accent,2.0+h*1.6,.68),{x:px,y:py,life:.34,decay:1,scaleGrowth:2.8+h*1.4});
+
+      if(world==="SUMMER_STORM"){
+        spawn(g=>rect(g,0,0,size.width,size.height,0xffffff,.035+h*.055),{x:0,y:0,life:.10,decay:1});
+        for(let i=0;i<4+Math.floor(h*4);i++)spawn(g=>rect(g,-1,-8,2,16+Math.random()*12,secondary,.50+h*.20),{x:Math.random()*size.width,y:py-40-Math.random()*80,vx:-18,vy:220+Math.random()*120,life:.34,decay:1});
+      }else if(world==="WINTER_FROST"){
+        spawn(g=>{const branches=5+Math.floor(h*3);for(let i=0;i<branches;i++){const a=i/branches*Math.PI*2+Math.random()*.24,l=32+Math.random()*48+combo*1.4;g.moveTo(0,0).lineTo(Math.cos(a)*l,Math.sin(a)*l);}g.stroke({color:accent,width:1.4+h,alpha:.72});},{x:px,y:py,life:.38,decay:1});
+      }else if(world==="VOID_CHAMBER"){
+        const n=6+Math.floor(h*7);for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,r=70+Math.random()*75,sx=px+Math.cos(a)*r,sy=py+Math.sin(a)*r;spawn(g=>circle(g,2+Math.random()*2.5,i%3?accent:secondary,.70),{x:sx,y:sy,vx:(px-sx)*1.4,vy:(py-sy)*1.4,life:.36,decay:1,scaleDecay:1.3});}
+      }else if(world==="NEON_RIFT"){
+        for(let i=0;i<3+Math.floor(h*4);i++)spawn(g=>rect(g,0,0,size.width*(.18+Math.random()*.36),2+Math.random()*6,i%2?accent:secondary,.20+h*.16),{x:Math.random()*size.width,y:Math.random()*size.height,vx:(Math.random()-.5)*150,life:.13+Math.random()*.10,decay:1});
+      }else if(world==="AUTUMN_DECAY"){
+        const n=6+Math.floor(h*6);for(let i=0;i<n;i++)spawn(g=>rect(g,-3,-2,6+Math.random()*5,4+Math.random()*2,i%3?accent:secondary,.70),{x:px+(Math.random()-.5)*110,y:py-18-Math.random()*55,vx:(Math.random()-.5)*75,vy:55+Math.random()*80,life:.42,decay:1,rotationSpeed:(Math.random()-.5)*4});
+      }else{
+        const n=7+Math.floor(h*7);for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2;spawn(g=>circle(g,2.3+Math.random()*3.4,i%4?accent:secondary,.78),{x:px,y:py,vx:Math.cos(a)*(85+Math.random()*115),vy:Math.sin(a)*(85+Math.random()*115)-20,gravity:42,life:.36,decay:1});}
+      }
+
+      // High heat gets the occasional whole-screen accent that made the old build feel explosive.
+      if(combo>=10&&h>.65)spawn(g=>rect(g,0,0,size.width,size.height,accent,.028+h*.035),{x:0,y:0,life:.09,decay:1});
       return made;
     }
 
