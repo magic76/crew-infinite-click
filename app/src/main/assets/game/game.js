@@ -62,8 +62,6 @@ async function boot(){
     document.getElementById('stage').appendChild(app.canvas);buildScene();
     window.PixiGameDebug={app:app,canvas:app.canvas,stage:app.stage,version:'0.37-shatter-debug'};
     setTimeout(()=>{try{if(window.runScreenShatterDemo)window.runScreenShatterDemo();}catch(e){reportError(e)}},1200);
-    window.PixiGameDebug={app:app,canvas:app.canvas,stage:app.stage,version:'0.37-shatter-debug'};
-    setTimeout(()=>{try{if(window.runScreenShatterDemo)window.runScreenShatterDemo();}catch(e){reportError(e)}},1200);
     app.stage.eventMode='static';app.stage.hitArea=viewport();
     app.stage.on('pointerdown',ev=>{
       ensureAudio();const view=viewport(),p=ev.global,x=clamp(p.x/view.width,0,1),y=clamp(p.y/view.height,0,1);

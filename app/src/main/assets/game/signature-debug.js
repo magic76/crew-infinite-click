@@ -10,6 +10,6 @@
       signatureRuntime=new global.SignatureMomentRuntime({getPixiApp:()=>global.PixiGameDebug&&global.PixiGameDebug.app,getGameCanvas:()=>global.PixiGameDebug&&global.PixiGameDebug.canvas});
     }
     if(typeof signatureRuntime.start!=="function")throw new Error("SignatureMomentRuntime instance required");
-    return signatureRuntime.start("SCREEN_SHATTER",{waitDurationMs:1450});
+    return signatureRuntime.start("SCREEN_SHATTER",{waitDurationMs:10000});
   };
 })(window);
