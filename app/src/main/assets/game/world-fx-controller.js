@@ -144,6 +144,65 @@
     }
 
     /**
+     * Anticipation cue for the hidden FOMO cycle. Density-independent and intentionally cheap.
+     */
+    tapPromiseAccent(x,y,progress,stage){
+      if(!this.worldDef)this.setWorld("NEON_RIFT",.35);
+      if(!this.worldDef)return 0;
+      const size=this._size(),p=clamp(Number(progress)||0,0,1),st=Math.max(1,Number(stage)||1);
+      const px=Math.abs(Number(x))<=1?Number(x)*size.width:Number(x);
+      const py=Math.abs(Number(y))<=1?Number(y)*size.height:Number(y);
+      let made=0;
+      const spawn=(draw,state)=>{if(this._spawn(draw,state))made++;};
+      const rings=st>=4?3:(st>=3?2:1);
+      for(let i=0;i<rings;i++){
+        spawn(g=>ring(g,22+i*11+st*3,i%2?this.worldDef.secondary:this.worldDef.accent,1.4+st*.35,.28+p*.34),
+          {x:px,y:py,life:.30+i*.07,decay:1,scaleGrowth:1.8+p*1.7});
+      }
+      if(st>=3){
+        for(let i=0;i<Math.min(6,2+st);i++){
+          const a=Math.PI*2*i/Math.min(6,2+st)+(Math.random()-.5)*.25;
+          spawn(g=>circle(g,1.8+Math.random()*2.2,i%2?this.worldDef.accent:this.worldDef.secondary,.58+p*.22),
+            {x:px+Math.cos(a)*42,y:py+Math.sin(a)*42,vx:Math.cos(a)*18,vy:Math.sin(a)*18,life:.28,decay:1});
+        }
+      }
+      return made;
+    }
+
+    /**
+     * Variable-ratio payoff. Bigger than tapFrenzyAccent, but still bounded by the shared pool.
+     */
+    tapJackpot(x,y,level,heat){
+      if(!this.worldDef)this.setWorld("NEON_RIFT",.55);
+      if(!this.worldDef)return 0;
+      const size=this._size(),lv=clamp(Number(level)||1,1,4),h=clamp(Number(heat)||0,0,1);
+      const px=Math.abs(Number(x))<=1?Number(x)*size.width:Number(x);
+      const py=Math.abs(Number(y))<=1?Number(y)*size.height:Number(y);
+      let made=0;
+      const spawn=(draw,state)=>{if(this._spawn(draw,state))made++;};
+      const n=Math.min(28,16+lv*3);
+      for(let i=0;i<n;i++){
+        const a=Math.PI*2*i/n+(Math.random()-.5)*.55,spd=120+Math.random()*180+lv*22;
+        const color=i%5===0?0xffffff:(i%2?this.worldDef.accent:this.worldDef.secondary);
+        spawn(g=>{
+          if(this.worldDef.id==="NEON_RIFT")rect(g,-2,-2,4+Math.random()*5,4+Math.random()*5,color,.9);
+          else if(this.worldDef.id==="WINTER_FROST")ring(g,2+Math.random()*4,color,1.5,.88);
+          else if(this.worldDef.id==="SUMMER_STORM")rect(g,-1,-7,2,14+Math.random()*12,color,.86);
+          else circle(g,2.2+Math.random()*4,color,.86);
+        },{x:px,y:py,vx:Math.cos(a)*spd,vy:Math.sin(a)*spd-25,gravity:38,life:.34+Math.random()*.24,decay:1,rotationSpeed:(Math.random()-.5)*4});
+      }
+      spawn(g=>ring(g,28+lv*5,this.worldDef.accent,3,.82),{x:px,y:py,life:.48,decay:1,scaleGrowth:3.7});
+      spawn(g=>ring(g,46+lv*7,this.worldDef.secondary,2,.48),{x:px,y:py,life:.58,decay:1,scaleGrowth:3.0});
+      if(this.worldDef.id==="SUMMER_STORM"||this.worldDef.id==="NEON_RIFT"){
+        spawn(g=>rect(g,0,0,size.width,size.height,this.worldDef.accent,.055+h*.045),{x:0,y:0,life:.10,decay:1});
+      }else if(this.worldDef.id==="VOID_CHAMBER"){
+        for(let i=0;i<6;i++){const a=Math.random()*Math.PI*2,r=120+Math.random()*70,sx=px+Math.cos(a)*r,sy=py+Math.sin(a)*r;
+          spawn(g=>circle(g,2.2,this.worldDef.secondary,.72),{x:sx,y:sy,vx:(px-sx)*1.8,vy:(py-sy)*1.8,life:.42,decay:1,scaleDecay:1.2});}
+      }
+      return made;
+    }
+
+    /**
      * Cheap local world feedback. This replaces the old generic tap burst so each world
      * keeps a recognizable feel without bringing back a tap-count phase loop.
      */

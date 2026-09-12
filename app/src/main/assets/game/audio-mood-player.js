@@ -29,6 +29,22 @@
       gain.gain.setValueAtTime(.0001,this.ctx.currentTime);gain.gain.exponentialRampToValueAtTime(.022+i*.028,this.ctx.currentTime+.005);gain.gain.exponentialRampToValueAtTime(.0001,this.ctx.currentTime+dur);
       osc.connect(gain);gain.connect(this.ctx.destination);this.activeNodes.add(osc);osc.onended=()=>this.activeNodes.delete(osc);osc.start();osc.stop(this.ctx.currentTime+dur+.01);
     }
+    playJackpot(mood,level){
+      if(this.voiceActive)return;
+      this.unlock();if(!this.ctx||!this.enabled)return;
+      const lv=Math.max(1,Math.min(4,Number(level)||1)),pack={ORGANIC:392,STORM:174,DRY:294,GLASS:740,COSMIC:147,GLITCH:466};
+      const root=pack[mood]||pack.GLITCH,t=this.ctx.currentTime;
+      [1,1.26,1.5].forEach((mul,i)=>{
+        const osc=this.ctx.createOscillator(),gain=this.ctx.createGain();osc.type=i===2?"triangle":"sine";
+        osc.frequency.setValueAtTime(root*mul*(1+lv*.035),t+i*.035);
+        osc.frequency.exponentialRampToValueAtTime(root*mul*1.18*(1+lv*.035),t+.16+i*.035);
+        gain.gain.setValueAtTime(.0001,t+i*.035);gain.gain.exponentialRampToValueAtTime(.034+lv*.008,t+.012+i*.035);
+        gain.gain.exponentialRampToValueAtTime(.0001,t+.18+i*.035);
+        osc.connect(gain);gain.connect(this.ctx.destination);this.activeNodes.add(osc);osc.onended=()=>this.activeNodes.delete(osc);
+        osc.start(t+i*.035);osc.stop(t+.20+i*.035);
+      });
+    }
+
     play(mood,cue,intensity){
       if(this.voiceActive)return;
       const level=Number(this.sensory&&this.sensory.audio)||0;

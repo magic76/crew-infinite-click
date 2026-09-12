@@ -12,68 +12,104 @@
       this.app=o.app;this.gameplay=o.gameplayContainer;this.onGameEvent=o.onGameEvent||(()=>{});
       this.onSpeechRequest=o.onSpeechRequest||(()=>{});this.haptics=o.haptics||null;
       this.root=null;this.dark=null;this.target=null;this.title=null;this.pointer={x:0,y:0};this.desired={x:0,y:0};
-      this.startedAt=0;this.holdStart=0;this.holdMs=Number(o.holdMs)||1100;this.radius=Number(o.radius)||82;
+      this.startedAt=0;this.holdStart=0;this.holdMs=Number(o.holdMs)||900;this.radius=Number(o.radius)||86;
       this.complete=false;this.lastRenderX=-9999;this.lastRenderY=-9999;this.tickBound=d=>this._tick(d);
-      this.downBound=e=>this._down(e);this.moveBound=e=>this._move(e);this.upBound=e=>this._up(e);
+      this.rootDownBound=e=>this._rootDown(e);this.moveBound=e=>this._move(e);this.upBound=e=>this._up(e);
+      this.targetDownBound=e=>this._targetDown(e);
     }
     start(){
       if(!this.app||!global.PIXI)return false;
       const s=this.app.renderer.screen,w=s.width,h=s.height;
-      this.root=new global.PIXI.Container();this.root.eventMode="none";
-      this.dark=new global.PIXI.Graphics();
-      this.target=new global.PIXI.Graphics().circle(0,0,24).fill({color:0xffffff,alpha:.95});
-      this.target.x=w*.72;this.target.y=h*.36;
+      this.root=new global.PIXI.Container();
+      this.root.eventMode="static";this.root.hitArea=new global.PIXI.Rectangle(0,0,w,h);this.root.interactiveChildren=true;
+      this.dark=new global.PIXI.Graphics();this.dark.eventMode="none";
+      this.target=new global.PIXI.Graphics().circle(0,0,24).fill({color:0xffffff,alpha:.96});
+      this.target.x=w*.72;this.target.y=h*.36;this.target.eventMode="static";
+      this.target.hitArea=new global.PIXI.Circle(0,0,54);this.target.cursor="pointer";
       this.title=new global.PIXI.Text({text:"FIND IT.",style:{fill:0xffffff,fontFamily:"sans-serif",fontSize:26,fontWeight:"700"}});
-      this.title.anchor.set(.5);this.title.x=w/2;this.title.y=h*.16;
-      this.root.addChild(this.dark,this.target,this.title);this.app.stage.addChild(this.root);
+      this.title.anchor.set(.5);this.title.x=w/2;this.title.y=h*.16;this.title.eventMode="none";
+      // Target is physically behind the darkness and is only revealed through the spotlight cutout.
+      this.root.addChild(this.target,this.dark,this.title);this.app.stage.addChild(this.root);
       this.pointer.x=this.desired.x=w*.5;this.pointer.y=this.desired.y=h*.55;
       this._renderSpotlight(true);
-      global.addEventListener("pointerdown",this.downBound,true);
-      global.addEventListener("pointermove",this.moveBound,true);
-      global.addEventListener("pointerup",this.upBound,true);
-      global.addEventListener("pointercancel",this.upBound,true);
+      this.target.on("pointerdown",this.targetDownBound);
+      this.root.on("pointerdown",this.rootDownBound);
+      this.root.on("pointermove",this.moveBound);
+      this.root.on("pointerup",this.upBound);
+      this.root.on("pointerupoutside",this.upBound);
       this.app.ticker.add(this.tickBound);this.startedAt=now();
       this.onGameEvent({type:"SIGNATURE_START",signature:"FLASHLIGHT_HUNT",special:true});
-      this.onSpeechRequest({mode:"BANTER",fallback:"Find it.",reason:"signature_start"});
+      // Text carries this micro-game. Do not make Gemini chatter over a simple search interaction.
       return true;
     }
     stop(reason){
       this.app&&this.app.ticker&&this.app.ticker.remove(this.tickBound);
-      global.removeEventListener("pointerdown",this.downBound,true);global.removeEventListener("pointermove",this.moveBound,true);
-      global.removeEventListener("pointerup",this.upBound,true);global.removeEventListener("pointercancel",this.upBound,true);
+      if(this.target)this.target.off("pointerdown",this.targetDownBound);
+      if(this.root){
+        this.root.off("pointerdown",this.rootDownBound);this.root.off("pointermove",this.moveBound);
+        this.root.off("pointerup",this.upBound);this.root.off("pointerupoutside",this.upBound);
+      }
       if(this.root&&this.root.parent)this.root.parent.removeChild(this.root);
       if(this.root)try{this.root.destroy({children:true});}catch(_){}
       this.root=this.dark=this.target=this.title=null;
       if(reason!=="completed")this.onGameEvent({type:"SIGNATURE_ABORT",signature:"FLASHLIGHT_HUNT",reason:String(reason||"stopped"),special:true});
     }
-    _move(e){this.desired.x=e.clientX;this.desired.y=e.clientY;e.stopImmediatePropagation();}
-    _down(e){
-      this.desired.x=e.clientX;this.desired.y=e.clientY;
-      const d=Math.hypot(e.clientX-this.target.x,e.clientY-this.target.y);
-      if(d<=this.radius*.85){this.holdStart=now();this.title.text="DON'T LET GO.";this.onGameEvent({type:"HOLD_START",x:e.clientX,y:e.clientY,special:true});this.onSpeechRequest({mode:"BANTER",fallback:"Don't let go.",reason:"flashlight_hold"});}
-      else{this.onGameEvent({type:"TAP",x:e.clientX,y:e.clientY,signature:"FLASHLIGHT_HUNT"});}
-      e.stopImmediatePropagation();e.preventDefault();
+    _point(e){
+      const p=e&&e.global;
+      if(p&&Number.isFinite(p.x)&&Number.isFinite(p.y))return{x:p.x,y:p.y};
+      const canvas=this.app&&this.app.canvas,rect=canvas&&canvas.getBoundingClientRect?canvas.getBoundingClientRect():null;
+      const s=this.app.renderer.screen;
+      if(rect&&rect.width&&rect.height){
+        return{x:clamp((Number(e&&e.clientX)-rect.left)*s.width/rect.width,0,s.width),
+          y:clamp((Number(e&&e.clientY)-rect.top)*s.height/rect.height,0,s.height)};
+      }
+      return{x:s.width*.5,y:s.height*.5};
+    }
+    _consume(e){try{e.stopPropagation();e.stopImmediatePropagation&&e.stopImmediatePropagation();e.preventDefault&&e.preventDefault();}catch(_){}}
+    _move(e){const p=this._point(e);this.desired.x=p.x;this.desired.y=p.y;}
+    _rootDown(e){
+      // Target pointerdown stops propagation, so reaching here means a genuine miss.
+      const p=this._point(e);this.desired.x=p.x;this.desired.y=p.y;
+      this.onGameEvent({type:"TAP",x:p.x,y:p.y,signature:"FLASHLIGHT_HUNT"});
+      this._consume(e);
+    }
+    _targetDown(e){
+      if(this.complete)return;
+      const p=this._point(e);this.desired.x=p.x;this.desired.y=p.y;
+      this.holdStart=now();this.title.text="HOLD IT.";
+      this.target.scale.set(1.28);this.target.alpha=1;
+      if(this.haptics)this.haptics.perform("SOFT_TAP",.48);
+      this.onGameEvent({type:"HOLD_START",x:p.x,y:p.y,special:true,signature:"FLASHLIGHT_HUNT"});
+      this._consume(e);
     }
     _up(e){
       if(this.holdStart&&!this.complete){
         const held=now()-this.holdStart;
-        if(held<this.holdMs){this.onGameEvent({type:"RELEASE_EARLY",durationMs:held,correct:false,special:true});this.title.text="TOO SOON.";this.onSpeechRequest({mode:"BANTER",fallback:"Too soon.",reason:"flashlight_release_early"});}
+        if(held<this.holdMs){
+          this.onGameEvent({type:"RELEASE_EARLY",durationMs:held,correct:false,special:true,signature:"FLASHLIGHT_HUNT"});
+          this.title.text="TOO SOON.";this.target.scale.set(1.08);
+          if(this.haptics)this.haptics.perform("WRONG",.28);
+          global.setTimeout(()=>{if(this.root&&!this.complete&&!this.holdStart)this.title.text="HOLD IT.";},360);
+        }
       }
-      this.holdStart=0;e.stopImmediatePropagation();e.preventDefault();
+      this.holdStart=0;this._consume(e);
     }
     _tick(){
       if(!this.root)return;
-      this.pointer.x+=(this.desired.x-this.pointer.x)*.28;this.pointer.y+=(this.desired.y-this.pointer.y)*.28;
+      this.pointer.x+=(this.desired.x-this.pointer.x)*.32;this.pointer.y+=(this.desired.y-this.pointer.y)*.32;
       if(Math.abs(this.pointer.x-this.lastRenderX)>1||Math.abs(this.pointer.y-this.lastRenderY)>1)this._renderSpotlight(false);
       if(this.holdStart&&!this.complete){
-        const held=now()-this.holdStart;
-        if(held>=this.holdMs){
-          this.complete=true;this.title.text="GOOD.";this.target.alpha=1;
-          if(this.haptics)this.haptics.perform("CORRECT",.7);
-          this.onGameEvent({type:"HOLD_COMPLETE",durationMs:held,correct:true,special:true});
-          this.onSpeechRequest({mode:"BANTER",fallback:"Okay... that was good.",reason:"flashlight_complete"});
-          global.setTimeout(()=>this.onGameEvent({type:"SIGNATURE_COMPLETE",signature:"FLASHLIGHT_HUNT",special:true}),420);
+        const held=now()-this.holdStart,progress=clamp(held/this.holdMs,0,1);
+        this.target.scale.set(1.12+progress*.34);
+        this.target.alpha=.90+progress*.10;
+        if(progress>=1){
+          this.complete=true;this.holdStart=0;this.title.text="GOOD.";this.target.scale.set(1.5);this.target.alpha=1;
+          if(this.haptics)this.haptics.perform("CORRECT",.82);
+          this.onGameEvent({type:"HOLD_COMPLETE",durationMs:held,correct:true,special:true,signature:"FLASHLIGHT_HUNT"});
+          global.setTimeout(()=>this.onGameEvent({type:"SIGNATURE_COMPLETE",signature:"FLASHLIGHT_HUNT",special:true}),360);
         }
+      }else if(this.target&&!this.complete){
+        this.target.scale.x+=(1-this.target.scale.x)*.16;this.target.scale.y=this.target.scale.x;
       }
     }
     _renderSpotlight(force){
@@ -83,7 +119,6 @@
       if(typeof g.circle==="function"&&typeof g.cut==="function"){
         g.circle(this.pointer.x,this.pointer.y,this.radius).cut();
       }else{
-        // Old Pixi fallback: still pure Pixi and updated at ticker rate, never CSS radial-gradient.
         g.circle(this.pointer.x,this.pointer.y,this.radius).fill({color:0x000000,alpha:0});
       }
     }

@@ -5,7 +5,7 @@ const game=fs.readFileSync(path.join(root,'app/src/main/assets/game/game.js'),'u
 const fx=fs.readFileSync(path.join(root,'app/src/main/assets/game/world-fx-controller.js'),'utf8');
 const exp=fs.readFileSync(path.join(root,'app/src/main/assets/game/experience-runtime.js'),'utf8');
 const audio=fs.readFileSync(path.join(root,'app/src/main/assets/game/audio-mood-player.js'),'utf8');
-for(const required of ['tapJuice:{lastAt:0,streak:0,lastFrenzyAt:0,heat:0}','localReleaseFeedback','state.fx.tapAccent(px,py,streak)','state.fx.tapFrenzyAccent(px,py,streak,heat)','playClick(mood,.28+power*.30,streak)']){
+for(const required of ['tapJuice:{lastAt:0,streak:0,lastFrenzyAt:0,heat:0,cycleTaps:0,goal:8','localReleaseFeedback','state.fx.tapAccent(px,py,streak)','state.fx.tapFrenzyAccent(px,py,streak,heat)','playClick(mood,.28+power*.30,Math.max(streak,Math.round(fomoProgress*20)))']){
   if(!game.includes(required))throw new Error('missing click juice invariant: '+required);
 }
 if(!fx.includes('tapAccent(x,y,streak)'))throw new Error('missing pooled tap accent');

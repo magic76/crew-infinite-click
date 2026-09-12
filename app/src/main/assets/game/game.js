@@ -9,7 +9,7 @@
     safe:{left:0,top:0,right:0,bottom:0},language:"zh-TW",lastInputAt:performance.now(),idleStage:0,
     nextTurnId:1,stateVersion:1,pendingGameTurnId:0,pendingGameEvent:null,geminiPending:false,
     frame:{fps:60,lastMs:performance.now(),accMs:0,frames:0,lastLog:0},
-    tapJuice:{lastAt:0,streak:0,lastFrenzyAt:0,heat:0}
+    tapJuice:{lastAt:0,streak:0,lastFrenzyAt:0,heat:0,cycleTaps:0,goal:8,promiseStage:0,jackpots:0,nearMissUsed:false,labelUntil:0,lastPromiseAt:0}
   };
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const hex=v=>typeof v==="number"?v:Number.parseInt(String(v||"#ffffff").replace("#",""),16)||0xffffff;
@@ -111,18 +111,73 @@
     stage.on("pointerupoutside",e=>{if(!state.signatureMoments.isActive()){const p=e.global;localReleaseFeedback();state.primitiveHost.pointerUp(p.x,p.y);}});
   }
 
+  function nextFomoGoal(){
+    const j=state.tapJuice.jackpots;
+    return 6+Math.floor(Math.random()*5)+Math.min(2,Math.floor(j/3));
+  }
+
+  function setFomoLabel(text,ms){
+    if(!state.targetLabel)return;
+    state.targetLabel.text=text;state.tapJuice.labelUntil=performance.now()+Math.max(120,Number(ms)||500);
+  }
+
+  function triggerPromiseStage(stage,px,py,progress){
+    const j=state.tapJuice;if(stage<=j.promiseStage)return;
+    j.promiseStage=stage;j.lastPromiseAt=performance.now();
+    if(stage===1)setFomoLabel("...",520);
+    else if(stage===2)setFomoLabel("KEEP GOING",760);
+    else setFomoLabel("ONE MORE?",920);
+    if(window.GameHaptics)window.GameHaptics.perform(stage>=3?"HEARTBEAT":"SOFT_TAP",stage>=3?.34:.20);
+    if(state.fx&&typeof state.fx.tapPromiseAccent==="function")state.fx.tapPromiseAccent(px,py,progress,stage);
+  }
+
+  function triggerFomoJackpot(px,py){
+    const j=state.tapJuice;j.jackpots++;
+    const level=Math.min(4,1+Math.floor(j.jackpots/2));
+    setFomoLabel(["AGAIN.","MORE?","KEEP GOING.","WHAT ELSE?"][j.jackpots%4],900);
+    if(window.GameHaptics)window.GameHaptics.perform("IMPACT",Math.min(.78,.48+level*.07));
+    if(state.fx&&typeof state.fx.tapJackpot==="function")state.fx.tapJackpot(px,py,level,j.heat);
+    else if(state.fx&&typeof state.fx.tapFrenzyAccent==="function")state.fx.tapFrenzyAccent(px,py,20,1);
+    if(state.audio&&state.runtime&&state.runtime.currentPlan&&typeof state.audio.playJackpot==="function"){
+      state.audio.playJackpot(state.runtime.currentPlan.audioMood||"GLITCH",level);
+    }
+    j.cycleTaps=0;j.goal=nextFomoGoal();j.promiseStage=0;j.nearMissUsed=false;
+    j.heat=clamp(j.heat+.18,0,1);
+  }
+
+  function updateFomoCycle(px,py,gap){
+    const j=state.tapJuice;
+    if(gap<900)j.cycleTaps=Math.min(30,j.cycleTaps+1);
+    else{j.cycleTaps=1;j.goal=nextFomoGoal();j.promiseStage=0;j.nearMissUsed=false;}
+    let progress=clamp(j.cycleTaps/Math.max(1,j.goal),0,1);
+    if(progress>=.46)triggerPromiseStage(1,px,py,progress);
+    if(progress>=.70)triggerPromiseStage(2,px,py,progress);
+    if(progress>=.88)triggerPromiseStage(3,px,py,progress);
+    if(j.cycleTaps>=j.goal){
+      // Occasional near-miss: the world visibly hesitates for one or two extra taps.
+      if(!j.nearMissUsed&&j.jackpots>0&&Math.random()<.28){
+        j.nearMissUsed=true;j.goal+=1+Math.floor(Math.random()*2);
+        setFomoLabel("SO CLOSE.",720);
+        if(window.GameHaptics)window.GameHaptics.perform("HEARTBEAT",.42);
+        if(state.fx&&typeof state.fx.tapPromiseAccent==="function")state.fx.tapPromiseAccent(px,py,.96,4);
+      }else triggerFomoJackpot(px,py);
+    }
+    return progress;
+  }
+
   function localTouchFeedback(x,y){
     const t=performance.now(),gap=state.tapJuice.lastAt?t-state.tapJuice.lastAt:9999;
-    if(gap<285){
-      state.tapJuice.streak=Math.min(20,state.tapJuice.streak+1);
-      state.tapJuice.heat=clamp(state.tapJuice.heat+.13,0,1);
+    if(gap<340){
+      state.tapJuice.streak=Math.min(24,state.tapJuice.streak+1);
+      state.tapJuice.heat=clamp(state.tapJuice.heat+.12,0,1);
     }else{
       state.tapJuice.streak=1;
-      state.tapJuice.heat=Math.max(.08,state.tapJuice.heat*.35);
+      state.tapJuice.heat=Math.max(.08,state.tapJuice.heat*.48);
     }
     state.tapJuice.lastAt=t;
-    const streak=state.tapJuice.streak,power=clamp((streak-1)/12,0,1),heat=state.tapJuice.heat;
     const s=screen(),px=x*s.width,py=y*s.height;
+    const fomoProgress=updateFomoCycle(px,py,gap);
+    const streak=state.tapJuice.streak,power=clamp(Math.max((streak-1)/12,fomoProgress*.82),0,1),heat=state.tapJuice.heat;
     const world=state.runtime&&state.runtime.currentPlan&&GameWorldCatalog.WORLDS[state.runtime.currentPlan.world];
     const accent=world&&world.accent!=null?world.accent:0xffffff;
     const secondary=world&&world.secondary!=null?world.secondary:0xffffff;
@@ -148,14 +203,14 @@
     if(window.GameHaptics)window.GameHaptics.perform(streak>=8?"DIGITAL_TRIPLE":"SOFT_TAP",.20+power*.22);
     if(state.audio&&state.runtime&&state.runtime.currentPlan){
       const mood=state.runtime.currentPlan.audioMood||"GLITCH";
-      if(typeof state.audio.playClick==="function")state.audio.playClick(mood,.28+power*.30,streak);
+      if(typeof state.audio.playClick==="function")state.audio.playClick(mood,.28+power*.30,Math.max(streak,Math.round(fomoProgress*20)));
       else state.audio.play(mood,"click",.28+power*.30);
     }
     if(state.fx&&typeof state.fx.tapAccent==="function")state.fx.tapAccent(px,py,streak);
 
     // Rapid tapping creates escalating effects without restoring the old fixed tap-count phase loop.
     // Cooldown is time-based, so the player can hammer the screen without allocating unbounded work.
-    if(streak>=4&&state.fx&&typeof state.fx.tapFrenzyAccent==="function"&&t-state.tapJuice.lastFrenzyAt>=230){
+    if((streak>=4||fomoProgress>=.70)&&state.fx&&typeof state.fx.tapFrenzyAccent==="function"&&t-state.tapJuice.lastFrenzyAt>=210){
       state.tapJuice.lastFrenzyAt=t;
       state.fx.tapFrenzyAccent(px,py,streak,heat);
     }
@@ -320,10 +375,22 @@
       if(r.life<=0){state.pools.ripples.release(r.g);state.ripples.splice(i,1);}
     }
     if(state.target&&state.primitiveHost&&state.primitiveHost.interaction!=="HOLD"){
-      const desired=1+Math.sin(performance.now()/450)*.025;
-      if(performance.now()-state.tapJuice.lastAt>420)state.tapJuice.heat=Math.max(0,state.tapJuice.heat-dt/1800);state.target.scale.x+=(desired-state.target.scale.x)*.16;state.target.scale.y=state.target.scale.x;
+      const nowT=performance.now(),sinceTap=nowT-state.tapJuice.lastAt;
+      const stage=state.tapJuice.promiseStage;
+      const promisePulse=stage>=3?.055+Math.sin(nowT/72)*.028:(stage===2?.026+Math.sin(nowT/105)*.014:0);
+      const desired=1+Math.sin(nowT/450)*.025+promisePulse;
+      if(sinceTap>420)state.tapJuice.heat=Math.max(0,state.tapJuice.heat-dt/2100);
+      // Preserve a nearly-complete cycle briefly. The player can see/feel that one more tap is still "alive".
+      if(state.tapJuice.cycleTaps>0&&sinceTap>1500){
+        state.tapJuice.cycleTaps=0;state.tapJuice.goal=nextFomoGoal();state.tapJuice.promiseStage=0;state.tapJuice.nearMissUsed=false;
+      }
+      state.target.scale.x+=(desired-state.target.scale.x)*.16;state.target.scale.y=state.target.scale.x;
       state.target.rotation+=(0-state.target.rotation)*.18;
       if(state.targetCore)state.targetCore.alpha+=(.96-state.targetCore.alpha)*.14;
+      if(state.targetLabel&&state.tapJuice.labelUntil&&nowT>state.tapJuice.labelUntil){
+        state.tapJuice.labelUntil=0;
+        if(["...","KEEP GOING","ONE MORE?","SO CLOSE.","AGAIN.","MORE?","WHAT ELSE?"].includes(String(state.targetLabel.text)))state.targetLabel.text="TOUCH";
+      }
     }
     const idle=performance.now()-state.lastInputAt;
     if(!state.signatureMoments.isActive()){
@@ -347,6 +414,7 @@
       particlePool:fx.pool||null,ripplePool:state.pools&&state.pools.ripples.stats(),decoyPool:state.pools&&state.pools.decoys.stats(),
       activeSignature:state.signatureMoments&&state.signatureMoments.currentId||"NONE",
       geminiRequestPending:state.geminiPending,eventAggregationCount:state.aggregator?state.aggregator.pendingCount():0,
+      fomo:{cycleTaps:state.tapJuice.cycleTaps,goal:state.tapJuice.goal,promiseStage:state.tapJuice.promiseStage,jackpots:state.tapJuice.jackpots,heat:Math.round(state.tapJuice.heat*100)/100},
       stateVersion:state.stateVersion
     };
   }
@@ -376,6 +444,7 @@
         state.aggregator&&state.aggregator.cancel();state.signatureMoments&&state.signatureMoments.stop("reset");
         clearDecoys();for(const r of state.ripples)state.pools.ripples.release(r.g);state.ripples.length=0;
         state.pendingGameTurnId=0;state.pendingGameEvent=null;state.geminiPending=false;state.stateVersion++;
+        Object.assign(state.tapJuice,{lastAt:0,streak:0,lastFrenzyAt:0,heat:0,cycleTaps:0,goal:nextFomoGoal(),promiseStage:0,jackpots:0,nearMissUsed:false,labelUntil:0,lastPromiseAt:0});
       }
     }catch(e){reportError(e);}
   }

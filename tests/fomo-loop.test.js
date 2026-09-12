@@ -1,0 +1,14 @@
+const fs=require('fs'),assert=require('assert');
+const g=fs.readFileSync('app/src/main/assets/game/game.js','utf8');
+const fx=fs.readFileSync('app/src/main/assets/game/world-fx-controller.js','utf8');
+assert(g.includes('cycleTaps:0,goal:8,promiseStage:0'),'tap state should carry a hidden escalation cycle');
+assert(g.includes('function nextFomoGoal()'),'FOMO threshold must be variable, not a fixed tap phase');
+assert(g.includes('6+Math.floor(Math.random()*5)'),'goal must vary per cycle');
+assert(g.includes('KEEP GOING')&&g.includes('ONE MORE?'),'anticipation needs visible promise beats');
+assert(g.includes('SO CLOSE.'),'near-miss cue should exist');
+assert(g.includes('Math.random()<.28'),'near-miss should be occasional, not deterministic');
+assert(g.includes('triggerFomoJackpot'),'cycle must have a payoff');
+assert(fx.includes('tapPromiseAccent('),'world FX needs anticipation cue');
+assert(fx.includes('tapJackpot('),'world FX needs bounded payoff cue');
+assert(!g.includes('Math.floor((state.taps-1)/4)%8'),'must not restore the old fixed phase machine');
+console.log('fomo-loop.test.js PASS');
