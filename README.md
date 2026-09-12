@@ -61,3 +61,7 @@ node tests/experience-runtime.test.js
 ```
 
 See `AGENT_APPLY.md` for integration details.
+
+## 0.36
+
+See `README_0.36.md` and `AGENT_APPLY.md`. 0.36 intentionally ships one finished signature scene (`FLASHLIGHT_HUNT`) plus meaningful HOLD / RELEASE / IDLE / WAIT input before adding more effects.

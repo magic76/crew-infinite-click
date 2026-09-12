@@ -1,0 +1,14 @@
+== tests/conversation-director.test.js ==
+conversation-director 0.34 tests passed
+== tests/experience-composer.test.js ==
+experience-composer 0.35 tests passed
+== tests/experience-director.test.js ==
+experience-director tests passed
+== tests/experience-runtime.test.js ==
+experience-runtime 0.34 sensory budget tests passed
+== tests/primitive-host-runtime.test.js ==
+primitive-host-runtime 0.36 tests passed
+== tests/sensory-director.test.js ==
+sensory-director 0.34 tests passed
+== tests/signature-flashlight-hunt.test.js ==
+signature flashlight hunt 0.36 tests passed

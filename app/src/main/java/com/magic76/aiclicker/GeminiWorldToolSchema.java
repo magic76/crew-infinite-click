@@ -26,6 +26,9 @@ public final class GeminiWorldToolSchema {
             properties.put("experienceIntent", enumString("High-level dramatic intent for this event. The Runtime composes safe primitives from it.",
                     "TEASE", "TEST_PATIENCE", "MISDIRECT", "CHASE", "SEARCH", "TRUST_TEST", "PREDICT", "SURPRISE", "RECOVER"));
 
+            properties.put("signatureMoment", enumString("Rare finished signature scene. Use FLASHLIGHT_HUNT only when a search/hold beat would be dramatically stronger than ordinary primitives; otherwise NONE.",
+                    "NONE", "FLASHLIGHT_HUNT"));
+
             JSONObject compositionProps = new JSONObject()
                     .put("interaction", enumString("Primary player interaction for this event.", "TAP", "HOLD", "DRAG", "SLICE", "WAIT"))
                     .put("spatial", enumString("Spatial rule affecting gameplay objects.", "NONE", "GRAVITY_DOWN", "GRAVITY_SIDE", "ORBIT", "PUSH_AWAY"))
@@ -83,7 +86,7 @@ public final class GeminiWorldToolSchema {
         try {
             declaration.put("name", FUNCTION_NAME);
             declaration.put("description", "Choose the next high-level world experience and a few validated UI actions. "
-                    + "Compose a fresh event from interaction/spatial/reveal/camera/surface/timing primitives. "
+                    + "Compose a fresh event from interaction/spatial/reveal/camera/surface/timing primitives, or rarely choose a finished signatureMoment. "
                     + "The runtime enforces compatibility, complexity, novelty, sensory contrast, and UI action safety.");
             declaration.put("parameters", params);
         } catch (Exception ignored) {}

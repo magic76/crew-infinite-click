@@ -1,93 +1,128 @@
-# 0.35 Apply Guide
+# Local Agent Apply Guide — 0.36
 
-Apply this on top of the user's latest working 0.34 branch. Do not rebuild the project from scratch.
+Apply this on top of the current 0.35 source. Do not redesign unrelated code.
 
-## Script load order
-Load these before `experience-runtime.js`:
+## Goal
 
-1. `world-catalog.js`
-2. `primitive-catalog.js`
-3. `experience-composer.js`
-4. `interaction-primitives.js`
-5. `primitive-host-runtime.js`
-6. existing `sensory-director.js` / `conversation-director.js` / FX/audio modules
-7. `experience-director.js`
-8. `experience-runtime.js`
+Ship one production-feeling signature event, `FLASHLIGHT_HUNT`, and make non-click input real gameplay.
 
-## Required host wiring
-Create one `PrimitiveHostRuntime` using the actual Pixi gameplay container and primary clickable target. Wire it to `InteractionPrimitives` callbacks:
+## Add
+
+- `web/signature-moment-runtime.js`
+- `web/signature-debug.js`
+
+## Replace/update
+
+- `web/primitive-host-runtime.js`
+- `web/conversation-director.js`
+- `web/experience-director.js`
+- `web/experience-runtime.js`
+- `android/GeminiWorldToolSchema.java`
+
+Preserve all 0.35 code unless this package explicitly changes it.
+
+## Integration
+
+### 1. Create SignatureMomentRuntime
+
+After Pixi/game runtime exists:
 
 ```js
-const primitiveHost = new PrimitiveHostRuntime({
-  gameplayContainer: gameWorldContainer,
-  getPrimaryTarget,
-  getViewport: () => ({width: app.screen.width, height: app.screen.height}),
-  onGameEvent: event => dispatchPlayerEvent(event),
-  onSurfaceMode: mode => setSurfaceRenderer(mode),
+const signatureMoments = new SignatureMomentRuntime({
+  getPrimaryTarget: () => getPrimaryTarget(),
+  haptics: GameHaptics,
+  audio: audioMoodPlayer,
+  onGameEvent: (event) => {
+    // Route through the existing ExperienceRuntime / ConversationDirector.
+    // Signature events must NOT create a second autonomous loop.
+    const ctx = experience.onPlayerEvent(event);
+    routeInteractionContextToExistingGeminiLive(ctx);
+  },
+  onSpeechRequest: ({ phase, fallback, event }) => {
+    // Reuse the current Gemini Live session as a BANTER turn.
+    // Ask for one short natural reaction based on phase/player history.
+    // Do not call apply_world_experience from this callback.
+    sendSignatureBanterToExistingLiveSession({ phase, fallback, event });
+  }
 });
+```
 
-const primitives = new InteractionPrimitives({
-  fx: worldFx,
-  getPrimaryTarget,
-  onInteraction: mode => primitiveHost.setInteraction(mode),
-  onSpatial: mode => primitiveHost.setSpatial(mode),
-  onCamera: mode => primitiveHost.setCamera(mode),
-  onSurface: mode => primitiveHost.setSurface(mode),
-  onTiming: mode => primitiveHost.setTiming(mode),
-});
+Pass it into ExperienceRuntime:
 
+```js
 const experience = new ExperienceRuntime({
   ...existingOptions,
-  primitives,
-  composer: new ExperienceComposer(),
+  signatureMoments
 });
-
-app.ticker.add(ticker => primitiveHost.tick(ticker.deltaMS || 16));
 ```
 
-Feed existing pointer events into `primitiveHost.pointerDown / pointerMove / pointerUp`. Do not keep the old handler firing a normal click after a successful HOLD/DRAG/SLICE; dedupe gesture completion.
+### 2. Script ordering
 
-## Surface primitives
-`FRAGMENT` and `LIQUID` are intentionally renderer adapters because Pixi APIs differ by project version. Implement them against the actual renderer:
+Load after `safe-area.js` and before the code that constructs `ExperienceRuntime`:
 
-- `FRAGMENT`: snapshot the gameplay container to a RenderTexture, split it into 6–16 rectangular sprites, animate pieces apart/reassemble, then restore the live container. It must actually fragment the rendered scene; do not fake this with particles.
-- `LIQUID`: use the project's supported displacement/filter path or mesh deformation. If no compatible filter exists, temporarily disable LIQUID in `primitive-catalog.js`; do not substitute generic particles.
-- `TRAIL`: retain 4–8 fading snapshots/ghost positions of the primary target.
-
-## Gemini Live
-Keep the same Live session and existing synchronous `FunctionResponse` behavior. Extend `apply_world_experience` using `GeminiWorldToolSchema.java`; do not add another model/session/agent loop. Gemini proposes `experienceIntent` and `composition`; JS `ExperienceComposer` remains authoritative.
-
-## Personality
-Keep 0.34 BANTER turns. Speech-only banter must not call the tool. GAME_TURN may speak briefly, then call `apply_world_experience` once.
-
-## Verification
-Run:
-
-```bash
-node tests/experience-composer.test.js
-node tests/primitive-host-runtime.test.js
-node tests/conversation-director.test.js
-node tests/experience-director.test.js
-node tests/experience-runtime.test.js
-node tests/sensory-director.test.js
-./gradlew assembleDebug
+```html
+<script src="safe-area.js"></script>
+<script src="signature-moment-runtime.js"></script>
+<script src="experience-runtime.js"></script>
+<script src="signature-debug.js"></script>
 ```
 
-Real-device checks:
-1. HOLD requires holding; a quick tap must not count as HOLD.
-2. DRAG sends changing x/y and visibly drags/affects the target.
-3. SLICE requires a real fast swipe distance, not a tap.
-4. GRAVITY changes the actual target position.
-5. CAMERA changes the gameplay container, not only overlay particles.
-6. FRAGMENT splits the rendered game scene into pieces.
-7. Run 10+ GAME_TURNs and verify compositions do not repeatedly differ by only one cosmetic dimension.
-8. Existing safe-area, haptic, banter, density and GameRuntime validation continue working.
+### 3. Gemini schema
 
-## Deterministic device showcase
-In a dev build, load `web/composition-debug.js` and call:
+Merge the updated `GeminiWorldToolSchema.java`. `apply_world_experience` gains:
+
+```text
+signatureMoment: NONE | FLASHLIGHT_HUNT
+```
+
+Never start a second Gemini connection for signature moments.
+
+### 4. Pointer ownership
+
+While `signatureMoments.isActive()` is true, its capture-phase pointer handlers own the scene. Do not attach another full-screen gesture handler above it.
+
+### 5. Voice routing
+
+Signature speech events should be short BANTER requests. Examples are fallbacks only; Gemini should vary wording using recent behavior.
+
+Important phases:
+
+- `start`
+- `escape`
+- `idle`
+- `idle_hint`
+- `hold_start`
+- `release_early`
+- `complete`
+
+Do not let Gemini narrate the visual effect. It should react to the player.
+
+## Real-device acceptance test
+
+Run in a dev build:
 
 ```js
-runCompositionShowcase(experience, 5000);
+runFlashlightHuntDemo(signatureMoments)
 ```
 
-This bypasses AI randomness and must visibly demonstrate four structurally different combinations. Remove/disable the debug entry point in release builds.
+Pass only if all are true:
+
+1. Screen is visibly almost black, not just dimmed by ~20%.
+2. Finger motion moves a clear circular flashlight opening.
+3. Target can only be visually found through the opening.
+4. Target escapes at least twice.
+5. Final catch requires holding, not tapping.
+6. Releasing early produces `release_early` and a voice/haptic reaction.
+7. Holding to completion removes the darkness.
+8. Doing nothing for ~3.2s creates `idle_wait` and a voice reaction.
+9. Doing nothing longer creates `idle_hint` and temporarily enlarges the flashlight.
+10. No ordinary particle/VFX/action plan fires on top of the signature scene.
+
+If any item fails, fix the integration before adding another signature moment.
+
+## Tests
+
+```bash
+for f in tests/*.test.js; do node "$f"; done
+./gradlew assembleDebug
+```

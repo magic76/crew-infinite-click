@@ -39,7 +39,7 @@
       this.lastActivityAt=now;
       this.idleStage=0;
 
-      if (e.type==="click" || e.type==="drag") {
+      if (e.type==="click" || e.type==="tap" || e.type==="drag") {
         this._rememberClick(now);
       }
 
@@ -57,7 +57,8 @@
       let chance=0.48;
       if (notable) chance+=0.24;
       if (burst>=4) chance+=0.20;
-      if (e.type==="timeout") chance+=0.12;
+      if (e.type==="timeout" || e.type==="idle_wait" || e.type==="idle_hint") chance+=0.12;
+      if (e.type==="hold_start" || e.type==="release" || e.type==="release_early" || e.type==="hold_complete") chance+=0.18;
       if (e.type==="drag") chance-=0.12;
       if (this.recentModes.slice(-2).every(x=>x===MODE.BANTER)) chance-=0.34;
       chance=Math.max(0.10,Math.min(0.82,chance));
@@ -126,6 +127,10 @@
       if (p.patience>=0.68) observations.push("player has shown patience");
       if (p.trustsAI<=0.35) observations.push("player is skeptical of the AI");
       if (p.curiosity>=0.68) observations.push("player explores unusual choices");
+      if (event&&event.type==="hold_start") observations.push("player is holding instead of tapping");
+      if (event&&event.type==="release_early") observations.push("player released before the hold finished");
+      if (event&&(event.type==="idle_wait"||event.type==="idle_hint"||event.type==="idle")) observations.push("player stopped interacting for a while");
+      if (event&&event.type==="wait_broken") observations.push("player touched even though waiting was the rule");
 
       let instruction;
       if (mode===MODE.BANTER) {
@@ -154,6 +159,8 @@
     _notableEvent(e) {
       return e&&(
         e.correct===true || e.correct===false || e.type==="timeout" ||
+        e.type==="hold_start" || e.type==="release_early" || e.type==="hold_complete" ||
+        e.type==="idle_wait" || e.type==="idle_hint" || e.type==="wait_broken" ||
         e.ignoredWarning===true || e.fakeEndingBelieved===true || e.special===true
       );
     }

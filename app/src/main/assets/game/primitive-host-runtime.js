@@ -17,10 +17,11 @@
       this.onSurfaceMode=typeof o.onSurfaceMode==="function"?o.onSurfaceMode:()=>{};
       this.interaction="TAP"; this.spatial="NONE"; this.camera="STATIC"; this.surface="NONE"; this.timing="SNAP";
       this.pointer=null; this.velocity={x:0,y:0}; this.orbitPhase=0; this.holdTimer=null;
+      this.holdStarted=false; this.holdThresholdMs=Math.max(320,Number(o.holdThresholdMs)||520);
       this.viewport=typeof o.getViewport==="function"?o.getViewport:()=>({width:global.innerWidth||360,height:global.innerHeight||640});
     }
 
-    setInteraction(mode){this.interaction=mode||"TAP"; this._clearHold();}
+    setInteraction(mode){this.interaction=mode||"TAP"; this._clearHold(); this.holdStarted=false;}
     setSpatial(mode){this.spatial=mode||"NONE"; this.velocity={x:0,y:0};}
     setCamera(mode){this.camera=mode||"STATIC"; this._applyCameraImmediate();}
     setSurface(mode){this.surface=mode||"NONE"; this.onSurfaceMode(this.surface);}
@@ -28,13 +29,20 @@
 
     pointerDown(x,y,targetId){
       const t={x,y,targetId:targetId||null,downAt:now(),last:{x,y},moved:0}; this.pointer=t;
-      if(this.interaction==="HOLD"){
-        this._clearHold();
-        this.holdTimer=setTimeout(()=>{
-          if(this.pointer===t&&t.moved<18) this.onGameEvent({type:"hold",targetId:t.targetId,x:t.x,y:t.y,durationMs:now()-t.downAt,special:true});
-        },480);
+      if(this.interaction==="WAIT"){
+        this.onGameEvent({type:"wait_broken",targetId:t.targetId,x:t.x,y:t.y,special:true});
+        return false;
       }
-      return this.interaction!=="WAIT";
+      if(this.interaction==="HOLD"){
+        this._clearHold(); this.holdStarted=false;
+        this.holdTimer=setTimeout(()=>{
+          if(this.pointer===t&&t.moved<18){
+            this.holdStarted=true;
+            this.onGameEvent({type:"hold_start",targetId:t.targetId,x:t.x,y:t.y,durationMs:now()-t.downAt,special:true});
+          }
+        },this.holdThresholdMs);
+      }
+      return true;
     }
 
     pointerMove(x,y){
@@ -47,15 +55,21 @@
     }
 
     pointerUp(x,y){
-      const p=this.pointer;if(!p)return null;this._clearHold();this.pointer=null;
+      const p=this.pointer;if(!p)return null;
+      const hadHold=this.holdStarted; this._clearHold(); this.pointer=null; this.holdStarted=false;
       const duration=now()-p.downAt, travel=dist({x:p.x,y:p.y},{x,y});
+      if(this.interaction==="HOLD"){
+        const e={type:"release",targetId:p.targetId,x,y,durationMs:duration,afterHold:hadHold,releasedEarly:!hadHold,special:true};
+        this.onGameEvent(e); return e;
+      }
       if(this.interaction==="SLICE"&&travel>=72&&duration<=700){
         const e={type:"slice",targetId:p.targetId,x1:p.x,y1:p.y,x2:x,y2:y,distance:travel,durationMs:duration,special:true};this.onGameEvent(e);return e;
       }
       if(this.interaction==="TAP"&&travel<18){
         const e={type:"tap",targetId:p.targetId,x,y};this.onGameEvent(e);return e;
       }
-      return null;
+      const e={type:"release",targetId:p.targetId,x,y,durationMs:duration,afterHold:false};
+      this.onGameEvent(e); return e;
     }
 
     tick(deltaMs){

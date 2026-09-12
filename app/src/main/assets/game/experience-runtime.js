@@ -25,6 +25,7 @@
       this.onRuleTwist=typeof o.onRuleTwist==="function"?o.onRuleTwist:()=>{};
       this.onSpeech=typeof o.onSpeech==="function"?o.onSpeech:()=>{};
       this.onInteractionDirective=typeof o.onInteractionDirective==="function"?o.onInteractionDirective:()=>{};
+      this.signatureMoments=o.signatureMoments||null;
       this.currentPlan=null;
       this.currentSensoryState=this.sensory.resolve({world:"NEON_RIFT",situation:"WAIT",intensity:0.12,surpriseLevel:0.06,sensoryDensity:0});
       this.currentSituationStartedAt=0;
@@ -64,7 +65,8 @@
       }
 
       const surprise=this._surpriseLevelForEvent(e);
-      const shouldNew=this.shouldRequestNewSituation();
+      const signatureActive=!!(this.signatureMoments&&this.signatureMoments.isActive&&this.signatureMoments.isActive());
+      const shouldNew=signatureActive?false:this.shouldRequestNewSituation();
       const interaction=this.conversation.routePlayerEvent(e,{shouldRequestNewSituation:shouldNew,currentPlan:this.currentPlan,sensory:this.currentSensoryState});
       const context=this.director.contextForAi(e,surprise);
       context.interaction=interaction;
@@ -77,6 +79,8 @@
 
     /** Poll from a cheap local timer, e.g. every 500ms. Returns null or a BANTER context. */
     pollIdle(gameSnapshot) {
+      // A signature moment owns its own idle beats; avoid duplicate global idle banter.
+      if(this.signatureMoments&&this.signatureMoments.isActive&&this.signatureMoments.isActive()) return null;
       const interaction=this.conversation.pollIdle({currentPlan:this.currentPlan,sensory:this.currentSensoryState});
       if (!interaction) return null;
       const event=interaction.event||{type:"idle"};
@@ -102,40 +106,57 @@
       this.currentSituationStartedAt=performance.now();
       const target=this.getPrimaryTarget();
 
-      if (this.primitives&&typeof this.primitives.apply==="function") {
+      let signatureStarted=false;
+      if (this.signatureMoments&&plan.signatureMoment&&plan.signatureMoment!=="NONE") {
+        signatureStarted=!!this.signatureMoments.start(plan.signatureMoment,{plan});
+        if (signatureStarted) {
+          // A signature moment is a finished micro-game. It temporarily owns input and staging.
+          // Do not stack ordinary primitives, VFX, rule twists or UI actions on top of it.
+          composition.interaction="WAIT";
+          composition.spatial="NONE";
+          composition.reveal="NONE";
+          composition.camera="STATIC";
+          composition.surface="NONE";
+          composition.timing="TENSION";
+        }
+      }
+
+      if (!signatureStarted && this.primitives&&typeof this.primitives.apply==="function") {
         this.primitives.apply(composition,plan);
       }
 
       if (this.fx) {
         this.fx.setSensoryState(sensoryState);
-        this.fx.applyPlan(plan,target,sensoryState);
+        if(!signatureStarted) this.fx.applyPlan(plan,target,sensoryState);
       }
 
       if (this.audio) {
         if (typeof this.audio.setSensoryState==="function") this.audio.setSensoryState(sensoryState);
-        const cue=previousWorld&&previousWorld!==plan.world?"worldChange":(plan.situation==="REVEAL"?"reveal":((plan.situation==="DECOY"||plan.situation==="FAKE_ENDING")?"trap":"click"));
-        this.audio.play(plan.audioMood,cue,Math.min(1,plan.intensity*(0.48+sensoryState.audio*0.19)));
+        if(!signatureStarted){
+          const cue=previousWorld&&previousWorld!==plan.world?"worldChange":(plan.situation==="REVEAL"?"reveal":((plan.situation==="DECOY"||plan.situation==="FAKE_ENDING")?"trap":"click"));
+          this.audio.play(plan.audioMood,cue,Math.min(1,plan.intensity*(0.48+sensoryState.audio*0.19)));
+        }
       }
 
-      if (this.haptics&&sensoryState.hapticCue!=="NONE") {
+      if (!signatureStarted && this.haptics&&sensoryState.hapticCue!=="NONE") {
         const hapticIntensity=sensoryState.density===3?0.82:(sensoryState.density===2?0.52:0.24);
         this.haptics.perform(sensoryState.hapticCue,hapticIntensity);
       }
 
-      this.onRuleTwist(plan.ruleTwist,plan);
-      if (plan.speech) {
+      if(!signatureStarted) this.onRuleTwist(plan.ruleTwist,plan);
+      if (!signatureStarted && plan.speech) {
         this.onSpeech(plan.speech,plan);
         this.conversation.recordSpeech(plan.speech);
       }
 
       let applied=[], rejected=[];
-      const sensoryLimitedActions=this._limitActionsForSensory(plan.actions,sensoryState);
+      const sensoryLimitedActions=signatureStarted?{allowed:[],rejected:Array.isArray(plan.actions)?plan.actions.slice():[]}:this._limitActionsForSensory(plan.actions,sensoryState);
       rejected=rejected.concat(sensoryLimitedActions.rejected);
-      if (this.gameRuntime&&typeof this.gameRuntime.applyActions==="function") {
+      if (!signatureStarted && this.gameRuntime&&typeof this.gameRuntime.applyActions==="function") {
         const result=this.gameRuntime.applyActions(sensoryLimitedActions.allowed)||{};
         applied=result.applied||[];
         rejected=rejected.concat(result.rejected||[]);
-      } else if (this.gameRuntime&&typeof this.gameRuntime.applyAction==="function") {
+      } else if (!signatureStarted && this.gameRuntime&&typeof this.gameRuntime.applyAction==="function") {
         for (const action of sensoryLimitedActions.allowed) {
           try { const ok=this.gameRuntime.applyAction(action); (ok?applied:rejected).push(action); }
           catch (_) { rejected.push(action); }
@@ -153,6 +174,8 @@
         creationActionBudget:sensoryState.creationActionBudget,
         experienceIntent:plan.experienceIntent,
         composition:composition,
+        signatureMoment:plan.signatureMoment||"NONE",
+        signatureStarted:signatureStarted,
         noveltyScore:composition.noveltyScore
       };
     }
@@ -184,6 +207,8 @@
         "After CHAOS, drop hard to QUIET instead of staying medium-busy.",
         "Speech is personality, not narration: tease, observe, predict, question, or fake-reassure. Never describe the visual effect literally.",
         "Choose an experienceIntent and composition. Build one coherent event by combining interaction + spatial + reveal + camera + surface + timing; do not turn every dimension on.",
+        "Signature moments are rare finished scenes. Use signatureMoment=FLASHLIGHT_HUNT only for a search/hold beat, never repeatedly; otherwise use NONE.",
+        "Player input includes stopping, holding, releasing, dragging and slicing. Treat inactivity and release timing as meaningful behavior, not missing input.",
         "Novelty comes from changing meaningful dimensions, not renaming the same particle effect. Prefer at least two meaningful dimension changes from recent compositions.",
         "Background visuals may be full screen, but clickable targets must stay inside safe interactive bounds."
       ].join(" ");

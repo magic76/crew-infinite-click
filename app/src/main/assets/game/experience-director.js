@@ -116,6 +116,7 @@
         hapticCue:typeof input.hapticCue === "string" ? input.hapticCue : "AUTO",
         experienceIntent:(catalog.INTENTS&&catalog.INTENTS.includes(input.experienceIntent)) ? input.experienceIntent : "TEASE",
         composition:(input.composition&&typeof input.composition==="object") ? Object.assign({},input.composition) : {},
+        signatureMoment:["NONE","FLASHLIGHT_HUNT"].includes(input.signatureMoment)?input.signatureMoment:"NONE",
         actions:Array.isArray(input.actions) ? input.actions.slice(0,8) : []
       };
 
@@ -151,6 +152,7 @@
         hapticCue:"AUTO",
         experienceIntent:"TEASE",
         composition:{},
+        signatureMoment:"NONE",
         actions:[]
       });
     }

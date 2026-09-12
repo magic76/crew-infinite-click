@@ -1,14 +1,22 @@
-Apply the attached AI Clicker 0.35 package on top of my latest 0.34 source. Read AGENT_APPLY.md first.
+Apply AI Clicker 0.36 on top of the current 0.35 project.
 
-Critical requirements:
-- Do not rebuild the app or rewrite GameRuntime/Gemini Live.
-- Integrate PrimitiveCatalog + ExperienceComposer + InteractionPrimitives + PrimitiveHostRuntime.
-- Gemini only proposes experienceIntent/composition; Runtime validates compatibility, max complexity, world vocabulary and novelty.
-- HOLD/DRAG/SLICE must be actual pointer interactions.
-- GRAVITY/ORBIT/PUSH_AWAY must move actual gameplay targets.
-- ZOOM/FOLLOW/PAN must transform the actual gameplay container.
-- FRAGMENT must use the current Pixi renderer/RenderTexture to split the actual scene; do NOT fake it with particles.
-- Keep 0.34 speech-only BANTER behavior and one Gemini Live session.
-- Preserve safe area, haptics, sensory density and current GameRuntime action validator.
-- Wire primitiveHost.tick() to the Pixi ticker.
-- Run every JS test plus ./gradlew assembleDebug, fix compile/runtime integration errors, then report changed files, test results and APK path.
+Read AGENT_APPLY.md first and follow it exactly.
+
+This version is deliberately NOT a broad refactor. The only product goal is to make FLASHLIGHT_HUNT feel obviously different on a physical Android phone and to make HOLD / RELEASE / IDLE / WAIT meaningful player inputs.
+
+Requirements:
+- integrate SignatureMomentRuntime into the existing Pixi/game host
+- reuse the existing Gemini Live session for signature banter
+- do not create a second agent loop/session
+- while a signature moment is active, suppress ordinary primitives/VFX/UI actions
+- make pointer capture work on Android WebView
+- keep safe-area bounds for target relocation
+- run runFlashlightHuntDemo(signatureMoments) on-device
+- do not declare success unless the screen is genuinely dark with a moving radial flashlight hole, the target escapes, HOLD is required, early release is detected, and idle behavior is visible
+- run all JS tests and ./gradlew assembleDebug
+
+Return:
+1. modified files
+2. test output
+3. APK path
+4. any integration issue found on the physical-device path
