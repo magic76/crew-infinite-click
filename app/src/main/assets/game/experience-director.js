@@ -116,7 +116,7 @@
         hapticCue:typeof input.hapticCue === "string" ? input.hapticCue : "AUTO",
         experienceIntent:(catalog.INTENTS&&catalog.INTENTS.includes(input.experienceIntent)) ? input.experienceIntent : "TEASE",
         composition:(input.composition&&typeof input.composition==="object") ? Object.assign({},input.composition) : {},
-        signatureMoment:["NONE","FLASHLIGHT_HUNT"].includes(input.signatureMoment)?input.signatureMoment:"NONE",
+        signatureMoment:["NONE","FLASHLIGHT_HUNT","SCREEN_SHATTER"].includes(input.signatureMoment)?input.signatureMoment:"NONE",
         actions:Array.isArray(input.actions) ? input.actions.slice(0,8) : []
       };
 
@@ -198,7 +198,7 @@
     _defaultBehavior(s) { if (s==="CHASE") return "ESCAPE"; if (s==="DECOY") return "SPLIT"; if (s==="HIDE") return "HIDE"; if (s==="WAIT") return "STILL"; return "PULSE"; }
     _fallbackRule(s) { if (s==="WAIT") return "WAIT_TO_WIN"; if (s==="MIRROR") return "LEFT_RIGHT_REVERSED"; return "NONE"; }
     _fallbackSpeech(s) {
-      return ({CHASE:"抓得到再說。",DECOY:"你確定那顆是真的？",WAIT:"這次不動，也許比較聰明。",PREDICT:"我猜你下一個還是會選錯。",MIRROR:"左右這種東西，真的有那麼可靠嗎？",HIDE:"你剛才是不是漏看了一個地方？",REVEAL:"好吧，給你看一點點。",FAKE_ENDING:"恭喜。大概吧。"})[s] || "再來一次。";
+      return ({CHASE:"Catch it first.",DECOY:"You sure that one is real?",WAIT:"Maybe doing nothing is smarter.",PREDICT:"I bet you pick wrong again.",MIRROR:"You trust left and right that much?",HIDE:"You missed something.",REVEAL:"Fine. One little hint.",FAKE_ENDING:"Congratulations. Probably."})[s] || "Again.";
     }
   }
 

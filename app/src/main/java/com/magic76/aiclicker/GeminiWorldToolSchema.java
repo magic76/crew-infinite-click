@@ -26,8 +26,8 @@ public final class GeminiWorldToolSchema {
             properties.put("experienceIntent", enumString("High-level dramatic intent for this event. The Runtime composes safe primitives from it.",
                     "TEASE", "TEST_PATIENCE", "MISDIRECT", "CHASE", "SEARCH", "TRUST_TEST", "PREDICT", "SURPRISE", "RECOVER"));
 
-            properties.put("signatureMoment", enumString("Rare finished signature scene. Use FLASHLIGHT_HUNT only when a search/hold beat would be dramatically stronger than ordinary primitives; otherwise NONE.",
-                    "NONE", "FLASHLIGHT_HUNT"));
+            properties.put("signatureMoment", enumString("Finished signature scene. Runtime already guarantees occasional signatures. Prefer NONE unless a dramatic scene is specifically warranted. FLASHLIGHT_HUNT is search/hold; SCREEN_SHATTER is break/wait/restore.",
+                    "NONE", "FLASHLIGHT_HUNT", "SCREEN_SHATTER"));
 
             JSONObject compositionProps = new JSONObject()
                     .put("interaction", enumString("Primary player interaction for this event.", "TAP", "HOLD", "DRAG", "SLICE", "WAIT"))

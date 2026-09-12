@@ -1,0 +1,24 @@
+{
+  "world": "VOID_CHAMBER",
+  "mood": "EERIE",
+  "situation": "HIDE",
+  "audioMood": "COSMIC",
+  "targetBehavior": "PULSE",
+  "ruleTwist": "NONE",
+  "experienceIntent": "SEARCH",
+  "composition": {
+    "interaction": "HOLD",
+    "spatial": "ORBIT",
+    "reveal": "SPOTLIGHT",
+    "camera": "ZOOM_IN",
+    "surface": "NONE",
+    "timing": "TENSION"
+  },
+  "speech": "Don't let go. I'm not done yet.",
+  "intensity": 0.62,
+  "surpriseLevel": 0.58,
+  "sensoryDensity": 1,
+  "visualEffect": "AUTO",
+  "hapticCue": "HEARTBEAT",
+  "actions": []
+}

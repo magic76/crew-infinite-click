@@ -1,22 +1,21 @@
-Apply AI Clicker 0.36 on top of the current 0.35 project.
+Apply ai-clicker 0.37 on top of the current 0.36 source.
 
-Read AGENT_APPLY.md first and follow it exactly.
+Do not add new generic particle presets.
 
-This version is deliberately NOT a broad refactor. The only product goal is to make FLASHLIGHT_HUNT feel obviously different on a physical Android phone and to make HOLD / RELEASE / IDLE / WAIT meaningful player inputs.
+Primary requirements:
+1. Make the player-facing game English-only.
+2. Integrate GeminiConversationPolicy so Gemini Live voice is performed and high-contrast, not flat assistant narration.
+3. Add SignatureMomentDirector to NORMAL PLAY, not only dev demos.
+4. Guarantee SCREEN_SHATTER around the fourth meaningful player interaction.
+5. SCREEN_SHATTER must capture the real Pixi/game canvas and animate 16 real image fragments over black.
+6. During its wait phase, touching resets the timer; doing nothing restores the scene.
+7. Pass delivery cues to signature BANTER requests using the existing Gemini Live session only.
+8. Keep FLASHLIGHT_HUNT and make it English-only with the darker spotlight implementation.
+9. Ensure signature moments temporarily own input and suppress ordinary VFX/actions.
+10. Run every JS test and ./gradlew assembleDebug.
 
-Requirements:
-- integrate SignatureMomentRuntime into the existing Pixi/game host
-- reuse the existing Gemini Live session for signature banter
-- do not create a second agent loop/session
-- while a signature moment is active, suppress ordinary primitives/VFX/UI actions
-- make pointer capture work on Android WebView
-- keep safe-area bounds for target relocation
-- run runFlashlightHuntDemo(signatureMoments) on-device
-- do not declare success unless the screen is genuinely dark with a moving radial flashlight hole, the target escapes, HOLD is required, early release is detected, and idle behavior is visible
-- run all JS tests and ./gradlew assembleDebug
+Do not report success merely because the code compiles. On a physical device, run both:
+runScreenShatterDemo(signatureMoments)
+runFlashlightHuntDemo(signatureMoments)
 
-Return:
-1. modified files
-2. test output
-3. APK path
-4. any integration issue found on the physical-device path
+Then confirm the automatic cadence also triggers SCREEN_SHATTER during normal play within the first few meaningful interactions.

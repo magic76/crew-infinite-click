@@ -1,124 +1,128 @@
-# Local Agent Apply Guide — 0.36
+# Local Agent Apply Guide — 0.37
 
-Apply this on top of the current 0.35 source. Do not redesign unrelated code.
+Apply this on top of the current 0.36 source. Do not redesign unrelated code.
 
 ## Goal
 
-Ship one production-feeling signature event, `FLASHLIGHT_HUNT`, and make non-click input real gameplay.
+Make the user immediately feel a different game:
+- English-only UI/speech;
+- more dramatic Gemini Live vocal performance;
+- a guaranteed early scene-level signature moment instead of optional demo content.
 
 ## Add
 
-- `web/signature-moment-runtime.js`
-- `web/signature-debug.js`
+- `web/signature-moment-director.js`
+- `tests/signature-moment-director.test.js`
+- `tests/screen-shatter.test.js`
+- `tests/english-only.test.js`
 
 ## Replace/update
 
-- `web/primitive-host-runtime.js`
+- `web/signature-moment-runtime.js`
+- `web/signature-debug.js`
 - `web/conversation-director.js`
-- `web/experience-director.js`
 - `web/experience-runtime.js`
+- `web/experience-director.js`
+- `web/composition-debug.js`
+- `web/gemini-plan-example.json`
+- `android/GeminiConversationPolicy.java`
 - `android/GeminiWorldToolSchema.java`
 
-Preserve all 0.35 code unless this package explicitly changes it.
+## Required script order
 
-## Integration
-
-### 1. Create SignatureMomentRuntime
-
-After Pixi/game runtime exists:
-
-```js
-const signatureMoments = new SignatureMomentRuntime({
-  getPrimaryTarget: () => getPrimaryTarget(),
-  haptics: GameHaptics,
-  audio: audioMoodPlayer,
-  onGameEvent: (event) => {
-    // Route through the existing ExperienceRuntime / ConversationDirector.
-    // Signature events must NOT create a second autonomous loop.
-    const ctx = experience.onPlayerEvent(event);
-    routeInteractionContextToExistingGeminiLive(ctx);
-  },
-  onSpeechRequest: ({ phase, fallback, event }) => {
-    // Reuse the current Gemini Live session as a BANTER turn.
-    // Ask for one short natural reaction based on phase/player history.
-    // Do not call apply_world_experience from this callback.
-    sendSignatureBanterToExistingLiveSession({ phase, fallback, event });
-  }
-});
-```
-
-Pass it into ExperienceRuntime:
-
-```js
-const experience = new ExperienceRuntime({
-  ...existingOptions,
-  signatureMoments
-});
-```
-
-### 2. Script ordering
-
-Load after `safe-area.js` and before the code that constructs `ExperienceRuntime`:
+Load the signature cadence before `ExperienceRuntime` is constructed:
 
 ```html
 <script src="safe-area.js"></script>
+<script src="signature-moment-director.js"></script>
 <script src="signature-moment-runtime.js"></script>
 <script src="experience-runtime.js"></script>
 <script src="signature-debug.js"></script>
 ```
 
-### 3. Gemini schema
+## Construct SignatureMomentRuntime
 
-Merge the updated `GeminiWorldToolSchema.java`. `apply_world_experience` gains:
+Use the real gameplay target and the real Pixi canvas:
 
-```text
-signatureMoment: NONE | FLASHLIGHT_HUNT
+```js
+const signatureMoments = new SignatureMomentRuntime({
+  getPrimaryTarget: () => getPrimaryTarget(),
+  getGameCanvas: () => app?.canvas || app?.view || document.querySelector("canvas"),
+  haptics: GameHaptics,
+  audio: audioMoodPlayer,
+  onGameEvent: event => {
+    const ctx = experience.onPlayerEvent(event);
+    routeInteractionContextToExistingGeminiLive(ctx);
+  },
+  onSpeechRequest: ({ moment, phase, fallback, delivery, event }) => {
+    // Reuse the existing Gemini Live connection.
+    // BANTER only. Never call apply_world_experience from this callback.
+    sendSignatureBanterToExistingLiveSession({
+      moment,
+      phase,
+      fallback,
+      delivery,
+      event
+    });
+  }
+});
+
+const signatureDirector = new SignatureMomentDirector({
+  firstEventMin: 4,
+  cooldownEvents: 9,
+  cooldownMs: 22000
+});
+
+const experience = new ExperienceRuntime({
+  ...existingOptions,
+  signatureMoments,
+  signatureDirector
+});
 ```
 
-Never start a second Gemini connection for signature moments.
+## Critical integration rule
 
-### 4. Pointer ownership
+Do not leave signature scenes as demo-only functions.
 
-While `signatureMoments.isActive()` is true, its capture-phase pointer handlers own the scene. Do not attach another full-screen gesture handler above it.
+Normal gameplay must call `experience.onPlayerEvent(...)` for real player interactions. `SignatureMomentDirector` then guarantees the first `SCREEN_SHATTER` around the fourth meaningful interaction.
 
-### 5. Voice routing
+If the user can play for 10+ taps and never see SCREEN_SHATTER, integration is wrong.
 
-Signature speech events should be short BANTER requests. Examples are fallbacks only; Gemini should vary wording using recent behavior.
+## Voice
 
-Important phases:
+Append `GeminiConversationPolicy.systemPromptAppendix()` to the existing Gemini Live system instruction.
 
-- `start`
-- `escape`
-- `idle`
-- `idle_hint`
-- `hold_start`
-- `release_early`
-- `complete`
+Pass `delivery` from ConversationDirector/signature speech into the BANTER context. Voice should be English only.
 
-Do not let Gemini narrate the visual effect. It should react to the player.
+Do not change to a second Gemini socket/session.
 
-## Real-device acceptance test
+## SCREEN_SHATTER acceptance
 
-Run in a dev build:
+Run:
+
+```js
+runScreenShatterDemo(signatureMoments)
+```
+
+Pass only if:
+1. The current actual game canvas is captured.
+2. The whole game image splits into 16 visible tiles.
+3. Pieces visibly fly/rotate away into black.
+4. `YOU BROKE IT.` is large and impossible to miss.
+5. The game then shows `DON'T TOUCH ANYTHING`.
+6. Touching during the wait resets the timer and triggers speech/haptic feedback.
+7. Staying still completes the wait and visibly reconstructs the scene.
+8. No ordinary particle plan is drawn over the signature moment.
+
+## FLASHLIGHT_HUNT acceptance
+
+Run:
 
 ```js
 runFlashlightHuntDemo(signatureMoments)
 ```
 
-Pass only if all are true:
-
-1. Screen is visibly almost black, not just dimmed by ~20%.
-2. Finger motion moves a clear circular flashlight opening.
-3. Target can only be visually found through the opening.
-4. Target escapes at least twice.
-5. Final catch requires holding, not tapping.
-6. Releasing early produces `release_early` and a voice/haptic reaction.
-7. Holding to completion removes the darkness.
-8. Doing nothing for ~3.2s creates `idle_wait` and a voice reaction.
-9. Doing nothing longer creates `idle_hint` and temporarily enlarges the flashlight.
-10. No ordinary particle/VFX/action plan fires on top of the signature scene.
-
-If any item fails, fix the integration before adding another signature moment.
+The screen must be almost black with a real finger-controlled circular opening. Final capture requires holding.
 
 ## Tests
 
@@ -126,3 +130,5 @@ If any item fails, fix the integration before adding another signature moment.
 for f in tests/*.test.js; do node "$f"; done
 ./gradlew assembleDebug
 ```
+
+Do not add more VFX until both signature moments pass on a physical phone.

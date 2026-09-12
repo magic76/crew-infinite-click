@@ -26,6 +26,7 @@
       this.onSpeech=typeof o.onSpeech==="function"?o.onSpeech:()=>{};
       this.onInteractionDirective=typeof o.onInteractionDirective==="function"?o.onInteractionDirective:()=>{};
       this.signatureMoments=o.signatureMoments||null;
+      this.signatureDirector=o.signatureDirector||((global.SignatureMomentDirector)?new global.SignatureMomentDirector({}):null);
       this.currentPlan=null;
       this.currentSensoryState=this.sensory.resolve({world:"NEON_RIFT",situation:"WAIT",intensity:0.12,surpriseLevel:0.06,sensoryDensity:0});
       this.currentSituationStartedAt=0;
@@ -51,6 +52,28 @@
      */
     onPlayerEvent(event) {
       const e=event||{};
+
+      // 0.37: signature moments cannot remain optional demo content. The local
+      // cadence guarantees an early, visibly different scene and then spaces
+      // later signatures far apart. This decision is local and deterministic;
+      // it does not create another model loop.
+      const alreadySignatureActive=!!(this.signatureMoments&&this.signatureMoments.isActive&&this.signatureMoments.isActive());
+      if(!alreadySignatureActive&&this.signatureDirector&&this.signatureMoments&&typeof this.signatureDirector.onPlayerEvent==="function") {
+        const forced=this.signatureDirector.onPlayerEvent(e,{signatureActive:false,currentPlan:this.currentPlan});
+        if(forced&&forced.id&&this.signatureMoments.start(forced.id,{reason:forced.reason})) {
+          if(typeof this.signatureDirector.recordStarted==="function") this.signatureDirector.recordStarted(forced.id);
+          const interaction={mode:"SILENT",reason:"signature_started_locally",event:e,instruction:"Signature moment owns this turn.",delivery:"DRAMATIC"};
+          const context=this.director.contextForAi(e,this._surpriseLevelForEvent(e));
+          context.interaction=interaction;
+          context.signature={id:forced.id,reason:forced.reason,started:true};
+          context.conversation=this.conversation.contextForAi(interaction,e);
+          context.sensory=this.sensory.contextForAi();
+          context.composition=this.composer.contextForAi();
+          this.onInteractionDirective(interaction,context);
+          return context;
+        }
+      }
+
       const feedback=this.sensory.feedbackForPlayerEvent(e,this.currentPlan);
       if (this.haptics&&feedback.hapticCue!=="NONE") this.haptics.perform(feedback.hapticCue,feedback.intensity);
 
@@ -110,6 +133,7 @@
       if (this.signatureMoments&&plan.signatureMoment&&plan.signatureMoment!=="NONE") {
         signatureStarted=!!this.signatureMoments.start(plan.signatureMoment,{plan});
         if (signatureStarted) {
+          if(this.signatureDirector&&typeof this.signatureDirector.recordStarted==="function") this.signatureDirector.recordStarted(plan.signatureMoment);
           // A signature moment is a finished micro-game. It temporarily owns input and staging.
           // Do not stack ordinary primitives, VFX, rule twists or UI actions on top of it.
           composition.interaction="WAIT";
@@ -207,7 +231,7 @@
         "After CHAOS, drop hard to QUIET instead of staying medium-busy.",
         "Speech is personality, not narration: tease, observe, predict, question, or fake-reassure. Never describe the visual effect literally.",
         "Choose an experienceIntent and composition. Build one coherent event by combining interaction + spatial + reveal + camera + surface + timing; do not turn every dimension on.",
-        "Signature moments are rare finished scenes. Use signatureMoment=FLASHLIGHT_HUNT only for a search/hold beat, never repeatedly; otherwise use NONE.",
+        "Signature moments are finished scenes. The local runtime already guarantees occasional signatures, so Gemini should usually use NONE. If explicitly chosen: FLASHLIGHT_HUNT is search/hold; SCREEN_SHATTER is a dramatic stop-and-wait beat. Never repeat them back-to-back.",
         "Player input includes stopping, holding, releasing, dragging and slicing. Treat inactivity and release timing as meaningful behavior, not missing input.",
         "Novelty comes from changing meaningful dimensions, not renaming the same particle effect. Prefer at least two meaningful dimension changes from recent compositions.",
         "Background visuals may be full screen, but clickable targets must stay inside safe interactive bounds."

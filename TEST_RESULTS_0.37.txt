@@ -1,0 +1,16 @@
+0.37 validation
+
+PASS node --check web/*.js
+PASS conversation-director.test.js
+PASS english-only.test.js
+PASS experience-composer.test.js
+PASS experience-director.test.js
+PASS experience-runtime.test.js
+PASS primitive-host-runtime.test.js
+PASS screen-shatter.test.js
+PASS sensory-director.test.js
+PASS signature-flashlight-hunt.test.js
+PASS signature-moment-director.test.js
+PASS runtime source English-only scan (web + android)
+
+Android APK was not built in this container because the Android SDK/project host is not present here. Run ./gradlew assembleDebug in the actual Android project after applying the package.
