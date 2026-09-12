@@ -6,15 +6,14 @@ import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.view.Gravity;
-import android.view.HapticFeedbackConstants;
 import android.view.View;
 import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
+import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.webkit.WebChromeClient;
 import android.util.Log;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -22,13 +21,12 @@ import android.widget.TextView;
 
 import org.json.JSONObject;
 
-/**
- * Thin Android shell over the PixiJS canvas. No Android draw loop.
- * Native code owns Gemini/session/security; Pixi owns every frame and every visual effect.
- */
+/** Thin Android shell. Pixi/ExperienceRuntime owns gameplay and every animation frame. */
 final class GameView extends FrameLayout {
     interface SettingsTapListener { void onSettingsTap(); }
     interface LanguageChangeListener { void onLanguageChanged(AppLanguage language); }
+    interface ExperienceDirectiveListener { void onExperienceDirective(String json); }
+    interface RuntimeSignalListener { void onRuntimeSignal(String json); }
 
     private final WebView webView;
     private final TextView statusView;
@@ -38,17 +36,14 @@ final class GameView extends FrameLayout {
     private final TextView settingsButton;
     private final LayoutParams topLayoutParams;
     private final LayoutParams captionLayoutParams;
-    private GameRuntime runtime;
     private SettingsTapListener settingsTapListener;
     private LanguageChangeListener languageChangeListener;
+    private ExperienceDirectiveListener experienceDirectiveListener;
+    private RuntimeSignalListener runtimeSignalListener;
     private AppLanguage language = AppLanguage.ZH_TW;
-    private ScenePlan currentPlan = ScenePlan.defaultPlan();
     private boolean rendererReady = false;
     private String connectionStatus = "DEMO";
-    private int insetLeftPx;
-    private int insetTopPx;
-    private int insetRightPx;
-    private int insetBottomPx;
+    private int insetLeftPx, insetTopPx, insetRightPx, insetBottomPx;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     GameView(Context context) {
@@ -68,6 +63,7 @@ final class GameView extends FrameLayout {
         webView.setVerticalScrollBarEnabled(false);
         webView.setHorizontalScrollBarEnabled(false);
         webView.addJavascriptInterface(new JsBridge(), "AndroidGame");
+        webView.addJavascriptInterface(new HapticJavascriptBridge(new HapticEngine(context)), "AndroidHaptics");
         webView.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String url = request == null || request.getUrl() == null ? "" : request.getUrl().toString();
@@ -76,7 +72,7 @@ final class GameView extends FrameLayout {
         });
         webView.setWebChromeClient(new WebChromeClient() {
             @Override public boolean onConsoleMessage(android.webkit.ConsoleMessage message) {
-                Log.i("PixiShatter", String.valueOf(message == null ? "" : message.message()));
+                if (BuildConfig.DEBUG) Log.i("InfiniteClick", String.valueOf(message == null ? "" : message.message()));
                 return true;
             }
         });
@@ -93,7 +89,7 @@ final class GameView extends FrameLayout {
 
         statusView = chip("BOOT");
         top.addView(statusView, wrap());
-        top.addView(spacer(), new LinearLayout.LayoutParams(0, 1, 1f));
+        top.addView(new View(context), new LinearLayout.LayoutParams(0, 1, 1f));
         zhButton = chip("中");
         enButton = chip("EN");
         settingsButton = chip("⚙");
@@ -115,177 +111,109 @@ final class GameView extends FrameLayout {
         captionLayoutParams.setMargins(dp(12), 0, dp(12), dp(24));
         addView(captionView, captionLayoutParams);
 
-        setOnApplyWindowInsetsListener((v, insets) -> {
-            applySystemInsets(insets);
-            return insets;
-        });
+        setOnApplyWindowInsetsListener((v, insets) -> { applySystemInsets(insets); return insets; });
         post(this::requestApplyInsets);
-
         zhButton.setOnClickListener(v -> chooseLanguage(AppLanguage.ZH_TW));
         enButton.setOnClickListener(v -> chooseLanguage(AppLanguage.EN));
         settingsButton.setOnClickListener(v -> { if (settingsTapListener != null) settingsTapListener.onSettingsTap(); });
         updateLanguageChips();
-
         webView.loadUrl("file:///android_asset/game/index.html");
     }
 
-    void setRuntime(GameRuntime runtime) { this.runtime = runtime; }
-    void setSettingsTapListener(SettingsTapListener listener) { this.settingsTapListener = listener; }
-    void setLanguageChangeListener(LanguageChangeListener listener) { this.languageChangeListener = listener; }
+    void setSettingsTapListener(SettingsTapListener l){settingsTapListener=l;}
+    void setLanguageChangeListener(LanguageChangeListener l){languageChangeListener=l;}
+    void setExperienceDirectiveListener(ExperienceDirectiveListener l){experienceDirectiveListener=l;}
+    void setRuntimeSignalListener(RuntimeSignalListener l){runtimeSignalListener=l;}
 
     void setLanguage(AppLanguage value) {
-        language = value == null ? AppLanguage.ZH_TW : value;
-        updateLanguageChips();
-        JSONObject o = command("language");
-        try { o.put("value", language.code); } catch (Exception ignored) {}
-        send(o);
+        language=value==null?AppLanguage.ZH_TW:value;updateLanguageChips();
+        JSONObject o=command("language");try{o.put("value",language.code);}catch(Exception ignored){}send(o);
     }
-
     void setConnectionStatus(String status) {
-        connectionStatus = status == null || status.trim().isEmpty() ? "DEMO" : status.trim();
-        post(() -> statusView.setText(rendererReady ? connectionStatus : "PIXI " + connectionStatus));
+        connectionStatus=status==null||status.trim().isEmpty()?"DEMO":status.trim();
+        post(()->statusView.setText(rendererReady?connectionStatus:"PIXI "+connectionStatus));
     }
+    void setAiCaption(String caption){post(()->captionView.setText(caption==null?"":caption));}
+    void clearAiCaption(){setAiCaption("");}
 
-    void setAiCaption(String caption) {
-        post(() -> captionView.setText(caption == null ? "" : caption));
-    }
+    void clearTransientState(){send(command("reset"));}
+    ScenePlan currentScenePlan(){return ScenePlan.defaultPlan();}
+    void applyScenePlan(ScenePlan plan){if(plan!=null){JSONObject o=command("scenePlan");try{o.put("plan",plan.toJson());}catch(Exception ignored){}send(o);}}
+    void applyInteraction(InteractionPlan plan){if(plan!=null){JSONObject o=command("interaction");try{o.put("interaction",plan.toJson());}catch(Exception ignored){}send(o);}}
+    void onGameTap(float x,float y){performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP);}
+    void shake(float intensity,long durationMs){send(command("screenShake"));}
+    void flash(int color,long durationMs){send(command("flash"));}
+    void playVisualAction(JSONObject action){if(action!=null)send(action);}
 
-    void clearTransientState() { send(command("reset")); }
-    ScenePlan currentScenePlan() { return currentPlan; }
-
-    void applyScenePlan(ScenePlan plan) {
-        if (plan == null) return;
-        currentPlan = plan;
-        JSONObject o = command("scenePlan");
-        try { o.put("plan", plan.toJson()); } catch (Exception ignored) {}
+    void applyExperiencePlan(JSONObject plan,long turnId){
+        JSONObject o=command("experiencePlan");
+        try{o.put("turnId",turnId);o.put("plan",plan==null?new JSONObject():plan);}catch(Exception ignored){}
         send(o);
     }
-
-    void applyInteraction(InteractionPlan plan) {
-        if (plan == null) return;
-        JSONObject o = command("interaction");
-        try { o.put("interaction", plan.toJson()); } catch (Exception ignored) {}
-        send(o);
+    void notifyGeminiFallback(long turnId){
+        JSONObject o=command("geminiFallback");try{o.put("turnId",turnId);}catch(Exception ignored){}send(o);
     }
-
-    void onGameTap(float x, float y) {
-        performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+    void setGeminiPending(boolean pending){
+        JSONObject o=command("geminiState");try{o.put("pending",pending);}catch(Exception ignored){}send(o);
     }
-
-    void shake(float intensity, long durationMs) {
-        JSONObject o = command("action");
-        try { o.put("action", new JSONObject().put("type", "screen_shake").put("strength", intensity).put("durationMs", durationMs)); } catch (Exception ignored) {}
-        send(o);
+    void setVoiceActive(boolean active){
+        JSONObject o=command("voiceState");try{o.put("active",active);}catch(Exception ignored){}send(o);
     }
-
-    void flash(int color, long durationMs) {
-        JSONObject o = command("action");
-        try { o.put("action", new JSONObject().put("type", "flash").put("color", String.format("#%06X", 0xFFFFFF & color)).put("durationMs", durationMs)); } catch (Exception ignored) {}
-        send(o);
+    void recordSpokenLine(String text){
+        JSONObject o=command("spokenLine");try{o.put("text",text==null?"":text);}catch(Exception ignored){}send(o);
     }
-
-    void playVisualAction(JSONObject action) {
-        if (action == null) return;
-        JSONObject o = command("action");
-        try { o.put("action", action); } catch (Exception ignored) {}
-        send(o);
-    }
+    void requestLiveTurn(){send(command("geminiLiveReady"));}
 
     private void applySystemInsets(WindowInsets insets) {
-        if (insets == null) return;
-        insetLeftPx = Math.max(0, insets.getSystemWindowInsetLeft());
-        insetTopPx = Math.max(0, insets.getSystemWindowInsetTop());
-        insetRightPx = Math.max(0, insets.getSystemWindowInsetRight());
-        insetBottomPx = Math.max(0, insets.getSystemWindowInsetBottom());
-
-        topLayoutParams.setMargins(insetLeftPx + dp(10), insetTopPx + dp(8), insetRightPx + dp(10), 0);
-        captionLayoutParams.setMargins(insetLeftPx + dp(12), 0, insetRightPx + dp(12), insetBottomPx + dp(24));
-        requestLayout();
-        sendSafeArea();
+        if(insets==null)return;
+        insetLeftPx=Math.max(0,insets.getSystemWindowInsetLeft());insetTopPx=Math.max(0,insets.getSystemWindowInsetTop());
+        insetRightPx=Math.max(0,insets.getSystemWindowInsetRight());insetBottomPx=Math.max(0,insets.getSystemWindowInsetBottom());
+        topLayoutParams.setMargins(insetLeftPx+dp(10),insetTopPx+dp(8),insetRightPx+dp(10),0);
+        captionLayoutParams.setMargins(insetLeftPx+dp(12),0,insetRightPx+dp(12),insetBottomPx+dp(24));
+        requestLayout();sendSafeArea();
     }
-
-    private void sendSafeArea() {
-        float density = Math.max(1f, getResources().getDisplayMetrics().density);
-        JSONObject o = command("safeArea");
-        try {
-            o.put("left", insetLeftPx / density);
-            o.put("top", insetTopPx / density);
-            o.put("right", insetRightPx / density);
-            o.put("bottom", insetBottomPx / density);
-        } catch (Exception ignored) {}
+    private void sendSafeArea(){
+        float density=Math.max(1f,getResources().getDisplayMetrics().density);
+        JSONObject o=command("safeArea");
+        try{o.put("left",insetLeftPx/density);o.put("top",insetTopPx/density);o.put("right",insetRightPx/density);o.put("bottom",insetBottomPx/density);}catch(Exception ignored){}
         send(o);
     }
-
-    private void chooseLanguage(AppLanguage next) {
-        if (next == language) return;
-        setLanguage(next);
-        if (languageChangeListener != null) languageChangeListener.onLanguageChanged(next);
+    private void chooseLanguage(AppLanguage next){if(next==language)return;setLanguage(next);if(languageChangeListener!=null)languageChangeListener.onLanguageChanged(next);}
+    private void updateLanguageChips(){zhButton.setAlpha(language==AppLanguage.ZH_TW?1f:.45f);enButton.setAlpha(language==AppLanguage.EN?1f:.45f);}
+    private JSONObject command(String op){JSONObject o=new JSONObject();try{o.put("op",op);}catch(Exception ignored){}return o;}
+    private void send(JSONObject payload){
+        if(payload==null)return;String quoted=JSONObject.quote(payload.toString());
+        post(()->webView.evaluateJavascript("window.InfiniteClick&&window.InfiniteClick.receive(JSON.parse("+quoted+"));",null));
     }
+    void onHostPause(){webView.onPause();}
+    void onHostResume(){webView.onResume();requestApplyInsets();}
 
-    private void updateLanguageChips() {
-        zhButton.setAlpha(language == AppLanguage.ZH_TW ? 1f : 0.45f);
-        enButton.setAlpha(language == AppLanguage.EN ? 1f : 0.45f);
-    }
-
-    private JSONObject command(String op) {
-        JSONObject o = new JSONObject();
-        try { o.put("op", op); } catch (Exception ignored) {}
-        return o;
-    }
-
-    private void send(JSONObject payload) {
-        if (payload == null) return;
-        String quoted = JSONObject.quote(payload.toString());
-        post(() -> webView.evaluateJavascript("window.InfiniteClick&&window.InfiniteClick.receive(JSON.parse(" + quoted + "));", null));
-    }
-
-    void onHostPause() { webView.onPause(); }
-    void onHostResume() { webView.onResume(); requestApplyInsets(); }
-
-    @Override protected void onDetachedFromWindow() {
-        webView.removeJavascriptInterface("AndroidGame");
-        webView.destroy();
-        super.onDetachedFromWindow();
+    @Override protected void onDetachedFromWindow(){
+        webView.removeJavascriptInterface("AndroidGame");webView.removeJavascriptInterface("AndroidHaptics");
+        webView.destroy();super.onDetachedFromWindow();
     }
 
     private final class JsBridge {
-        @JavascriptInterface public void onRendererReady(String renderer) {
-            post(() -> {
-                rendererReady = true;
-                statusView.setText(connectionStatus);
-                JSONObject o = command("scenePlan");
-                try { o.put("plan", currentPlan.toJson()); } catch (Exception ignored) {}
-                send(o);
-                JSONObject lang = command("language");
-                try { lang.put("value", language.code); } catch (Exception ignored) {}
-                send(lang);
-                sendSafeArea();
-            });
+        @JavascriptInterface public boolean isDebug(){return BuildConfig.DEBUG;}
+        @JavascriptInterface public void onRendererReady(String renderer){
+            post(()->{rendererReady=true;statusView.setText(connectionStatus);setLanguage(language);sendSafeArea();});
         }
-        @JavascriptInterface public void onRendererError(String message) {
-            post(() -> {
-                rendererReady = false;
-                statusView.setText("RENDER ERROR");
-                captionView.setText("Pixi renderer error: " + (message == null ? "unknown" : message));
-            });
+        @JavascriptInterface public void onRendererError(String message){
+            post(()->{rendererReady=false;statusView.setText("RENDER ERROR");captionView.setText("Pixi renderer error: "+(message==null?"unknown":message));});
         }
-        @JavascriptInterface public void onTap(double x, double y) {
-            post(() -> {
-                GameRuntime r = runtime;
-                if (r != null) r.onWorldTap((float)x, (float)y);
-            });
+        @JavascriptInterface public void onExperienceDirective(String json){
+            ExperienceDirectiveListener l=experienceDirectiveListener;if(l!=null)post(()->l.onExperienceDirective(json));
+        }
+        @JavascriptInterface public void onRuntimeSignal(String json){
+            RuntimeSignalListener l=runtimeSignalListener;if(l!=null)post(()->l.onRuntimeSignal(json));
         }
     }
 
-    private TextView chip(String text) {
-        TextView v = new TextView(getContext());
-        v.setText(text); v.setTextColor(Color.WHITE); v.setTextSize(12f); v.setGravity(Gravity.CENTER);
-        v.setPadding(dp(10), dp(7), dp(10), dp(7));
-        GradientDrawable bg = new GradientDrawable(); bg.setColor(Color.argb(95, 255, 255, 255)); bg.setCornerRadius(dp(14));
-        v.setBackground(bg); return v;
+    private TextView chip(String text){
+        TextView v=new TextView(getContext());v.setText(text);v.setTextColor(Color.WHITE);v.setTextSize(12f);v.setGravity(Gravity.CENTER);
+        v.setPadding(dp(10),dp(7),dp(10),dp(7));GradientDrawable bg=new GradientDrawable();bg.setColor(Color.argb(95,255,255,255));bg.setCornerRadius(dp(14));v.setBackground(bg);return v;
     }
-    private View spacer() { return new View(getContext()); }
-    private LinearLayout.LayoutParams wrap() { return new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT); }
-    private LinearLayout.LayoutParams wrapWithRight(int right) { LinearLayout.LayoutParams p = wrap(); p.rightMargin = dp(right); return p; }
-    private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
+    private LinearLayout.LayoutParams wrap(){return new LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT,LinearLayout.LayoutParams.WRAP_CONTENT);}
+    private LinearLayout.LayoutParams wrapWithRight(int right){LinearLayout.LayoutParams p=wrap();p.rightMargin=dp(right);return p;}
+    private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
 }

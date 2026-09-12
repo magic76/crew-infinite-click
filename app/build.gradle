@@ -10,8 +10,8 @@ android {
         applicationId 'com.magic76.aiclicker'
         minSdk 26
         targetSdk 35
-        versionCode 31
-        versionName '0.31.0-interaction-pass'
+        versionCode 374
+        versionName '0.37.4-runtime-cleanup'
     }
 
     buildTypes {

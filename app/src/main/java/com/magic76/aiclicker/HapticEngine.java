@@ -4,7 +4,6 @@ import android.content.Context;
 import android.os.Build;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
-import android.os.VibratorManager;
 
 /** Native haptic patterns. Keep them short; contrast is more important than frequency. */
 public final class HapticEngine {
@@ -15,9 +14,6 @@ public final class HapticEngine {
         Context app = context == null ? null : context.getApplicationContext();
         if (app == null) {
             vibrator = null;
-        } else if (Build.VERSION.SDK_INT >= 31) {
-            VibratorManager manager = (VibratorManager) app.getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
-            vibrator = manager == null ? null : manager.getDefaultVibrator();
         } else {
             vibrator = (Vibrator) app.getSystemService(Context.VIBRATOR_SERVICE);
         }

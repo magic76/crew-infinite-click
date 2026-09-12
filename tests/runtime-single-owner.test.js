@@ -1,0 +1,18 @@
+const fs=require('fs'),assert=require('assert');
+const game=fs.readFileSync('app/src/main/assets/game/game.js','utf8');
+const runtime=fs.readFileSync('app/src/main/assets/game/experience-runtime.js','utf8');
+const main=fs.readFileSync('app/src/main/java/com/magic76/aiclicker/MainActivity.java','utf8');
+const view=fs.readFileSync('app/src/main/java/com/magic76/aiclicker/GameView.java','utf8');
+assert(game.includes('new ExperienceRuntime('),'game.js must instantiate ExperienceRuntime');
+assert(!/Math\.floor\s*\(\s*\(state\.taps/.test(game),'fixed tap-count phase loop must be removed');
+assert(!game.includes('TEASE / ESCAPE / SWARM'),'legacy phase sequence should not remain');
+const fx=fs.readFileSync('app/src/main/assets/game/world-fx-controller.js','utf8');
+for(const name of ['portal','glitch','fracture','absorb','swarm'])assert(fx.includes(name+'('),'legacy effect implementation should remain reusable: '+name);
+assert(!main.includes('new GameRuntime('),'MainActivity must not instantiate native GameRuntime gameplay owner');
+assert(!main.includes('new LocalDirector('),'MainActivity must not instantiate LocalDirector');
+assert(!view.includes('void onTap(')&&!view.includes('public void onTap('),'JS/native bridge must not carry every tap');
+assert(game.includes('runtime.fallback('),'local runtime fallback must keep gameplay working without Gemini');
+assert(main.includes('notifyGeminiFallback(turn.turnId)'),'Gemini unavailable/timeout must fall back without blocking gameplay');
+assert(game.includes('turnId!==state.pendingGameTurnId'),'late Gemini plans must be rejected');
+assert(runtime.includes('type==="HOLD_PROGRESS"||type==="DRAG_MOVE"'),'continuous gesture samples must stay local');
+console.log('runtime-single-owner.test.js PASS');

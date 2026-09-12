@@ -1,113 +1,129 @@
-(function (global) {
+(function(global){
   "use strict";
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const now=()=>global.performance&&performance.now?performance.now():Date.now();
 
-  function now(){return global.performance&&performance.now?performance.now():Date.now();}
-  function dist(a,b){const dx=a.x-b.x,dy=a.y-b.y;return Math.sqrt(dx*dx+dy*dy);}
-
-  /**
-   * Host-side executable primitive adapter. This owns gesture/camera/spatial state.
-   * Surface rendering (FRAGMENT/LIQUID) is delegated because it depends on the app's Pixi version/render pipeline.
-   */
   class PrimitiveHostRuntime {
     constructor(options){
       const o=options||{};
-      this.gameplayContainer=o.gameplayContainer||null;
+      this.world=o.world||o.gameplayContainer||null;
       this.getPrimaryTarget=typeof o.getPrimaryTarget==="function"?o.getPrimaryTarget:()=>null;
       this.onGameEvent=typeof o.onGameEvent==="function"?o.onGameEvent:()=>{};
       this.onSurfaceMode=typeof o.onSurfaceMode==="function"?o.onSurfaceMode:()=>{};
-      this.interaction="TAP"; this.spatial="NONE"; this.camera="STATIC"; this.surface="NONE"; this.timing="SNAP";
-      this.pointer=null; this.velocity={x:0,y:0}; this.orbitPhase=0; this.holdTimer=null;
-      this.holdStarted=false; this.holdThresholdMs=Math.max(320,Number(o.holdThresholdMs)||520);
-      this.viewport=typeof o.getViewport==="function"?o.getViewport:()=>({width:global.innerWidth||360,height:global.innerHeight||640});
+      this.interaction="TAP";this.spatial="NONE";this.camera="STATIC";this.surface="NONE";this.timing="SNAP";
+      this.pointer=null;this.holdThresholdMs=Math.max(280,Number(o.holdThresholdMs)||620);
+      this.holdProgressEveryMs=Math.max(80,Number(o.holdProgressEveryMs)||120);
+      this.waitSuccessMs=Math.max(650,Number(o.waitSuccessMs)||1350);
+      this.lastMoveEmitAt=0;this.lastHoldProgressAt=0;this.waitArmedAt=0;this.waitResolved=false;
+      this.orbitAngle=0;
     }
 
-    setInteraction(mode){this.interaction=mode||"TAP"; this._clearHold(); this.holdStarted=false;}
-    setSpatial(mode){this.spatial=mode||"NONE"; this.velocity={x:0,y:0};}
-    setCamera(mode){this.camera=mode||"STATIC"; this._applyCameraImmediate();}
-    setSurface(mode){this.surface=mode||"NONE"; this.onSurfaceMode(this.surface);}
-    setTiming(mode){this.timing=mode||"SNAP";}
+    setInteraction(mode){
+      this.interaction=String(mode||"TAP").toUpperCase();
+      this.pointer=null;this.lastMoveEmitAt=0;this.lastHoldProgressAt=0;
+      this.waitResolved=false;this.waitArmedAt=this.interaction==="WAIT"?now():0;
+    }
+    setSpatial(mode){this.spatial=String(mode||"NONE").toUpperCase();}
+    setCamera(mode){this.camera=String(mode||"STATIC").toUpperCase();}
+    setSurface(mode){this.surface=String(mode||"NONE").toUpperCase();this.onSurfaceMode(this.surface);}
+    setTiming(mode){this.timing=String(mode||"SNAP").toUpperCase();}
 
-    pointerDown(x,y,targetId){
-      const t={x,y,targetId:targetId||null,downAt:now(),last:{x,y},moved:0}; this.pointer=t;
+    pointerDown(x,y){
+      const t=now();this.pointer={x0:x,y0:y,x,y,startedAt:t,moved:false,holdComplete:false};
       if(this.interaction==="WAIT"){
-        this.onGameEvent({type:"wait_broken",targetId:t.targetId,x:t.x,y:t.y,special:true});
-        return false;
+        this.waitArmedAt=t;this.waitResolved=false;
+        this._emit("WAIT_BROKEN",{x,y,special:true,ignoredWarning:true});
+        return;
       }
       if(this.interaction==="HOLD"){
-        this._clearHold(); this.holdStarted=false;
-        this.holdTimer=setTimeout(()=>{
-          if(this.pointer===t&&t.moved<18){
-            this.holdStarted=true;
-            this.onGameEvent({type:"hold_start",targetId:t.targetId,x:t.x,y:t.y,durationMs:now()-t.downAt,special:true});
-          }
-        },this.holdThresholdMs);
+        this.lastHoldProgressAt=t;
+        this._emit("HOLD_START",{x,y,progress:0,special:true});
+      } else if(this.interaction==="DRAG") {
+        this._emit("DRAG_START",{x,y,special:true});
       }
-      return true;
     }
 
     pointerMove(x,y){
-      const p=this.pointer;if(!p)return null;
-      const cur={x,y}; p.moved+=dist(p.last,cur);p.last=cur;
-      if(this.interaction==="DRAG"){
-        const e={type:"drag",targetId:p.targetId,x,y,dx:x-p.x,dy:y-p.y,special:true};this.onGameEvent(e);return e;
+      const p=this.pointer;if(!p)return;
+      const t=now(),dx=x-p.x0,dy=y-p.y0;
+      p.x=x;p.y=y;if(Math.hypot(dx,dy)>8)p.moved=true;
+      if(this.interaction==="DRAG"&&t-this.lastMoveEmitAt>=16){
+        this.lastMoveEmitAt=t;
+        this._emit("DRAG_MOVE",{x,y,dx,dy,durationMs:t-p.startedAt});
       }
-      return null;
     }
 
     pointerUp(x,y){
-      const p=this.pointer;if(!p)return null;
-      const hadHold=this.holdStarted; this._clearHold(); this.pointer=null; this.holdStarted=false;
-      const duration=now()-p.downAt, travel=dist({x:p.x,y:p.y},{x,y});
+      const p=this.pointer;this.pointer=null;if(!p)return;
+      const t=now(),duration=t-p.startedAt,dx=x-p.x0,dy=y-p.y0;
       if(this.interaction==="HOLD"){
-        const e={type:"release",targetId:p.targetId,x,y,durationMs:duration,afterHold:hadHold,releasedEarly:!hadHold,special:true};
-        this.onGameEvent(e); return e;
+        if(p.holdComplete)this._emit("RELEASE",{x,y,durationMs:duration,afterHold:true,special:true});
+        else this._emit("RELEASE_EARLY",{x,y,durationMs:duration,progress:clamp(duration/this.holdThresholdMs,0,1),correct:false,special:true});
+        return;
       }
-      if(this.interaction==="SLICE"&&travel>=72&&duration<=700){
-        const e={type:"slice",targetId:p.targetId,x1:p.x,y1:p.y,x2:x,y2:y,distance:travel,durationMs:duration,special:true};this.onGameEvent(e);return e;
+      if(this.interaction==="DRAG"){
+        this._emit("DRAG_END",{x,y,dx,dy,durationMs:duration,special:true});
+        return;
       }
-      if(this.interaction==="TAP"&&travel<18){
-        const e={type:"tap",targetId:p.targetId,x,y};this.onGameEvent(e);return e;
+      if(this.interaction==="SLICE"){
+        if(Math.hypot(dx,dy)>34)this._emit("SLICE",{x,y,dx,dy,durationMs:duration,special:true});
+        else this._emit("RELEASE",{x,y,durationMs:duration});
+        return;
       }
-      const e={type:"release",targetId:p.targetId,x,y,durationMs:duration,afterHold:false};
-      this.onGameEvent(e); return e;
+      if(this.interaction==="WAIT")return;
+      this._emit("TAP",{x,y,durationMs:duration});
+      this._emit("RELEASE",{x,y,durationMs:duration});
+    }
+
+    cancelPointer(){
+      const p=this.pointer;this.pointer=null;
+      if(!p)return;
+      if(this.interaction==="HOLD"&&!p.holdComplete)this._emit("RELEASE_EARLY",{x:p.x,y:p.y,durationMs:now()-p.startedAt,cancelled:true,correct:false,special:true});
+      else if(this.interaction==="DRAG")this._emit("DRAG_END",{x:p.x,y:p.y,cancelled:true,special:true});
     }
 
     tick(deltaMs){
-      const target=this.getPrimaryTarget(); if(!target)return;
-      const dt=Math.min(0.05,Math.max(0.001,(Number(deltaMs)||16)/1000));
-      const v=this.viewport();
-      if(this.spatial==="GRAVITY_DOWN"){
-        this.velocity.y+=720*dt; target.y+=this.velocity.y*dt;
-        if(target.y>v.height-40){target.y=v.height-40;this.velocity.y*=-0.48;}
-      } else if(this.spatial==="GRAVITY_SIDE"){
-        this.velocity.x+=620*dt; target.x+=this.velocity.x*dt;
-        if(target.x>v.width-40){target.x=v.width-40;this.velocity.x*=-0.52;}
-      } else if(this.spatial==="ORBIT"){
-        this.orbitPhase+=dt*1.6; const cx=v.width/2,cy=v.height/2;
-        target.x=cx+Math.cos(this.orbitPhase)*Math.min(120,v.width*.28);
-        target.y=cy+Math.sin(this.orbitPhase)*Math.min(150,v.height*.22);
-      } else if(this.spatial==="PUSH_AWAY"&&this.pointer){
-        const dx=target.x-this.pointer.last.x,dy=target.y-this.pointer.last.y,d=Math.max(20,Math.sqrt(dx*dx+dy*dy));
-        if(d<150){target.x+=dx/d*180*dt;target.y+=dy/d*180*dt;}
+      const dt=Math.max(0,Math.min(50,Number(deltaMs)||16));
+      const t=now(),p=this.pointer;
+      if(this.interaction==="HOLD"&&p&&!p.holdComplete){
+        const elapsed=t-p.startedAt,progress=clamp(elapsed/this.holdThresholdMs,0,1);
+        if(t-this.lastHoldProgressAt>=this.holdProgressEveryMs){
+          this.lastHoldProgressAt=t;
+          this._emit("HOLD_PROGRESS",{x:p.x,y:p.y,progress,durationMs:elapsed});
+        }
+        if(progress>=1){
+          p.holdComplete=true;
+          this._emit("HOLD_COMPLETE",{x:p.x,y:p.y,durationMs:elapsed,progress:1,correct:true,special:true});
+        }
       }
-      this._tickCamera(target,v,dt);
+      if(this.interaction==="WAIT"&&!this.waitResolved&&this.waitArmedAt&&t-this.waitArmedAt>=this.waitSuccessMs){
+        this.waitResolved=true;
+        this._emit("WAIT_SUCCESS",{durationMs:t-this.waitArmedAt,correct:true,special:true});
+      }
+
+      const target=this.getPrimaryTarget(),world=this.world;
+      if(target){
+        const scale=dt/16.6667;
+        if(this.spatial==="GRAVITY_DOWN")target.y+=0.35*scale;
+        else if(this.spatial==="GRAVITY_SIDE")target.x+=0.35*scale;
+        else if(this.spatial==="ORBIT"){
+          const w=global.innerWidth||360,h=global.innerHeight||640;this.orbitAngle+=0.018*scale;
+          target.x=w/2+Math.cos(this.orbitAngle)*Math.min(90,w*.22);
+          target.y=h/2+Math.sin(this.orbitAngle)*Math.min(130,h*.18);
+        } else if(this.spatial==="PUSH_AWAY"&&p){
+          const dx=target.x-p.x,dy=target.y-p.y,d=Math.max(1,Math.hypot(dx,dy));
+          if(d<150){target.x+=dx/d*1.3*scale;target.y+=dy/d*1.3*scale;}
+        }
+      }
+      if(world){
+        if(this.camera==="FOLLOW"&&target){world.pivot.set(target.x,target.y);world.position.set((global.innerWidth||360)/2,(global.innerHeight||640)/2);}
+        else if(this.camera==="ZOOM_IN"){world.scale.x+=(1.06-world.scale.x)*.08;world.scale.y=world.scale.x;}
+        else if(this.camera==="ZOOM_OUT"){world.scale.x+=(.94-world.scale.x)*.08;world.scale.y=world.scale.x;}
+        else {world.scale.x+=(1-world.scale.x)*.09;world.scale.y=world.scale.x;if(this.camera==="STATIC"){world.pivot.set(0,0);world.position.set(0,0);}}
+      }
     }
 
-    _applyCameraImmediate(){
-      const c=this.gameplayContainer;if(!c)return;
-      if(this.camera==="STATIC"){if(c.scale&&c.scale.set)c.scale.set(1);c.x=0;c.y=0;}
-      else if(this.camera==="ZOOM_IN"){if(c.scale&&c.scale.set)c.scale.set(1.35);}
-      else if(this.camera==="ZOOM_OUT"){if(c.scale&&c.scale.set)c.scale.set(0.78);}
-      else if(this.camera==="PAN"){c.x=26;c.y=-18;}
-    }
-
-    _tickCamera(target,v,dt){
-      const c=this.gameplayContainer;if(!c||this.camera!=="FOLLOW")return;
-      const desiredX=v.width/2-target.x, desiredY=v.height/2-target.y;
-      c.x+=(desiredX-c.x)*Math.min(1,dt*4.5);c.y+=(desiredY-c.y)*Math.min(1,dt*4.5);
-    }
-
-    _clearHold(){if(this.holdTimer){clearTimeout(this.holdTimer);this.holdTimer=null;}}
+    _emit(type,extra){try{this.onGameEvent(Object.assign({type},extra||{}));}catch(_){}}
   }
 
   global.PrimitiveHostRuntime=PrimitiveHostRuntime;

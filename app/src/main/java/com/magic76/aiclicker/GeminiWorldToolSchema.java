@@ -3,118 +3,71 @@ package com.magic76.aiclicker;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** Function declaration + raw WebSocket tool-response helper for Gemini Live. */
+/** High-level creative-director tool. No frame data, code, raw HTML/JS, or particle coordinates. */
 public final class GeminiWorldToolSchema {
-    public static final String FUNCTION_NAME = "apply_world_experience";
-    private GeminiWorldToolSchema() {}
+    public static final String FUNCTION_NAME="apply_world_experience";
+    private GeminiWorldToolSchema(){}
 
-    public static JSONObject declaration() {
-        JSONObject properties = new JSONObject();
-        try {
-            properties.put("world", enumString("Visual/gameplay world for the current run segment.",
-                    "SPRING_BLOOM", "SUMMER_STORM", "AUTUMN_DECAY", "WINTER_FROST", "VOID_CHAMBER", "NEON_RIFT"));
-            properties.put("mood", enumString("Emotional tone. Keep it playful rather than hostile.",
-                    "PLAYFUL", "EERIE", "CALM", "CHAOTIC"));
-            properties.put("situation", enumString("Gameplay situation for roughly the next 6-18 seconds; speech-only banter can happen between game turns.",
-                    "CHASE", "DECOY", "WAIT", "PREDICT", "MIRROR", "HIDE", "REVEAL", "FAKE_ENDING"));
-            properties.put("audioMood", enumString("Sound palette matching the world.",
-                    "ORGANIC", "STORM", "DRY", "GLASS", "COSMIC", "GLITCH"));
-            properties.put("targetBehavior", enumString("Primary target motion/visibility behavior.",
-                    "STILL", "ESCAPE", "SPLIT", "PULSE", "HIDE"));
-            properties.put("ruleTwist", enumString("Optional temporary rule. Prefer NONE most of the time.",
-                    "NONE", "WAIT_TO_WIN", "TAP_THE_SHADOW", "FOLLOW_THE_SOUND", "DONT_TOUCH_CENTER", "LEFT_RIGHT_REVERSED"));
-            properties.put("experienceIntent", enumString("High-level dramatic intent for this event. The Runtime composes safe primitives from it.",
-                    "TEASE", "TEST_PATIENCE", "MISDIRECT", "CHASE", "SEARCH", "TRUST_TEST", "PREDICT", "SURPRISE", "RECOVER"));
+    public static JSONObject declaration(){
+        JSONObject p=new JSONObject();
+        try{
+            p.put("turnId",new JSONObject().put("type","INTEGER").put("description","Echo exact turnId from DIRECTIVE."));
+            p.put("baseStateVersion",new JSONObject().put("type","INTEGER").put("description","Echo exact baseStateVersion from DIRECTIVE."));
+            p.put("world",enumString("Visual/gameplay world.","SPRING_BLOOM","SUMMER_STORM","AUTUMN_DECAY","WINTER_FROST","VOID_CHAMBER","NEON_RIFT"));
+            p.put("mood",enumString("Emotional tone.","PLAYFUL","EERIE","CALM","CHAOTIC"));
+            p.put("situation",enumString("Situation for the next several seconds.","CHASE","DECOY","WAIT","PREDICT","MIRROR","HIDE","REVEAL","FAKE_ENDING"));
+            p.put("audioMood",enumString("Local SFX palette.","ORGANIC","STORM","DRY","GLASS","COSMIC","GLITCH"));
+            p.put("targetBehavior",enumString("Primary target behavior.","STILL","ESCAPE","SPLIT","PULSE","HIDE"));
+            p.put("ruleTwist",enumString("Optional temporary rule.","NONE","WAIT_TO_WIN","TAP_THE_SHADOW","FOLLOW_THE_SOUND","DONT_TOUCH_CENTER","LEFT_RIGHT_REVERSED"));
+            p.put("experienceIntent",enumString("High-level intent.","TEASE","TEST_PATIENCE","MISDIRECT","CHASE","SEARCH","TRUST_TEST","PREDICT","SURPRISE","RECOVER"));
+            p.put("signatureMoment",enumString("Rare exclusive micro-game. Usually NONE.","NONE","FLASHLIGHT_HUNT","SCREEN_SHATTER"));
 
-            properties.put("signatureMoment", enumString("Finished signature scene. Runtime already guarantees occasional signatures. Prefer NONE unless a dramatic scene is specifically warranted. FLASHLIGHT_HUNT is search/hold; SCREEN_SHATTER is break/wait/restore.",
-                    "NONE", "FLASHLIGHT_HUNT", "SCREEN_SHATTER"));
+            JSONObject cp=new JSONObject()
+                    .put("interaction",enumString("Primary input.","TAP","HOLD","DRAG","SLICE","WAIT"))
+                    .put("spatial",enumString("Spatial rule.","NONE","GRAVITY_DOWN","GRAVITY_SIDE","ORBIT","PUSH_AWAY"))
+                    .put("reveal",enumString("Reveal rule.","NONE","SPOTLIGHT","FOG_REVEAL","BLACKOUT"))
+                    .put("camera",enumString("Camera behavior.","STATIC","ZOOM_IN","ZOOM_OUT","FOLLOW","PAN"))
+                    .put("surface",enumString("Surface behavior.","NONE","FRAGMENT","TRAIL","LIQUID"))
+                    .put("timing",enumString("Sequencing style.","SNAP","TENSION","DELAYED","REVERSAL"));
+            p.put("composition",new JSONObject().put("type","OBJECT").put("properties",cp)
+                    .put("description","Compose existing safe primitives only. Do not invent a primitive."));
+            p.put("speech",new JSONObject().put("type","STRING").put("description","Optional very short in-character line. Never narrate the obvious visual."));
+            p.put("intensity",new JSONObject().put("type","NUMBER").put("minimum",0).put("maximum",1));
+            p.put("surpriseLevel",new JSONObject().put("type","NUMBER").put("minimum",0).put("maximum",1));
+            p.put("sensoryDensity",new JSONObject().put("type","INTEGER").put("minimum",0).put("maximum",3)
+                    .put("description","0 QUIET, 1 NORMAL, 2 BUSY, 3 short CHAOS. Use 0/1 often; 3 rarely."));
+            p.put("visualEffect",enumString("Existing effect request. Prefer AUTO.","AUTO","PETAL_BLOOM","STORM_FLASH","RAIN_BURST","LEAF_FALL","DUST_DISSOLVE","FREEZE_CRACK","FROST_PULSE","VOID_SUCTION","GRAVITY_WELL","BLACKOUT_REVEAL","GLITCH_BARS","NEON_SLICE","PIXEL_SCATTER","MIRROR_SPLIT","SHOCKWAVE","ECHO_RINGS","SPOTLIGHT","SOFT_FADE"));
+            p.put("hapticCue",enumString("Optional haptic suggestion.","AUTO","NONE","SOFT_TAP","CORRECT","WRONG","WARNING","ICE_TICK","DRY_DOUBLE","DIGITAL_TRIPLE","THUNDER","VOID_PULL","HEARTBEAT","IMPACT"));
+        }catch(Exception ignored){}
 
-            JSONObject compositionProps = new JSONObject()
-                    .put("interaction", enumString("Primary player interaction for this event.", "TAP", "HOLD", "DRAG", "SLICE", "WAIT"))
-                    .put("spatial", enumString("Spatial rule affecting gameplay objects.", "NONE", "GRAVITY_DOWN", "GRAVITY_SIDE", "ORBIT", "PUSH_AWAY"))
-                    .put("reveal", enumString("Visibility/reveal mechanic.", "NONE", "SPOTLIGHT", "FOG_REVEAL", "BLACKOUT"))
-                    .put("camera", enumString("Gameplay camera behavior.", "STATIC", "ZOOM_IN", "ZOOM_OUT", "FOLLOW", "PAN"))
-                    .put("surface", enumString("Screen/material behavior.", "NONE", "FRAGMENT", "TRAIL", "LIQUID"))
-                    .put("timing", enumString("Sequencing style.", "SNAP", "TENSION", "DELAYED", "REVERSAL"));
-            properties.put("composition", new JSONObject().put("type", "OBJECT")
-                    .put("description", "Composable experience primitives. Choose a coherent subset; do not maximize every dimension. Runtime validates compatibility and novelty.")
-                    .put("properties", compositionProps));
+        JSONObject params=new JSONObject();
+        try{
+            params.put("type","OBJECT").put("properties",p)
+                    .put("required",new JSONArray().put("turnId").put("baseStateVersion").put("world").put("mood")
+                            .put("situation").put("audioMood").put("targetBehavior").put("intensity").put("surpriseLevel"));
+        }catch(Exception ignored){}
 
-            properties.put("speech", new JSONObject().put("type", "STRING")
-                    .put("description", "Optional short setup/punchline caption, max 140 characters. Live voice is primary; never narrate the effect or insult the player."));
-            properties.put("intensity", new JSONObject().put("type", "NUMBER").put("minimum", 0).put("maximum", 1));
-            properties.put("surpriseLevel", new JSONObject().put("type", "NUMBER").put("minimum", 0).put("maximum", 1));
-
-            // These are requests only. SensoryDirector is authoritative and may downgrade them.
-            properties.put("sensoryDensity", new JSONObject().put("type", "NUMBER").put("minimum", 0).put("maximum", 3)
-                    .put("description", "Requested density: 0 QUIET, 1 NORMAL, 2 BUSY, 3 CHAOS. Make contrast obvious; use 0/1 often and 3 rarely."));
-            properties.put("visualEffect", enumString("Optional world-appropriate effect. Prefer AUTO when unsure.",
-                    "AUTO", "PETAL_BLOOM", "STORM_FLASH", "RAIN_BURST", "LEAF_FALL", "DUST_DISSOLVE",
-                    "FREEZE_CRACK", "FROST_PULSE", "VOID_SUCTION", "GRAVITY_WELL", "BLACKOUT_REVEAL",
-                    "GLITCH_BARS", "NEON_SLICE", "PIXEL_SCATTER", "MIRROR_SPLIT", "SHOCKWAVE",
-                    "ECHO_RINGS", "SPOTLIGHT", "SOFT_FADE"));
-            properties.put("hapticCue", enumString("Optional tactile suggestion. Prefer AUTO/NONE; Runtime controls frequency.",
-                    "AUTO", "NONE", "SOFT_TAP", "CORRECT", "WRONG", "WARNING", "ICE_TICK", "DRY_DOUBLE",
-                    "DIGITAL_TRIPLE", "THUNDER", "VOID_PULL", "HEARTBEAT", "IMPACT"));
-
-            JSONObject actionItem = new JSONObject().put("type", "OBJECT")
-                    .put("properties", new JSONObject()
-                            .put("type", new JSONObject().put("type", "STRING"))
-                            .put("targetId", new JSONObject().put("type", "STRING"))
-                            .put("id", new JSONObject().put("type", "STRING"))
-                            .put("text", new JSONObject().put("type", "STRING"))
-                            .put("x", new JSONObject().put("type", "NUMBER"))
-                            .put("y", new JSONObject().put("type", "NUMBER"))
-                            .put("width", new JSONObject().put("type", "NUMBER"))
-                            .put("height", new JSONObject().put("type", "NUMBER"))
-                            .put("value", new JSONObject().put("type", "NUMBER"))
-                            .put("durationMs", new JSONObject().put("type", "NUMBER"))
-                            .put("style", new JSONObject().put("type", "OBJECT")));
-            properties.put("actions", new JSONObject().put("type", "ARRAY").put("maxItems", 8).put("items", actionItem)
-                    .put("description", "Small incremental UI changes only. Existing Game Runtime validates them."));
-        } catch (Exception ignored) {}
-
-        JSONObject params = new JSONObject();
-        try {
-            params.put("type", "OBJECT");
-            params.put("properties", properties);
-            params.put("required", new JSONArray().put("world").put("mood").put("situation")
-                    .put("audioMood").put("targetBehavior").put("intensity").put("surpriseLevel"));
-        } catch (Exception ignored) {}
-
-        JSONObject declaration = new JSONObject();
-        try {
-            declaration.put("name", FUNCTION_NAME);
-            declaration.put("description", "Choose the next high-level world experience and a few validated UI actions. "
-                    + "Compose a fresh event from interaction/spatial/reveal/camera/surface/timing primitives, or rarely choose a finished signatureMoment. "
-                    + "The runtime enforces compatibility, complexity, novelty, sensory contrast, and UI action safety.");
-            declaration.put("parameters", params);
-        } catch (Exception ignored) {}
-        return declaration;
+        JSONObject out=new JSONObject();
+        try{out.put("name",FUNCTION_NAME).put("description","Suggest one validated high-level experience plan. ExperienceRuntime is authoritative and applies it asynchronously.").put("parameters",params);}
+        catch(Exception ignored){}
+        return out;
     }
 
-    public static String buildToolResponse(String callId, JSONObject result) {
-        JSONObject functionResponse = new JSONObject();
-        JSONObject root = new JSONObject();
-        try {
-            functionResponse.put("name", FUNCTION_NAME);
-            if (callId != null && !callId.isEmpty()) functionResponse.put("id", callId);
-            functionResponse.put("response", new JSONObject().put("result",
-                    result == null ? new JSONObject().put("ok", true) : result));
-            root.put("toolResponse", new JSONObject().put("functionResponses", new JSONArray().put(functionResponse)));
-        } catch (Exception ignored) {}
+    public static String buildToolResponse(String callId,JSONObject result){
+        JSONObject root=new JSONObject();
+        try{
+            JSONObject response=new JSONObject().put("result",result==null?new JSONObject().put("ok",true):result);
+            JSONObject fr=new JSONObject().put("name",FUNCTION_NAME).put("response",response);
+            if(callId!=null&&!callId.isEmpty())fr.put("id",callId);
+            root.put("toolResponse",new JSONObject().put("functionResponses",new JSONArray().put(fr)));
+        }catch(Exception ignored){}
         return root.toString();
     }
 
-    private static JSONObject enumString(String description, String... values) {
-        JSONObject out = new JSONObject();
-        try {
-            out.put("type", "STRING");
-            out.put("description", description);
-            JSONArray allowed = new JSONArray();
-            for (String value : values) allowed.put(value);
-            out.put("enum", allowed);
-        } catch (Exception ignored) {}
-        return out;
+    private static JSONObject enumString(String description,String...values){
+        JSONObject out=new JSONObject();try{
+            JSONArray a=new JSONArray();for(String v:values)a.put(v);
+            out.put("type","STRING").put("description",description).put("enum",a);
+        }catch(Exception ignored){}return out;
     }
 }
