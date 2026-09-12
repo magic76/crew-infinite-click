@@ -247,6 +247,7 @@ final class GeminiLiveClient extends WebSocketListener {
             "Use recentSpeech to avoid repeating the same joke, structure, or sentiment. If you cannot add a new observation, stay silent. "+
             "For GAME_TURN, call apply_world_experience exactly once. Choose WHAT comes next, never raw code, frame data, physics values, or particle coordinates. "+
             "DIRECTIVE.context.worldMutation is persistent physical truth: pressure, stage, ruptures, scars and epoch. Do not reset it, narrate its numbers, or request an early world switch. At high pressure choose a complementary behavior that makes the buildup feel intentional. "+
+            "DIRECTIVE.context.visualPromise is an unresolved local visual mystery. The local PromiseRuntime advances and reveals it without model latency. Use its type, phase and nextTease only to choose a complementary or contrasting situation/target behavior; never explain the mystery, announce progress, or promise a specific visual the runtime cannot render. "+
             "Do not invent modal mini-games, search overlays, or interaction modes that interrupt rapid-tap flow. Keep the game moving. "+
             "Language follows DIRECTIVE.language. Keep any spoken line very short, specific, and natural.";
 }

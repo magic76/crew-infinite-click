@@ -8,8 +8,8 @@ const gemini=fs.readFileSync('app/src/main/java/com/magic76/aiclicker/GeminiLive
 assert(index.indexOf('world-mutation-runtime.js')<index.indexOf('experience-runtime.js'),'mutation runtime must load before ExperienceRuntime');
 assert.strictEqual((game.match(/new WorldMutationRuntime\(/g)||[]).length,1,'there must be exactly one persistent mutation runtime');
 assert(game.includes('state.mutation.tap(px,py'),'every physical tap must push world pressure');
-assert(game.includes('state.mutation.promise(stage,px,py)'),'FOMO promise beats must reinforce the same world pressure');
-assert(game.includes('state.mutation.jackpot(px,py,level)'),'jackpot must feed persistent world evolution');
+assert(game.includes('state.mutation.promise(Math.min(4,e.phaseIndex),e.x,e.y)'),'visual promise phase beats must reinforce the same world pressure');
+assert(game.includes('state.mutation.jackpot(e.x,e.y,level)'),'promise reveal payoff must feed persistent world evolution');
 assert(game.includes('state.mutation.setWorld(plan.world)'),'validated world plan must synchronize mutation visuals');
 assert(game.includes('targetModulation(nowT)'),'target body must visually reflect world pressure');
 assert(fx.includes('mutationStageAccent('),'stage crossings need pooled visual punctuation');

@@ -5,11 +5,11 @@
   const DEBUG=!!window.__INFINITE_CLICK_DEBUG__;
   const state={
     app:null,gameplay:null,bg:null,world:null,target:null,targetCore:null,targetLabel:null,
-    pools:null,ripples:[],decoys:[],fx:null,mutation:null,audio:null,primitiveHost:null,runtime:null,aggregator:null,
+    pools:null,ripples:[],decoys:[],fx:null,mutation:null,promise:null,audio:null,primitiveHost:null,runtime:null,aggregator:null,
     safe:{left:0,top:0,right:0,bottom:0},language:"zh-TW",lastInputAt:performance.now(),idleStage:0,
     nextTurnId:1,stateVersion:1,pendingGameTurnId:0,pendingGameEvent:null,geminiPending:false,
     frame:{fps:60,lastMs:performance.now(),accMs:0,frames:0,lastLog:0},
-    tapJuice:{lastAt:0,streak:0,lastFrenzyAt:0,heat:0,cycleTaps:0,goal:8,promiseStage:0,jackpots:0,nearMissUsed:false,labelUntil:0,lastPromiseAt:0}
+    tapJuice:{lastAt:0,streak:0,lastFrenzyAt:0,heat:0,jackpots:0}
   };
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const hex=v=>typeof v==="number"?v:Number.parseInt(String(v||"#ffffff").replace("#",""),16)||0xffffff;
@@ -24,7 +24,7 @@
     });
     state.app=app;document.body.appendChild(app.canvas);buildScene();wireRuntime();wireInput();
     app.ticker.add(tick);
-    if(DEBUG)window.PixiGameDebug={app,canvas:app.canvas,runtime:()=>state.runtime,mutation:()=>state.mutation,diagnostics};
+    if(DEBUG)window.PixiGameDebug={app,canvas:app.canvas,runtime:()=>state.runtime,mutation:()=>state.mutation,promise:()=>state.promise,diagnostics};
     try{A&&A.onRendererReady("PIXI_RUNTIME_V2");}catch(_){}
   }
 
@@ -42,9 +42,13 @@
     });
     state.fx=new WorldFxController(app,{particlePool:state.pools.particles,parent:state.gameplay});
     state.world=new PIXI.Container();state.world.label="world";state.gameplay.addChild(state.world);
-    // Keep transient foreground over the main target.
-    if(state.fx.foreground)state.gameplay.addChild(state.fx.foreground);
     createTarget();
+    // Mystery clues sit above the gameplay target but below short-lived foreground explosions.
+    state.promise=new PromiseRuntime(app,{
+      parent:state.gameplay,getTarget:()=>state.target,
+      onPhaseChange:handlePromisePhase,onReveal:handlePromiseReveal
+    });
+    if(state.fx.foreground)state.gameplay.addChild(state.fx.foreground);
     resizeScene();
     window.addEventListener("resize",resizeScene);
   }
@@ -86,7 +90,8 @@
       onPrimitiveTiming:m=>state.primitiveHost.setTiming(m),
       onRuleTwist:(rule,plan)=>applyValidatedPlanToTarget(plan,rule),
       onInteractionDirective:(directive,context)=>routeDirective(directive,context),
-      mutationContext:()=>state.mutation&&state.mutation.context?state.mutation.context():null
+      mutationContext:()=>state.mutation&&state.mutation.context?state.mutation.context():null,
+      promiseContext:()=>state.promise&&state.promise.context?state.promise.context():null
     });
     state.aggregator=new GeminiEventAggregator({windowMs:500,onFlush:sendDirectiveToNative});
     state.runtime.startSession();
@@ -110,60 +115,30 @@
     stage.on("pointerupoutside",e=>{const p=e.global;localReleaseFeedback();state.primitiveHost.pointerUp(p.x,p.y);});
   }
 
-  function nextFomoGoal(){
-    const j=state.tapJuice.jackpots;
-    return 6+Math.floor(Math.random()*5)+Math.min(2,Math.floor(j/3));
+  function handlePromisePhase(event){
+    const e=event||{};
+    if(e.phaseIndex<2||e.phaseIndex>=5)return;
+    if(state.mutation&&typeof state.mutation.promise==="function")state.mutation.promise(Math.min(4,e.phaseIndex),e.x,e.y);
+    if(state.fx&&typeof state.fx.tapPromiseAccent==="function")state.fx.tapPromiseAccent(e.x,e.y,e.progress,Math.min(4,e.phaseIndex));
+    if(window.GameHaptics){
+      const cue=e.phaseIndex>=4?"HEARTBEAT":"SOFT_TAP";
+      window.GameHaptics.perform(cue,e.phaseIndex>=4?.31:.14);
+    }
   }
 
-  function setFomoLabel(text,ms){
-    if(!state.targetLabel)return;
-    state.targetLabel.text=text;state.tapJuice.labelUntil=performance.now()+Math.max(120,Number(ms)||500);
-  }
-
-  function triggerPromiseStage(stage,px,py,progress){
-    const j=state.tapJuice;if(stage<=j.promiseStage)return;
-    j.promiseStage=stage;j.lastPromiseAt=performance.now();
-    if(stage===1)setFomoLabel("...",520);
-    else if(stage===2)setFomoLabel("KEEP GOING",760);
-    else setFomoLabel("ONE MORE?",920);
-    if(window.GameHaptics)window.GameHaptics.perform(stage>=3?"HEARTBEAT":"SOFT_TAP",stage>=3?.34:.20);
-    if(state.mutation&&typeof state.mutation.promise==="function")state.mutation.promise(stage,px,py);
-    if(state.fx&&typeof state.fx.tapPromiseAccent==="function")state.fx.tapPromiseAccent(px,py,progress,stage);
-  }
-
-  function triggerFomoJackpot(px,py){
-    const j=state.tapJuice;j.jackpots++;
+  function handlePromiseReveal(event){
+    const e=event||{},j=state.tapJuice;j.jackpots++;
     const level=Math.min(4,1+Math.floor(j.jackpots/2));
-    setFomoLabel(["AGAIN.","MORE?","KEEP GOING.","WHAT ELSE?"][j.jackpots%4],900);
-    if(state.mutation&&typeof state.mutation.jackpot==="function")state.mutation.jackpot(px,py,level);
-    if(window.GameHaptics)window.GameHaptics.perform("IMPACT",Math.min(.78,.48+level*.07));
-    if(state.fx&&typeof state.fx.tapJackpot==="function")state.fx.tapJackpot(px,py,level,j.heat);
-    else if(state.fx&&typeof state.fx.tapFrenzyAccent==="function")state.fx.tapFrenzyAccent(px,py,20,1);
-    if(state.audio&&state.runtime&&state.runtime.currentPlan&&typeof state.audio.playJackpot==="function"){
+    if(state.mutation&&typeof state.mutation.jackpot==="function")state.mutation.jackpot(e.x,e.y,level);
+    if(window.GameHaptics)window.GameHaptics.perform("IMPACT",Math.min(.80,.50+level*.07));
+    if(state.fx&&typeof state.fx.tapJackpot==="function")state.fx.tapJackpot(e.x,e.y,level,j.heat);
+    if(state.audio&&state.runtime&&state.runtime.currentPlan&&typeof state.audio.playJackpot==="function")
       state.audio.playJackpot(state.runtime.currentPlan.audioMood||"GLITCH",level);
-    }
-    j.cycleTaps=0;j.goal=nextFomoGoal();j.promiseStage=0;j.nearMissUsed=false;
-    j.heat=clamp(j.heat+.18,0,1);
-  }
-
-  function updateFomoCycle(px,py,gap){
-    const j=state.tapJuice;
-    if(gap<900)j.cycleTaps=Math.min(30,j.cycleTaps+1);
-    else{j.cycleTaps=1;j.goal=nextFomoGoal();j.promiseStage=0;j.nearMissUsed=false;}
-    let progress=clamp(j.cycleTaps/Math.max(1,j.goal),0,1);
-    if(progress>=.46)triggerPromiseStage(1,px,py,progress);
-    if(progress>=.70)triggerPromiseStage(2,px,py,progress);
-    if(progress>=.88)triggerPromiseStage(3,px,py,progress);
-    if(j.cycleTaps>=j.goal){
-      // Occasional near-miss: the world visibly hesitates for one or two extra taps.
-      if(!j.nearMissUsed&&j.jackpots>0&&Math.random()<.28){
-        j.nearMissUsed=true;j.goal+=1+Math.floor(Math.random()*2);
-        setFomoLabel("SO CLOSE.",720);
-        if(window.GameHaptics)window.GameHaptics.perform("HEARTBEAT",.42);
-        if(state.fx&&typeof state.fx.tapPromiseAccent==="function")state.fx.tapPromiseAccent(px,py,.96,4);
-      }else triggerFomoJackpot(px,py);
-    }
-    return progress;
+    if(state.runtime&&typeof state.runtime.forceLocalPromiseConsequence==="function")
+      state.runtime.forceLocalPromiseConsequence({promiseType:e.type||"RIFT",chain:e.chain||0,reveals:e.reveals||0});
+    j.heat=clamp(j.heat+.16,0,1);state.stateVersion++;
+    renderBackground();
+    try{A&&A.onRuntimeSignal(JSON.stringify({type:"PROMISE_REVEAL",promiseType:e.type||"",chain:e.chain||0,reveals:e.reveals||0,stateVersion:state.stateVersion}));}catch(_){}
   }
 
   function localTouchFeedback(x,y){
@@ -177,16 +152,20 @@
     }
     state.tapJuice.lastAt=t;
     const s=screen(),px=x*s.width,py=y*s.height;
-    const fomoProgress=updateFomoCycle(px,py,gap);
-    const mutationState=state.mutation&&typeof state.mutation.tap==="function"?state.mutation.tap(px,py,{streak:state.tapJuice.streak,heat:state.tapJuice.heat,fomoProgress}):null;
+    const beforeMutation=state.mutation&&state.mutation.context?state.mutation.context():null;
+    const promiseState=state.promise&&typeof state.promise.tap==="function"?state.promise.tap(px,py,{
+      streak:state.tapJuice.streak,heat:state.tapJuice.heat,mutationPressure:beforeMutation?beforeMutation.pressure:0
+    }):null;
+    const promiseProgress=promiseState?Number(promiseState.progress)||0:0;
+    const mutationState=state.mutation&&typeof state.mutation.tap==="function"?state.mutation.tap(px,py,{
+      streak:state.tapJuice.streak,heat:state.tapJuice.heat,fomoProgress:promiseProgress
+    }):null;
     const mutationPressure=mutationState?Number(mutationState.pressure)||0:0;
-    const streak=state.tapJuice.streak,power=clamp(Math.max((streak-1)/12,fomoProgress*.82,mutationPressure*.68),0,1),heat=state.tapJuice.heat;
+    const streak=state.tapJuice.streak,power=clamp(Math.max((streak-1)/12,promiseProgress*.86,mutationPressure*.68),0,1),heat=state.tapJuice.heat;
     const world=state.runtime&&state.runtime.currentPlan&&GameWorldCatalog.WORLDS[state.runtime.currentPlan.world];
     const accent=world&&world.accent!=null?world.accent:0xffffff;
     const secondary=world&&world.secondary!=null?world.secondary:0xffffff;
 
-    // Tap feel is never gated by sensoryDensity. The old pre-cleanup build felt good because
-    // every physical tap produced a dense local response; v4 restores that density with pools.
     const pool=state.pools.ripples,g=pool.acquire(state.gameplay);if(g){
       g.circle(0,0,10+power*5).stroke({color:accent,width:2.5+power*1.5,alpha:.90});
       g.x=px;g.y=py;state.ripples.push({g,life:.30,max:.30,growth:3.0+power*1.0,alpha:.90});
@@ -206,16 +185,13 @@
     if(window.GameHaptics)window.GameHaptics.perform(streak>=8?"DIGITAL_TRIPLE":"SOFT_TAP",.20+power*.22);
     if(state.audio&&state.runtime&&state.runtime.currentPlan){
       const mood=state.runtime.currentPlan.audioMood||"GLITCH";
-      if(typeof state.audio.playClick==="function")state.audio.playClick(mood,.28+power*.30,Math.max(streak,Math.round(fomoProgress*20)));
+      if(typeof state.audio.playClick==="function")state.audio.playClick(mood,.28+power*.30,Math.max(streak,Math.round(promiseProgress*20)));
       else state.audio.play(mood,"click",.28+power*.30);
     }
     if(state.fx&&typeof state.fx.tapAccent==="function")state.fx.tapAccent(px,py,streak);
 
-    // Rapid tapping creates escalating effects without restoring the old fixed tap-count phase loop.
-    // Cooldown is time-based, so the player can hammer the screen without allocating unbounded work.
-    if((streak>=4||fomoProgress>=.70)&&state.fx&&typeof state.fx.tapFrenzyAccent==="function"&&t-state.tapJuice.lastFrenzyAt>=210){
-      state.tapJuice.lastFrenzyAt=t;
-      state.fx.tapFrenzyAccent(px,py,streak,heat);
+    if((streak>=4||promiseProgress>=.68)&&state.fx&&typeof state.fx.tapFrenzyAccent==="function"&&t-state.tapJuice.lastFrenzyAt>=210){
+      state.tapJuice.lastFrenzyAt=t;state.fx.tapFrenzyAccent(px,py,streak,heat);
     }
   }
 
@@ -304,6 +280,7 @@
   function applyValidatedPlanToTarget(plan,rule){
     if(!plan)return;
     if(state.mutation&&plan.world)state.mutation.setWorld(plan.world);
+    if(state.promise){if(plan.world&&typeof state.promise.setWorld==="function")state.promise.setWorld(plan.world);if(typeof state.promise.steer==="function")state.promise.steer(plan);}
     clearDecoys();renderTargetPalette(plan);
     const behavior=String(plan.targetBehavior||"STILL").toUpperCase(),s=screen(),safe=safeBounds();
     state.target.visible=true;state.target.alpha=behavior==="HIDE"?.18:1;
@@ -377,22 +354,13 @@
     }
     if(state.target&&state.primitiveHost&&state.primitiveHost.interaction!=="HOLD"){
       const nowT=performance.now(),sinceTap=nowT-state.tapJuice.lastAt;
-      const stage=state.tapJuice.promiseStage;
-      const promisePulse=stage>=3?.055+Math.sin(nowT/72)*.028:(stage===2?.026+Math.sin(nowT/105)*.014:0);
       const mutationMod=state.mutation&&state.mutation.targetModulation?state.mutation.targetModulation(nowT):{scale:1,rotation:0,glow:.18};
-      const desired=mutationMod.scale+Math.sin(nowT/450)*.025+promisePulse;
+      const promiseMod=state.promise&&state.promise.targetModulation?state.promise.targetModulation(nowT):{scale:1,rotation:0,alpha:1,urgency:0};
+      const desired=mutationMod.scale*promiseMod.scale+Math.sin(nowT/450)*.025;
       if(sinceTap>420)state.tapJuice.heat=Math.max(0,state.tapJuice.heat-dt/2100);
-      // Preserve a nearly-complete cycle briefly. The player can see/feel that one more tap is still "alive".
-      if(state.tapJuice.cycleTaps>0&&sinceTap>1500){
-        state.tapJuice.cycleTaps=0;state.tapJuice.goal=nextFomoGoal();state.tapJuice.promiseStage=0;state.tapJuice.nearMissUsed=false;
-      }
       state.target.scale.x+=(desired-state.target.scale.x)*.16;state.target.scale.y=state.target.scale.x;
-      state.target.rotation+=((mutationMod.rotation||0)-state.target.rotation)*.18;
-      if(state.targetCore){const desiredAlpha=clamp(.88+(mutationMod.glow||.18)*.12,.90,1);state.targetCore.alpha+=(desiredAlpha-state.targetCore.alpha)*.14;}
-      if(state.targetLabel&&state.tapJuice.labelUntil&&nowT>state.tapJuice.labelUntil){
-        state.tapJuice.labelUntil=0;
-        if(["...","KEEP GOING","ONE MORE?","SO CLOSE.","AGAIN.","MORE?","WHAT ELSE?"].includes(String(state.targetLabel.text)))state.targetLabel.text="TOUCH";
-      }
+      state.target.rotation+=(((mutationMod.rotation||0)+(promiseMod.rotation||0))-state.target.rotation)*.18;
+      if(state.targetCore){const desiredAlpha=clamp((.88+(mutationMod.glow||.18)*.12)*(promiseMod.alpha||1),.72,1);state.targetCore.alpha+=(desiredAlpha-state.targetCore.alpha)*.14;}
     }
     const idle=performance.now()-state.lastInputAt;
     if(idle>2800&&state.idleStage===0){state.idleStage=1;state.runtime.onPlayerEvent({type:"IDLE_START",idleMs:Math.round(idle),special:true});}
@@ -414,7 +382,8 @@
       particlePool:fx.pool||null,ripplePool:state.pools&&state.pools.ripples.stats(),decoyPool:state.pools&&state.pools.decoys.stats(),
       activeSignature:"NONE",
       geminiRequestPending:state.geminiPending,eventAggregationCount:state.aggregator?state.aggregator.pendingCount():0,
-      fomo:{cycleTaps:state.tapJuice.cycleTaps,goal:state.tapJuice.goal,promiseStage:state.tapJuice.promiseStage,jackpots:state.tapJuice.jackpots,heat:Math.round(state.tapJuice.heat*100)/100},
+      fomo:Object.assign({jackpots:state.tapJuice.jackpots,heat:Math.round(state.tapJuice.heat*100)/100},state.promise&&state.promise.context?state.promise.context():{}),
+      promise:state.promise&&state.promise.context?state.promise.context():null,
       mutation:state.mutation&&state.mutation.context?state.mutation.context():null,
       stateVersion:state.stateVersion
     };
@@ -446,7 +415,8 @@
         clearDecoys();for(const r of state.ripples)state.pools.ripples.release(r.g);state.ripples.length=0;
         state.pendingGameTurnId=0;state.pendingGameEvent=null;state.geminiPending=false;state.stateVersion++;
         if(state.mutation&&state.mutation.reset)state.mutation.reset({clearScars:true});
-        Object.assign(state.tapJuice,{lastAt:0,streak:0,lastFrenzyAt:0,heat:0,cycleTaps:0,goal:nextFomoGoal(),promiseStage:0,jackpots:0,nearMissUsed:false,labelUntil:0,lastPromiseAt:0});
+        if(state.promise&&state.promise.reset)state.promise.reset();
+        Object.assign(state.tapJuice,{lastAt:0,streak:0,lastFrenzyAt:0,heat:0,jackpots:0});
       }
     }catch(e){reportError(e);}
   }

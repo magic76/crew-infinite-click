@@ -14,6 +14,7 @@
       this.onSpeech=typeof o.onSpeech==="function"?o.onSpeech:()=>{};
       this.onInteractionDirective=typeof o.onInteractionDirective==="function"?o.onInteractionDirective:()=>{};
       this.mutationContext=typeof o.mutationContext==="function"?o.mutationContext:()=>null;
+      this.promiseContext=typeof o.promiseContext==="function"?o.promiseContext:()=>null;
       this.primitives=o.primitives||new global.InteractionPrimitives({
         fx:this.fx,getPrimaryTarget:this.getPrimaryTarget,
         onInteraction:o.onPrimitiveInteraction,onSpatial:o.onPrimitiveSpatial,onCamera:o.onPrimitiveCamera,
@@ -144,6 +145,32 @@
     }
 
     /**
+     * PromiseRuntime may finish a visual mystery locally, but gameplay consequences still flow
+     * through ExperienceRuntime so there is never a second gameplay owner.
+     */
+    forceLocalPromiseConsequence(meta) {
+      const m=meta||{},type=String(m.promiseType||m.type||"RIFT").toUpperCase();
+      const previous=this.currentPlan&&this.currentPlan.world;
+      const event=Object.assign({type:"PROMISE_REVEAL",special:true},m);
+      const plan=this.director.fallbackPlan(event,.82);
+      if(previous)plan.world=previous;
+      const map={
+        RIFT:{situation:"CHASE",targetBehavior:"ESCAPE",experienceIntent:"SURPRISE",ruleTwist:"NONE"},
+        ASSEMBLY:{situation:"PREDICT",targetBehavior:"PULSE",experienceIntent:"PREDICT",ruleTwist:"NONE"},
+        SHADOW:{situation:"MIRROR",targetBehavior:"HIDE",experienceIntent:"TRUST_TEST",ruleTwist:"LEFT_RIGHT_REVERSED"},
+        TRANSFORM:{situation:"CHASE",targetBehavior:"PULSE",experienceIntent:"CHASE",ruleTwist:"NONE"},
+        ECHO:{situation:"DECOY",targetBehavior:"SPLIT",experienceIntent:"MISDIRECT",ruleTwist:"NONE"},
+        FALSE_CALM:{situation:"FAKE_ENDING",targetBehavior:"ESCAPE",experienceIntent:"SURPRISE",ruleTwist:"NONE"}
+      };
+      Object.assign(plan,map[type]||map.RIFT);
+      plan.intensity=Math.max(.64,Number(plan.intensity)||0);
+      plan.surpriseLevel=Math.max(.82,Number(plan.surpriseLevel)||0);
+      plan.sensoryDensity=Math.max(2,Number(plan.sensoryDensity)||0);
+      plan.speech="";plan.signatureMoment="NONE";
+      return this.applyAiPlan(plan);
+    }
+
+    /**
      * WorldMutationRuntime can request a rare local world rupture without creating a second
      * gameplay owner. ExperienceRuntime still validates/applies the resulting plan.
      */
@@ -178,6 +205,7 @@
       const ctx=this.director.contextForAi(event||{},this._surpriseLevelForEvent(event));
       ctx.game=gameSnapshot||{};ctx.sensory=this.sensory.contextForAi();ctx.composition=this.composer.contextForAi();
       ctx.worldMutation=this.mutationContext()||null;
+      ctx.visualPromise=this.promiseContext()||null;
       ctx.runtimeOwner="ExperienceRuntime";
       ctx.instruction=[
         "ExperienceRuntime is the only gameplay owner. Gemini is asynchronous creative direction, never the touch critical path.",
@@ -187,6 +215,7 @@
         "Speech is personality, not narration. React, tease, predict, question, or fake-reassure.",
         "Compose from existing interaction/spatial/reveal/camera/surface/timing primitives only.",
         "WorldMutationRuntime owns persistent local pressure, scars and rupture pacing. Do not reset, narrate, or prematurely switch away from that world.",
+        "PromiseRuntime owns the unresolved visual mystery chain. Use visualPromise only as creative context: complement or contrast its current type/phase with situation, target behavior and composition. Never narrate its progress and never wait for the model to advance it.",
         "Signature moments are retired. Always choose NONE.",
         "Input includes tap, hold, release, drag, slice, idle and wait behavior. Never require model latency for immediate feedback."
       ].join(" ");
