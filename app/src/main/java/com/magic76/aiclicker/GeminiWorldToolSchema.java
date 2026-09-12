@@ -23,6 +23,20 @@ public final class GeminiWorldToolSchema {
                     "STILL", "ESCAPE", "SPLIT", "PULSE", "HIDE"));
             properties.put("ruleTwist", enumString("Optional temporary rule. Prefer NONE most of the time.",
                     "NONE", "WAIT_TO_WIN", "TAP_THE_SHADOW", "FOLLOW_THE_SOUND", "DONT_TOUCH_CENTER", "LEFT_RIGHT_REVERSED"));
+            properties.put("experienceIntent", enumString("High-level dramatic intent for this event. The Runtime composes safe primitives from it.",
+                    "TEASE", "TEST_PATIENCE", "MISDIRECT", "CHASE", "SEARCH", "TRUST_TEST", "PREDICT", "SURPRISE", "RECOVER"));
+
+            JSONObject compositionProps = new JSONObject()
+                    .put("interaction", enumString("Primary player interaction for this event.", "TAP", "HOLD", "DRAG", "SLICE", "WAIT"))
+                    .put("spatial", enumString("Spatial rule affecting gameplay objects.", "NONE", "GRAVITY_DOWN", "GRAVITY_SIDE", "ORBIT", "PUSH_AWAY"))
+                    .put("reveal", enumString("Visibility/reveal mechanic.", "NONE", "SPOTLIGHT", "FOG_REVEAL", "BLACKOUT"))
+                    .put("camera", enumString("Gameplay camera behavior.", "STATIC", "ZOOM_IN", "ZOOM_OUT", "FOLLOW", "PAN"))
+                    .put("surface", enumString("Screen/material behavior.", "NONE", "FRAGMENT", "TRAIL", "LIQUID"))
+                    .put("timing", enumString("Sequencing style.", "SNAP", "TENSION", "DELAYED", "REVERSAL"));
+            properties.put("composition", new JSONObject().put("type", "OBJECT")
+                    .put("description", "Composable experience primitives. Choose a coherent subset; do not maximize every dimension. Runtime validates compatibility and novelty.")
+                    .put("properties", compositionProps));
+
             properties.put("speech", new JSONObject().put("type", "STRING")
                     .put("description", "Optional short setup/punchline caption, max 140 characters. Live voice is primary; never narrate the effect or insult the player."));
             properties.put("intensity", new JSONObject().put("type", "NUMBER").put("minimum", 0).put("maximum", 1));
@@ -69,7 +83,8 @@ public final class GeminiWorldToolSchema {
         try {
             declaration.put("name", FUNCTION_NAME);
             declaration.put("description", "Choose the next high-level world experience and a few validated UI actions. "
-                    + "Sensory contrast is essential: calm and sparse moments make rare impacts feel stronger.");
+                    + "Compose a fresh event from interaction/spatial/reveal/camera/surface/timing primitives. "
+                    + "The runtime enforces compatibility, complexity, novelty, sensory contrast, and UI action safety.");
             declaration.put("parameters", params);
         } catch (Exception ignored) {}
         return declaration;

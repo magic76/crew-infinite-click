@@ -1,325 +1,93 @@
-# AI Infinite Click 0.34 — Local Agent Apply Guide
+# 0.35 Apply Guide
 
-Apply this on top of the user's latest working 0.33 tree. Do not rebuild the project or replace working Gemini/Pixi/GameRuntime infrastructure.
+Apply this on top of the user's latest working 0.34 branch. Do not rebuild the project from scratch.
 
-## 1. Preserve existing architecture
+## Script load order
+Load these before `experience-runtime.js`:
 
-Keep:
+1. `world-catalog.js`
+2. `primitive-catalog.js`
+3. `experience-composer.js`
+4. `interaction-primitives.js`
+5. `primitive-host-runtime.js`
+6. existing `sensory-director.js` / `conversation-director.js` / FX/audio modules
+7. `experience-director.js`
+8. `experience-runtime.js`
 
-- one Gemini Live WebSocket/session;
-- existing PCM audio playback;
-- existing `apply_world_experience` synchronous function response path;
-- GameRuntime as authoritative state/action validator;
-- 0.32 Android safe-area integration;
-- 0.33 native HapticEngine;
-- current score/profile/state persistence.
-
-Do **not** create a second agent loop.
-
-## 2. Copy/merge files
-
-Web:
-
-```text
-web/conversation-director.js          NEW
-web/experience-runtime.js             UPDATED
-web/sensory-director.js               UPDATED
-web/world-fx-controller.js             UPDATED
-web/contrast-debug.js                 NEW (debug only)
-```
-
-Android:
-
-```text
-android/GeminiConversationPolicy.java NEW
-android/GeminiWorldToolSchema.java    UPDATED
-```
-
-The other Java files are cumulative copies from 0.33. Change the placeholder package:
-
-```java
-package com.crewpocket.aiclicker.v034;
-```
-
-to the app's real package.
-
-## 3. JS load order
-
-Production:
-
-```html
-<link rel="stylesheet" href="safe-area.css">
-<script src="safe-area.js"></script>
-<script src="world-catalog.js"></script>
-<script src="experience-director.js"></script>
-<script src="sensory-director.js"></script>
-<script src="conversation-director.js"></script>
-<script src="haptic-bridge.js"></script>
-<script src="audio-mood-player.js"></script>
-<script src="world-fx-controller.js"></script>
-<script src="experience-runtime.js"></script>
-```
-
-`contrast-debug.js` must not be loaded in release unless the project already has a guarded dev-tools bundle.
-
-## 4. Create ConversationDirector inside the existing ExperienceRuntime
+## Required host wiring
+Create one `PrimitiveHostRuntime` using the actual Pixi gameplay container and primary clickable target. Wire it to `InteractionPrimitives` callbacks:
 
 ```js
-const conversation = new ConversationDirector({
-  profileAccessor: () => gameRuntime.getPlayerProfile?.() || {}
+const primitiveHost = new PrimitiveHostRuntime({
+  gameplayContainer: gameWorldContainer,
+  getPrimaryTarget,
+  getViewport: () => ({width: app.screen.width, height: app.screen.height}),
+  onGameEvent: event => dispatchPlayerEvent(event),
+  onSurfaceMode: mode => setSurfaceRenderer(mode),
+});
+
+const primitives = new InteractionPrimitives({
+  fx: worldFx,
+  getPrimaryTarget,
+  onInteraction: mode => primitiveHost.setInteraction(mode),
+  onSpatial: mode => primitiveHost.setSpatial(mode),
+  onCamera: mode => primitiveHost.setCamera(mode),
+  onSurface: mode => primitiveHost.setSurface(mode),
+  onTiming: mode => primitiveHost.setTiming(mode),
 });
 
 const experience = new ExperienceRuntime({
-  gameRuntime,
-  director,
-  sensory,
-  conversation,
-  fx: worldFx,
-  audio: audioMood,
-  haptics: window.GameHaptics,
-  profileAccessor: () => gameRuntime.getPlayerProfile?.() || {},
-  getPrimaryTarget: () => {
-    const target = gameRuntime.getElement?.("main_button");
-    return target ? {x:target.x,y:target.y} : null;
-  },
-  onRuleTwist: (rule,plan) => gameRuntime.setTemporaryRule?.(rule,plan),
-  onSpeech: (speech) => window.setCaption?.(speech)
+  ...existingOptions,
+  primitives,
+  composer: new ExperienceComposer(),
 });
+
+app.ticker.add(ticker => primitiveHost.tick(ticker.deltaMS || 16));
 ```
 
-## 5. Route every player event through the new mode
+Feed existing pointer events into `primitiveHost.pointerDown / pointerMove / pointerUp`. Do not keep the old handler firing a normal click after a successful HOLD/DRAG/SLICE; dedupe gesture completion.
 
-Existing immediate local call remains:
+## Surface primitives
+`FRAGMENT` and `LIQUID` are intentionally renderer adapters because Pixi APIs differ by project version. Implement them against the actual renderer:
 
-```js
-const aiContext = experience.onPlayerEvent({
-  type:"click",
-  targetId,
-  x,
-  y,
-  totalClicks:gameRuntime.totalClicks,
-  correct,
-  ignoredWarning
-});
-```
+- `FRAGMENT`: snapshot the gameplay container to a RenderTexture, split it into 6–16 rectangular sprites, animate pieces apart/reassemble, then restore the live container. It must actually fragment the rendered scene; do not fake this with particles.
+- `LIQUID`: use the project's supported displacement/filter path or mesh deformation. If no compatible filter exists, temporarily disable LIQUID in `primitive-catalog.js`; do not substitute generic particles.
+- `TRAIL`: retain 4–8 fading snapshots/ghost positions of the primary target.
 
-Then inspect:
+## Gemini Live
+Keep the same Live session and existing synchronous `FunctionResponse` behavior. Extend `apply_world_experience` using `GeminiWorldToolSchema.java`; do not add another model/session/agent loop. Gemini proposes `experienceIntent` and `composition`; JS `ExperienceComposer` remains authoritative.
 
-```js
-const mode = aiContext.interaction.mode;
-```
+## Personality
+Keep 0.34 BANTER turns. Speech-only banter must not call the tool. GAME_TURN may speak briefly, then call `apply_world_experience` once.
 
-### SILENT
-
-```js
-if (mode === "SILENT") {
-  return; // no network/model event
-}
-```
-
-This is intentional. Constant speech becomes noise too.
-
-### BANTER
-
-Send a compact event to the **already-open** Gemini Live session.
-
-Use `GeminiConversationPolicy.buildTurnText("BANTER", compactContext)` or equivalent existing JSON/message builder.
-
-Critical instruction:
-
-```text
-SPEAK ONLY.
-Do not call any function/tool.
-Do not change the UI.
-One short natural reaction to the player's behavior.
-```
-
-Examples of the desired personality:
-
-```text
-「你真的每顆都要按是不是？」
-「……你又選這顆。」
-「你現在是在懷疑我嗎？」
-「好啦，這次真的不騙你。」
-「一、二——欸，你太快了。」
-```
-
-Do not hard-code these lines; they illustrate tone only.
-
-### GAME_TURN
-
-Send the compact event with mode `GAME_TURN`.
-
-Instruction:
-
-```text
-React briefly in voice, then call apply_world_experience exactly once.
-The line should be a setup/punchline, not a narration of the visual effect.
-```
-
-When the tool call arrives:
-
-1. sanitize/apply through the existing Runtime;
-2. send the existing synchronous `toolResponse.functionResponses` acknowledgement;
-3. let the same Live session continue its audio response.
-
-Do not open another WebSocket.
-
-## 6. Avoid double speech
-
-With Gemini Live AUDIO active, do not separately synthesize `plan.speech` with another TTS path.
-
-`plan.speech` in 0.34 is optional and should be used only for:
-
-- caption fallback;
-- offline/local-director fallback;
-- logging/debug.
-
-If output transcription from Gemini Live is available, feed the final spoken line into:
-
-```js
-experience.recordSpokenLine(transcript);
-```
-
-This improves repeat avoidance.
-
-## 7. Add idle banter polling
-
-Use one cheap local timer (not another agent loop):
-
-```js
-setInterval(() => {
-  const ctx = experience.pollIdle(gameRuntime.getCompactSnapshot?.() || {});
-  if (!ctx) return;
-  sendExistingGeminiLiveEvent(ctx); // BANTER only
-}, 500);
-```
-
-Default idle beats:
-
-```text
-~4.3s -> first possible voice-only reaction
-~9.0s -> second possible voice-only reaction
-```
-
-There are no repeated idle messages after stage 2 until player activity resets the idle state.
-
-## 8. Stronger visual contrast
-
-0.34 density values:
-
-```text
-0 QUIET   ambient 0   create/duplicate budget 1   recommended interactive 1
-1 NORMAL  ambient 4   create/duplicate budget 2   recommended interactive 4
-2 BUSY    ambient 26  create/duplicate budget 7   recommended interactive 18
-3 CHAOS   ambient 42  create/duplicate budget 10  recommended interactive 34
-```
-
-Behavior requirements:
-
-- QUIET means truly quiet: zero ambient particles, no click burst, no decorative plan VFX.
-- BUSY must be obviously more populated than NORMAL.
-- CHAOS should visibly transform the frame for a short beat.
-- after CHAOS, `SensoryDirector` forces about 3.2s of QUIET.
-- do not keep a permanent particle emitter underneath QUIET.
-
-The global GameRuntime max-elements safety limit remains authoritative.
-
-## 9. Important VFX bug fixed
-
-0.33 had code equivalent to:
-
-```js
-const multiplier = Number(this.sensory.burstMultiplier) || 0.6;
-```
-
-That makes a valid `0` fall back to `0.6`, so QUIET still emits particles.
-
-0.34 explicitly preserves zero and returns before spawning burst particles.
-
-Do not reintroduce `|| default` for numeric fields where zero is meaningful.
-
-## 10. Situation timing
-
-Old 0.33:
-
-```text
-10-30s
-```
-
-0.34:
-
-```text
-minimum ~6.5s
-maximum ~18s
-```
-
-This does not mean speech waits 6.5 seconds. BANTER happens independently between game turns.
-
-## 11. Gemini system prompt
-
-Append `GeminiConversationPolicy.systemPromptAppendix()` to the existing game-host system instruction.
-
-Key policy:
-
-```text
-You are the mischievous host of an infinite click game, not an assistant.
-Most spoken reactions are short and conversational.
-Observe behavior; tease, predict, question, fake-reassure, or pause.
-Do not narrate obvious UI changes.
-For BANTER: voice only, no tool.
-For GAME_TURN: react briefly, call apply_world_experience exactly once.
-```
-
-Do not make the AI hostile, insulting, or exhausting.
-
-## 12. Debug contrast verification
-
-In a dev build only, load:
-
-```html
-<script src="contrast-debug.js"></script>
-```
-
-Then from console/debug bridge:
-
-```js
-runSensoryContrastDemo(experience)
-```
-
-You must visually see four distinct beats:
-
-```text
-QUIET -> almost empty
-NORMAL -> restrained
-BUSY -> clearly dense/moving
-CHAOS -> unmistakable full-frame burst
-then -> empty QUIET
-```
-
-If BUSY looks like NORMAL on the actual phone, increase presentation scale/effect size in the existing renderer; do not weaken the director again.
-
-## 13. Tests
-
+## Verification
 Run:
 
 ```bash
-node tests/experience-director.test.js
-node tests/sensory-director.test.js
+node tests/experience-composer.test.js
+node tests/primitive-host-runtime.test.js
 node tests/conversation-director.test.js
+node tests/experience-director.test.js
 node tests/experience-runtime.test.js
+node tests/sensory-director.test.js
 ./gradlew assembleDebug
 ```
 
-Then real-device checks:
+Real-device checks:
+1. HOLD requires holding; a quick tap must not count as HOLD.
+2. DRAG sends changing x/y and visibly drags/affects the target.
+3. SLICE requires a real fast swipe distance, not a tap.
+4. GRAVITY changes the actual target position.
+5. CAMERA changes the gameplay container, not only overlay particles.
+6. FRAGMENT splits the rendered game scene into pieces.
+7. Run 10+ GAME_TURNs and verify compositions do not repeatedly differ by only one cosmetic dimension.
+8. Existing safe-area, haptic, banter, density and GameRuntime validation continue working.
 
-1. rapid taps do not cause continuous overlapping voice;
-2. some taps intentionally receive no speech/no haptic;
-3. many ordinary events produce voice-only banter without UI changes;
-4. idle 4-5 seconds can trigger one natural voice reaction;
-5. BANTER never calls `apply_world_experience`;
-6. GAME_TURN calls it exactly once and the tool response unblocks Live audio;
-7. QUIET has zero ambient/click particles;
-8. BUSY and CHAOS are obviously different from NORMAL on-device;
-9. after CHAOS the screen becomes sparse instead of remaining busy;
-10. safe-area and max-elements validation remain intact.
+## Deterministic device showcase
+In a dev build, load `web/composition-debug.js` and call:
+
+```js
+runCompositionShowcase(experience, 5000);
+```
+
+This bypasses AI randomness and must visibly demonstrate four structurally different combinations. Remove/disable the debug entry point in release builds.

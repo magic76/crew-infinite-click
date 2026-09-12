@@ -114,6 +114,8 @@
         sensoryDensity:Number.isFinite(Number(input.sensoryDensity)) ? Math.max(0,Math.min(3,Math.round(Number(input.sensoryDensity)))) : undefined,
         visualEffect:typeof input.visualEffect === "string" ? input.visualEffect : "AUTO",
         hapticCue:typeof input.hapticCue === "string" ? input.hapticCue : "AUTO",
+        experienceIntent:(catalog.INTENTS&&catalog.INTENTS.includes(input.experienceIntent)) ? input.experienceIntent : "TEASE",
+        composition:(input.composition&&typeof input.composition==="object") ? Object.assign({},input.composition) : {},
         actions:Array.isArray(input.actions) ? input.actions.slice(0,8) : []
       };
 
@@ -147,6 +149,8 @@
         sensoryDensity:undefined,
         visualEffect:"AUTO",
         hapticCue:"AUTO",
+        experienceIntent:"TEASE",
+        composition:{},
         actions:[]
       });
     }

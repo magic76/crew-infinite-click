@@ -1,43 +1,14 @@
-Apply AI Infinite Click 0.34 on top of my current working 0.33 source.
+Apply the attached AI Clicker 0.35 package on top of my latest 0.34 source. Read AGENT_APPLY.md first.
 
-Read AGENT_APPLY.md first and follow it exactly.
-
-Main goals:
-1. Make visual density contrast obvious on the physical phone.
-2. Make Gemini Live feel conversational without changing the UI every time.
-
-Required architecture:
-- Keep ONE existing Gemini Live session.
-- Keep GameRuntime/action validator authoritative.
-- Add ConversationDirector with SILENT / BANTER / GAME_TURN.
-- BANTER = AUDIO response only, NO tool/function call, NO UI change.
-- GAME_TURN = short voice reaction + apply_world_experience exactly once + existing synchronous tool response.
-- Add the ~500ms local idle poll; this is only a scheduler check, not another agent loop.
-- Feed final Gemini output transcription to experience.recordSpokenLine() if transcription is already available.
-- Do not synthesize plan.speech separately when Gemini Live AUDIO is already speaking.
-
-Visual requirements:
-- QUIET: 0 ambient particles, no click particle burst, almost empty frame.
-- NORMAL: 4 ambient.
-- BUSY: ~26 ambient, visibly stronger movement/effects.
-- CHAOS: ~42 ambient + short full-frame accent/crowd burst.
-- CHAOS must fall back to QUIET for ~3.2s.
-- Preserve max-elements=50 and safe interactive bounds.
-
-Important: do not just change numeric constants. Ensure the actual current Pixi renderer visibly honors them. If the project has newer/better VFX than the reference file, integrate the same semantics into those current effects instead of replacing them.
-
-Run:
-node tests/experience-director.test.js
-node tests/sensory-director.test.js
-node tests/conversation-director.test.js
-node tests/experience-runtime.test.js
-./gradlew assembleDebug
-
-Then install the APK on a real device and verify BANTER does not mutate UI, speech does not overlap constantly, and run the dev-only runSensoryContrastDemo(experience) once to compare all four density levels.
-
-Return:
-- changed files
-- integration notes
-- test results
-- APK path
-- any Gemini Live/tool-call issue you had to fix
+Critical requirements:
+- Do not rebuild the app or rewrite GameRuntime/Gemini Live.
+- Integrate PrimitiveCatalog + ExperienceComposer + InteractionPrimitives + PrimitiveHostRuntime.
+- Gemini only proposes experienceIntent/composition; Runtime validates compatibility, max complexity, world vocabulary and novelty.
+- HOLD/DRAG/SLICE must be actual pointer interactions.
+- GRAVITY/ORBIT/PUSH_AWAY must move actual gameplay targets.
+- ZOOM/FOLLOW/PAN must transform the actual gameplay container.
+- FRAGMENT must use the current Pixi renderer/RenderTexture to split the actual scene; do NOT fake it with particles.
+- Keep 0.34 speech-only BANTER behavior and one Gemini Live session.
+- Preserve safe area, haptics, sensory density and current GameRuntime action validator.
+- Wire primitiveHost.tick() to the Pixi ticker.
+- Run every JS test plus ./gradlew assembleDebug, fix compile/runtime integration errors, then report changed files, test results and APK path.

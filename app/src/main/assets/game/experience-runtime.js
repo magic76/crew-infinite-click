@@ -8,6 +8,16 @@
       this.director=o.director||new global.ExperienceDirector({profileAccessor:o.profileAccessor});
       this.sensory=o.sensory||new global.SensoryDirector();
       this.conversation=o.conversation||new global.ConversationDirector({profileAccessor:o.profileAccessor});
+      this.composer=o.composer||new global.ExperienceComposer();
+      this.primitives=o.primitives||new global.InteractionPrimitives({
+        fx:o.fx||null,
+        getPrimaryTarget:typeof o.getPrimaryTarget==="function"?o.getPrimaryTarget:()=>null,
+        onInteraction:o.onPrimitiveInteraction,
+        onSpatial:o.onPrimitiveSpatial,
+        onCamera:o.onPrimitiveCamera,
+        onSurface:o.onPrimitiveSurface,
+        onTiming:o.onPrimitiveTiming
+      });
       this.fx=o.fx||null;
       this.audio=o.audio||null;
       this.haptics=o.haptics||global.GameHaptics||null;
@@ -60,6 +70,7 @@
       context.interaction=interaction;
       context.conversation=this.conversation.contextForAi(interaction,e);
       context.sensory=this.sensory.contextForAi();
+      context.composition=this.composer.contextForAi();
       this.onInteractionDirective(interaction,context);
       return context;
     }
@@ -84,10 +95,16 @@
       const previousWorld=this.currentPlan&&this.currentPlan.world;
       const plan=this.director.sanitizePlan(rawPlan);
       const sensoryState=this.sensory.resolve(plan);
+      const composition=this.composer.compose(plan.composition||{}, {world:plan.world,density:sensoryState.density,experienceIntent:plan.experienceIntent});
+      plan.composition=composition;
       this.currentPlan=plan;
       this.currentSensoryState=sensoryState;
       this.currentSituationStartedAt=performance.now();
       const target=this.getPrimaryTarget();
+
+      if (this.primitives&&typeof this.primitives.apply==="function") {
+        this.primitives.apply(composition,plan);
+      }
 
       if (this.fx) {
         this.fx.setSensoryState(sensoryState);
@@ -133,7 +150,10 @@
         visualEffect:sensoryState.visualEffect,
         appliedCount:applied.length,
         rejectedCount:rejected.length,
-        creationActionBudget:sensoryState.creationActionBudget
+        creationActionBudget:sensoryState.creationActionBudget,
+        experienceIntent:plan.experienceIntent,
+        composition:composition,
+        noveltyScore:composition.noveltyScore
       };
     }
 
@@ -155,6 +175,7 @@
       const ctx=this.director.contextForAi(event||{},this._surpriseLevelForEvent(event));
       ctx.game=gameSnapshot||{};
       ctx.sensory=this.sensory.contextForAi();
+      ctx.composition=this.composer.contextForAi();
       ctx.instruction=[
         "Keep the current world coherent for several situations.",
         "Do not repeat either of the last two situations unless surpriseLevel >= 0.9.",
@@ -162,6 +183,8 @@
         "Visual contrast must be obvious: QUIET is almost empty, NORMAL is restrained, BUSY is clearly crowded/moving, CHAOS is a rare short punch.",
         "After CHAOS, drop hard to QUIET instead of staying medium-busy.",
         "Speech is personality, not narration: tease, observe, predict, question, or fake-reassure. Never describe the visual effect literally.",
+        "Choose an experienceIntent and composition. Build one coherent event by combining interaction + spatial + reveal + camera + surface + timing; do not turn every dimension on.",
+        "Novelty comes from changing meaningful dimensions, not renaming the same particle effect. Prefer at least two meaningful dimension changes from recent compositions.",
         "Background visuals may be full screen, but clickable targets must stay inside safe interactive bounds."
       ].join(" ");
       return ctx;

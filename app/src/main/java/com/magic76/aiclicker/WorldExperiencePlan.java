@@ -30,6 +30,8 @@ public final class WorldExperiencePlan {
             "GRAVITY_WELL", "BLACKOUT_REVEAL", "GLITCH_BARS", "NEON_SLICE",
             "PIXEL_SCATTER", "MIRROR_SPLIT", "SHOCKWAVE", "ECHO_RINGS",
             "SPOTLIGHT", "SOFT_FADE"));
+    public static final Set<String> INTENTS = new HashSet<>(Arrays.asList(
+            "TEASE", "TEST_PATIENCE", "MISDIRECT", "CHASE", "SEARCH", "TRUST_TEST", "PREDICT", "SURPRISE", "RECOVER"));
     public static final Set<String> HAPTIC_CUES = new HashSet<>(Arrays.asList(
             "AUTO", "NONE", "SOFT_TAP", "CORRECT", "WRONG", "WARNING", "ICE_TICK",
             "DRY_DOUBLE", "DIGITAL_TRIPLE", "THUNDER", "VOID_PULL", "HEARTBEAT", "IMPACT"));
@@ -47,13 +49,15 @@ public final class WorldExperiencePlan {
     public final int sensoryDensity;
     public final String visualEffect;
     public final String hapticCue;
+    public final String experienceIntent;
+    public final JSONObject composition;
     public final JSONArray actions;
 
     private WorldExperiencePlan(
             String world, String mood, String situation, String audioMood,
             String targetBehavior, String ruleTwist, String speech,
             double intensity, double surpriseLevel, int sensoryDensity,
-            String visualEffect, String hapticCue, JSONArray actions) {
+            String visualEffect, String hapticCue, String experienceIntent, JSONObject composition, JSONArray actions) {
         this.world = world;
         this.mood = mood;
         this.situation = situation;
@@ -66,6 +70,8 @@ public final class WorldExperiencePlan {
         this.sensoryDensity = sensoryDensity;
         this.visualEffect = visualEffect;
         this.hapticCue = hapticCue;
+        this.experienceIntent = experienceIntent;
+        this.composition = composition == null ? new JSONObject() : composition;
         this.actions = actions;
     }
 
@@ -79,6 +85,9 @@ public final class WorldExperiencePlan {
         String ruleTwist = enumValue(args.optString("ruleTwist"), RULE_TWISTS, "NONE");
         String visualEffect = enumValue(args.optString("visualEffect"), VISUAL_EFFECTS, "AUTO");
         String hapticCue = enumValue(args.optString("hapticCue"), HAPTIC_CUES, "AUTO");
+        String experienceIntent = enumValue(args.optString("experienceIntent"), INTENTS, "TEASE");
+        JSONObject composition = args.optJSONObject("composition");
+        if (composition == null) composition = new JSONObject();
 
         String speech = args.optString("speech", "");
         if (speech.length() > 140) speech = speech.substring(0, 140);
@@ -94,7 +103,7 @@ public final class WorldExperiencePlan {
             actions = trimmed;
         }
         return new WorldExperiencePlan(world, mood, situation, audioMood, targetBehavior,
-                ruleTwist, speech, intensity, surpriseLevel, sensoryDensity, visualEffect, hapticCue, actions);
+                ruleTwist, speech, intensity, surpriseLevel, sensoryDensity, visualEffect, hapticCue, experienceIntent, composition, actions);
     }
 
     public JSONObject toJson() {
@@ -112,6 +121,8 @@ public final class WorldExperiencePlan {
             if (sensoryDensity >= 0) out.put("sensoryDensity", sensoryDensity);
             out.put("visualEffect", visualEffect);
             out.put("hapticCue", hapticCue);
+            out.put("experienceIntent", experienceIntent);
+            out.put("composition", composition);
             out.put("actions", actions);
         } catch (Exception ignored) {}
         return out;
