@@ -10,15 +10,8 @@ android {
         applicationId 'com.magic76.aiclicker'
         minSdk 26
         targetSdk 35
-        versionCode 23
-        versionName '0.20.2-godot-thermal-visibility-fix'
-    }
-
-    // Godot projects can contain hidden metadata. The 0.20 spike currently uses only source
-    // .gd/.gdshader assets, but keeping the official ignore override prevents future imports from
-    // silently disappearing when .godot metadata is added.
-    aaptOptions {
-        ignoreAssetsPattern "!.svn:!.git:!.gitignore:!.ds_store:!*.scc:<dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"
+        versionCode 30
+        versionName '0.30.0-pixi-reboot'
     }
 
     buildTypes {
@@ -36,8 +29,4 @@ android {
 
 dependencies {
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
-    implementation 'androidx.fragment:fragment:1.8.6'
-
-    // Godot is embedded as an Android library / Fragment. 4.7.2 is the current stable patch.
-    implementation 'org.godotengine:godot:4.7.2.stable'
 }

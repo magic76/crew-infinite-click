@@ -8,31 +8,19 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
-import android.util.Log;
 import android.view.View;
 import android.view.Window;
 
 import android.view.WindowManager;
 import android.widget.EditText;
-import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import org.json.JSONObject;
 
-import androidx.fragment.app.Fragment;
-import androidx.fragment.app.FragmentActivity;
 
-import org.godotengine.godot.Godot;
-import org.godotengine.godot.GodotFragment;
-import org.godotengine.godot.GodotHost;
-import org.godotengine.godot.plugin.GodotPlugin;
 
-import java.util.Collections;
-import java.util.Set;
-
-public final class MainActivity extends FragmentActivity implements GodotHost {
-    private static final String TAG = "InfiniteClickGodot";
+public final class MainActivity extends Activity {
     private static final String PREFS = "ai_infinite_click";
     private static final String KEY_API = "gemini_api_key";
     private static final String KEY_LANGUAGE = "game_language";
@@ -41,10 +29,6 @@ public final class MainActivity extends FragmentActivity implements GodotHost {
     private final LocalDirector localDirector = new LocalDirector();
 
     private GameView gameView;
-    private GodotWorldBridge godotWorldBridge;
-    private GodotFragment godotFragment;
-    private VisualBridgePlugin visualBridgePlugin;
-    private Godot pluginGodot;
     private GameRuntime runtime;
     private GeminiLiveClient liveClient;
     private SharedPreferences prefs;
@@ -70,32 +54,13 @@ public final class MainActivity extends FragmentActivity implements GodotHost {
 
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         currentLanguage = AppLanguage.fromCode(prefs.getString(KEY_LANGUAGE, AppLanguage.ZH_TW.code));
-
-        FrameLayout root = new FrameLayout(this);
-        FrameLayout godotContainer = new FrameLayout(this);
-        godotContainer.setId(R.id.godot_fragment_container);
-        godotContainer.setBackgroundColor(Color.BLACK);
-        root.addView(godotContainer, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-
-        godotWorldBridge = new GodotWorldBridge();
         gameView = new GameView(this);
-        gameView.setWorldSurface(godotWorldBridge);
-        godotWorldBridge.setStateListener(() -> gameView.postInvalidateOnAnimation());
-        root.addView(gameView, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
-
-        // GodotFragment owns the engine/render-surface lifecycle. Android keeps the HUD,
-        // Gemini Live and deterministic gameplay as an overlay above it.
-        setContentView(root);
-        attachGodotFragment();
-
         runtime = new GameRuntime(this, gameView, this::onRuntimeEvent, this::onGameEnded);
         runtime.setLanguage(currentLanguage);
         gameView.setRuntime(runtime);
         gameView.setSettingsTapListener(this::showApiKeyDialog);
         gameView.setLanguageChangeListener(this::onLanguageChanged);
-
+        setContentView(gameView);
         runtime.initializeDefaultScene();
         String key = prefs.getString(KEY_API, "");
         if (key != null && !key.trim().isEmpty()) {
@@ -103,50 +68,6 @@ public final class MainActivity extends FragmentActivity implements GodotHost {
         } else {
             gameView.setConnectionStatus("DEMO");
         }
-    }
-
-    private void attachGodotFragment() {
-        Fragment existing = getSupportFragmentManager().findFragmentById(R.id.godot_fragment_container);
-        if (existing instanceof GodotFragment) {
-            godotFragment = (GodotFragment) existing;
-            return;
-        }
-
-        godotFragment = new GodotFragment();
-        getSupportFragmentManager()
-                .beginTransaction()
-                .replace(R.id.godot_fragment_container, godotFragment)
-                .commitNowAllowingStateLoss();
-    }
-
-    @Override public Activity getActivity() {
-        return this;
-    }
-
-    @Override public Godot getGodot() {
-        return godotFragment == null ? null : godotFragment.getGodot();
-    }
-
-    @Override public Set<GodotPlugin> getHostPlugins(Godot godot) {
-        if (visualBridgePlugin == null || pluginGodot != godot) {
-            pluginGodot = godot;
-            visualBridgePlugin = new VisualBridgePlugin(godot, godotWorldBridge);
-            if (godotWorldBridge != null) godotWorldBridge.attachPlugin(visualBridgePlugin);
-        }
-        return Collections.<GodotPlugin>singleton(visualBridgePlugin);
-    }
-
-    @Override public void onGodotSetupCompleted() {
-        Log.i(TAG, "Godot setup completed");
-        if (godotWorldBridge != null) godotWorldBridge.onGodotSetupCompleted();
-    }
-
-    @Override public void onGodotMainLoopStarted() {
-        Log.i(TAG, "Godot main loop started (GodotHost callback)");
-        // GodotFragment explicitly forwards this lifecycle callback to its parent GodotHost.
-        // Use the host callback as the authoritative engine-start signal instead of depending
-        // only on the runtime plugin lifecycle callback.
-        if (godotWorldBridge != null) godotWorldBridge.onGodotMainLoopStarted();
     }
 
     private void onLanguageChanged(AppLanguage language) {
@@ -158,9 +79,11 @@ public final class MainActivity extends FragmentActivity implements GodotHost {
     @Override protected void onResume() {
         super.onResume();
         configureSystemBars();
+        if (gameView != null) gameView.onHostResume();
     }
 
     @Override protected void onPause() {
+        if (gameView != null) gameView.onHostPause();
         super.onPause();
     }
 
@@ -169,9 +92,6 @@ public final class MainActivity extends FragmentActivity implements GodotHost {
         if (turnWatchdog != null) mainHandler.removeCallbacks(turnWatchdog);
         if (completionWatchdog != null) mainHandler.removeCallbacks(completionWatchdog);
         if (liveClient != null) liveClient.close();
-        if (godotWorldBridge != null) godotWorldBridge.destroy();
-        visualBridgePlugin = null;
-        pluginGodot = null;
         super.onDestroy();
     }
 

@@ -19,7 +19,7 @@ import java.util.Random;
  * 0.16 Living Canvas runtime.
  *
  * The product invariant is intentionally small:
- * - there is one persistent endless WorldPlan
+ * - there is one persistent high-level ScenePlan
  * - every screen tap is valid
  * - local rendering reacts immediately
  * - Gemini evolves the high-level world asynchronously
@@ -41,6 +41,7 @@ final class GameRuntime {
     private final StateSink stateSink;
 
     private final MomentumEngine momentumEngine = new MomentumEngine();
+    private final PlayerProfile playerProfile = new PlayerProfile();
     private final ArrayDeque<JSONObject> recentEvents = new ArrayDeque<>();
     private final ArrayDeque<TapSample> tapSamples = new ArrayDeque<>();
 
@@ -109,7 +110,7 @@ final class GameRuntime {
         sessionId = "world_" + (++sessionSerial) + "_" + sessionStartedAt;
 
         view.clearTransientState();
-        view.applyWorldPlan(WorldPlan.defaultPlan());
+        view.applyScenePlan(ScenePlan.defaultPlan());
         view.setAiCaption(text("摸摸看，這個世界會記住你。", "Touch the world. It will remember you."));
         view.invalidate();
 
@@ -127,8 +128,11 @@ final class GameRuntime {
         lastTapAt = now;
 
         runClicks++;
+        playerProfile.totalClicks++;
+        playerProfile.recordReaction(interval);
         momentumEngine.recordTap(now, true);
         bestTapStreak = Math.max(bestTapStreak, momentumEngine.fastStreak());
+        if (momentumEngine.fastStreak() >= 4 && momentumEngine.fastStreak() % 4 == 0) playerProfile.rageClickCount++;
 
         tapSamples.addLast(new TapSample(x, y, now));
         while (tapSamples.size() > MAX_TAP_SAMPLES) tapSamples.removeFirst();
@@ -151,7 +155,7 @@ final class GameRuntime {
             root.put("sessionAgeMs", sessionStartedAt <= 0L ? 0L : Math.max(0L, now - sessionStartedAt));
             root.put("runClicks", runClicks);
             root.put("engagementState", engagementState(now));
-            root.put("worldRevision", worldRevision);
+            root.put("sceneRevision", worldRevision);
 
             String voiceCue = "SILENT_OK";
             if ("start".equals(event.type)) {
@@ -164,12 +168,13 @@ final class GameRuntime {
             }
             root.put("voiceCue", voiceCue);
 
-            WorldPlan current = view.currentWorldPlan();
-            if (current != null) root.put("worldPlan", current.toJson());
+            ScenePlan current = view.currentScenePlan();
+            if (current != null) root.put("scenePlan", current.toJson());
 
             root.put("momentum", momentumEngine.toJson(now));
             root.put("clickSpeed", momentumEngine.speedJson(now));
             root.put("tapPattern", buildTapPattern());
+            root.put("playerProfile", playerProfile.toJson());
 
             JSONArray events = new JSONArray();
             for (JSONObject recent : recentEvents) events.put(recent);
@@ -192,9 +197,9 @@ final class GameRuntime {
         String speech = safeText(args.optString("speech", ""), 200);
         if (!speech.isEmpty()) view.setAiCaption(speech);
 
-        WorldPlan plan = WorldPlan.parse(args);
+        ScenePlan plan = ScenePlan.parse(args);
         if (plan != null) {
-            view.applyWorldPlan(plan);
+            view.applyScenePlan(plan);
             worldRevision++;
             semanticStateVersion++;
         }
@@ -207,21 +212,18 @@ final class GameRuntime {
                 JSONObject action = actions.optJSONObject(i);
                 if (action == null) continue;
                 String type = action.optString("type", "");
-                if ("shakeScreen".equals(type)) {
-                    float intensity = clamp((float)action.optDouble("intensity", 0.12), 0.04f, 0.45f);
-                    long duration = clampLong(action.optLong("durationMs", 120L), 60L, 500L);
+                if ("shakeScreen".equals(type) || "screen_shake".equals(type)) {
+                    float intensity = clamp((float)action.optDouble("strength", action.optDouble("intensity", 0.12)), 0.04f, 0.45f);
+                    long duration = clampLong(action.optLong("durationMs", 120L), 60L, 600L);
                     view.shake(intensity, duration);
-                } else if ("flashScreen".equals(type)) {
+                } else if ("flashScreen".equals(type) || "flash".equals(type)) {
                     String hex = action.optString("color", "#FFFFFF");
                     int color = Color.WHITE;
                     try { color = Color.parseColor(hex); } catch (Exception ignored) {}
-                    long duration = clampLong(action.optLong("durationMs", 90L), 50L, 400L);
+                    long duration = clampLong(action.optLong("durationMs", 90L), 40L, 500L);
                     view.flash(color, duration);
-                } else if (isCuratedVisualEffect(type)) {
-                    float x = clamp((float)action.optDouble("x", 0.5), 0f, 1f);
-                    float y = clamp((float)action.optDouble("y", 0.5), 0f, 1f);
-                    float strength = clamp((float)action.optDouble("strength", 0.72), 0.15f, 1f);
-                    view.playVisualEffect(type, x, y, strength);
+                } else if (isVisualAction(type)) {
+                    view.playVisualAction(action);
                 }
             }
         }
@@ -229,14 +231,10 @@ final class GameRuntime {
         view.invalidate();
     }
 
-    private boolean isCuratedVisualEffect(String type) {
-        return "spawn_portal".equals(type)
-                || "black_hole".equals(type)
-                || "gravity_pull".equals(type)
-                || "shockwave".equals(type)
-                || "particle_burst".equals(type)
-                || "world_crack".equals(type)
-                || "glitch_world".equals(type);
+    private boolean isVisualAction(String type) {
+        return "particle_burst".equals(type) || "shockwave".equals(type) || "portal".equals(type)
+                || "black_hole".equals(type) || "gravity_pull".equals(type) || "world_crack".equals(type)
+                || "glitch".equals(type) || "swarm".equals(type) || "dissolve".equals(type);
     }
 
     private JSONObject buildTapPattern() {
@@ -328,17 +326,13 @@ final class GameRuntime {
         return "CALM";
     }
 
-    List<GameElement> snapshotElements() {
-        return Collections.emptyList();
-    }
-
     GameState getGameState() { return gameState; }
     boolean isPlaying() { return gameState == GameState.PLAYING; }
 
     AppLanguage getLanguage() { return language; }
     void setLanguage(AppLanguage value) {
         language = value == null ? AppLanguage.ZH_TW : value;
-        view.invalidate();
+        view.setLanguage(language);
     }
     String text(String zh, String en) { return language.pick(zh, en); }
 
@@ -351,7 +345,7 @@ final class GameRuntime {
     double getMomentum() { return momentumEngine.value(System.currentTimeMillis()); }
     double getClickRate() { return momentumEngine.clickRatePerSecond(); }
     double getPeakClickRate() { return momentumEngine.peakClickRatePerSecond(); }
-    WorldPlan getCurrentWorldPlan() { return view.currentWorldPlan(); }
+    ScenePlan getCurrentScenePlan() { return view.currentScenePlan(); }
 
     private static String safeText(String value, int max) {
         if (value == null) return "";

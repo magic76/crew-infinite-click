@@ -99,7 +99,7 @@ final class GeminiLiveClient extends WebSocketListener {
         if (!setupReady || socket == null || contextEnvelope == null) return false;
         try {
             String content = "PLAYER_EVENT\n" + contextEnvelope.toString() +
-                    "\nEvolve the persistent world now. Call apply_game_turn FIRST with a coherent WorldPlan. Respect PLAYER_EVENT.voiceCue. If it is REQUIRED, speech must be non-empty and after the tool result you MUST produce audible native audio. If ENCOURAGED, prefer a brief natural reaction. SILENT_OK may stay silent. " +
+                    "\nDirect the next reactive canvas beat now. Call apply_game_turn FIRST with one ScenePlan plus 0-2 curated visual actions. Respect PLAYER_EVENT.voiceCue. If it is REQUIRED, speech must be non-empty and after the tool result you MUST produce audible native audio. If ENCOURAGED, prefer a brief natural reaction. SILENT_OK may stay silent. " +
                     "If pendingInteraction is present, treat it as one aggregated burst rather than replaying old events.";
             JSONObject turn = new JSONObject();
             turn.put("role", "user");
@@ -303,90 +303,50 @@ final class GeminiLiveClient extends WebSocketListener {
     }
 
     private JSONObject buildGameTurnDeclaration() throws Exception {
-        JSONObject paletteProps = new JSONObject()
-                .put("primary", schema("string", "#RRGGBB dark/base color"))
-                .put("secondary", schema("string", "#RRGGBB secondary/background color"))
-                .put("accent", schema("string", "#RRGGBB luminous accent color"));
-        JSONObject paletteSchema = new JSONObject()
-                .put("type", "object")
-                .put("properties", paletteProps);
+        JSONObject sceneProps = new JSONObject()
+                .put("intent", new JSONObject().put("type", "string").put("enum", new JSONArray()
+                        .put("TEASE").put("ESCAPE").put("SWARM").put("REVEAL").put("ABSORB")
+                        .put("FRACTURE").put("GLITCH").put("CALM").put("CELEBRATE")))
+                .put("mood", new JSONObject().put("type", "string").put("enum", new JSONArray()
+                        .put("CURIOUS").put("PLAYFUL").put("EERIE").put("CHAOTIC").put("CALM").put("TRIUMPHANT")))
+                .put("primary", schema("string", "#RRGGBB dark base"))
+                .put("secondary", schema("string", "#RRGGBB supporting tone"))
+                .put("accent", schema("string", "#RRGGBB luminous accent"))
+                .put("energy", schema("number", "0.1..1 visual intensity"))
+                .put("tempo", schema("number", "0.1..1 continuous motion speed"))
+                .put("focusX", schema("number", "0..1 visual focus x"))
+                .put("focusY", schema("number", "0..1 visual focus y"));
+        JSONObject sceneSchema = new JSONObject()
+                .put("type", "object").put("properties", sceneProps)
+                .put("required", new JSONArray().put("intent").put("mood").put("primary").put("secondary")
+                        .put("accent").put("energy").put("tempo").put("focusX").put("focusY"));
 
-        JSONObject worldProps = new JSONObject()
-                .put("theme", new JSONObject().put("type", "string").put("enum",
-                        new JSONArray().put("COSMIC").put("ABYSS").put("GARDEN").put("CIRCUIT")
-                                .put("DREAM").put("INK").put("LAVA").put("ICE")))
-                .put("motif", new JSONObject().put("type", "string").put("enum",
-                        new JSONArray().put("ORBS").put("STARS").put("EYES").put("JELLYFISH")
-                                .put("VINES").put("PORTALS").put("SHARDS").put("GLYPHS")))
-                .put("mood", new JSONObject().put("type", "string").put("enum",
-                        new JSONArray().put("CALM").put("CURIOUS").put("PLAYFUL").put("EERIE").put("CHAOTIC")))
-                .put("tapReaction", new JSONObject().put("type", "string").put("enum",
-                        new JSONArray().put("BLOOM").put("RIPPLE").put("CRACK").put("ATTRACT")
-                                .put("REPEL").put("MULTIPLY").put("WARP")))
-                .put("evolution", new JSONObject().put("type", "string").put("enum",
-                        new JSONArray().put("DRIFT").put("GROW").put("PULSE").put("ORBIT").put("FLOW").put("BREATHE")))
-                .put("layout", new JSONObject().put("type", "string").put("enum",
-                        new JSONArray().put("FIELD").put("TUNNEL").put("VORTEX").put("GATE").put("SHARD_STORM")))
-                .put("cameraMotion", new JSONObject().put("type", "string").put("enum",
-                        new JSONArray().put("DRIFT").put("FORWARD").put("ORBIT").put("FLOAT")))
-                .put("composition", new JSONObject().put("type", "string").put("enum",
-                        new JSONArray().put("CENTER").put("EDGE").put("DIAGONAL").put("SPIRAL")
-                                .put("CLUSTERED").put("HOLLOW_CENTER")))
-                .put("environment", new JSONObject().put("type", "string").put("enum",
-                        new JSONArray().put("FOG").put("STARDUST").put("SMOKE").put("BUBBLES")
-                                .put("ASH").put("POLLEN").put("GLITCH")))
-                .put("materialStyle", new JSONObject().put("type", "string").put("enum",
-                        new JSONArray().put("GLASS").put("METAL").put("BIO").put("ENERGY").put("CRYSTAL").put("INK")))
-                .put("palette", paletteSchema)
-                .put("density", schema("number", "0.12..1.0; main visual population"))
-                .put("motion", schema("number", "0.05..1.0; continuous local motion"))
-                .put("scale", schema("number", "0.25..1.0; motif size"))
-                .put("depth", schema("number", "0.15..1.0; depth spread and spatial extrusion"))
-                .put("particleLevel", schema("number", "0..1; atmospheric layer density"))
-                .put("pulseStrength", schema("number", "0..1; authored pulse and tap afterglow strength"))
-                .put("contrastLevel", schema("number", "0.15..1; lighting and foreground contrast"));
-
-        JSONObject worldSchema = new JSONObject()
-                .put("type", "object")
-                .put("properties", worldProps)
-                .put("required", new JSONArray()
-                        .put("theme").put("motif").put("mood").put("tapReaction")
-                        .put("evolution").put("layout").put("cameraMotion")
-                        .put("composition").put("environment").put("materialStyle")
-                        .put("palette").put("density").put("motion").put("scale").put("depth")
-                        .put("particleLevel").put("pulseStrength").put("contrastLevel"));
-
-        JSONObject fxProps = new JSONObject()
-                .put("type", new JSONObject().put("type", "string")
-                        .put("enum", new JSONArray()
-                                .put("shakeScreen").put("flashScreen")
-                                .put("spawn_portal").put("black_hole").put("gravity_pull")
-                                .put("shockwave").put("particle_burst").put("world_crack").put("glitch_world")))
-                .put("intensity", schema("number", "shake 0.05..0.45"))
-                .put("durationMs", schema("integer", "60..500"))
-                .put("color", schema("string", "#RRGGBB"))
-                .put("x", schema("number", "curated VFX normalized x 0..1"))
-                .put("y", schema("number", "curated VFX normalized y 0..1"))
-                .put("strength", schema("number", "curated VFX strength 0.15..1"));
-        JSONObject fxSchema = new JSONObject()
-                .put("type", "object")
-                .put("properties", fxProps)
+        JSONObject actionProps = new JSONObject()
+                .put("type", new JSONObject().put("type", "string").put("enum", new JSONArray()
+                        .put("particle_burst").put("shockwave").put("portal").put("black_hole")
+                        .put("gravity_pull").put("world_crack").put("glitch").put("swarm")
+                        .put("dissolve").put("screen_shake").put("flash")))
+                .put("x", schema("number", "0..1 normalized x"))
+                .put("y", schema("number", "0..1 normalized y"))
+                .put("strength", schema("number", "0.1..1"))
+                .put("durationMs", schema("integer", "40..600 only for flash/shake"))
+                .put("color", schema("string", "#RRGGBB only for flash"));
+        JSONObject actionSchema = new JSONObject().put("type", "object").put("properties", actionProps)
                 .put("required", new JSONArray().put("type"));
 
         JSONObject params = new JSONObject()
                 .put("type", "object")
                 .put("properties", new JSONObject()
-                        .put("turnId", schema("integer", "Echo the exact turnId from PLAYER_EVENT."))
-                        .put("baseStateVersion", schema("integer", "Echo stateVersion from PLAYER_EVENT."))
-                        .put("speech", schema("string", "Optional voice intent/caption. Empty is valid and preferred for routine taps."))
-                        .put("worldPlan", worldSchema)
-                        .put("actions", new JSONObject().put("type", "array").put("items", fxSchema)))
-                .put("required", new JSONArray()
-                        .put("turnId").put("baseStateVersion").put("speech").put("worldPlan").put("actions"));
+                        .put("turnId", schema("integer", "Echo exact turnId from PLAYER_EVENT"))
+                        .put("baseStateVersion", schema("integer", "Echo stateVersion from PLAYER_EVENT"))
+                        .put("speech", schema("string", "Optional brief spoken reaction; empty is valid for routine taps"))
+                        .put("scenePlan", sceneSchema)
+                        .put("actions", new JSONObject().put("type", "array").put("items", actionSchema)))
+                .put("required", new JSONArray().put("turnId").put("baseStateVersion").put("speech").put("scenePlan").put("actions"));
 
         return new JSONObject()
                 .put("name", "apply_game_turn")
-                .put("description", "Evolve one persistent endless procedural world. The Runtime renders the WorldPlan continuously and owns all tap feedback.")
+                .put("description", "Direct one beat of an AI-reactive PixiJS canvas. Choose intent and optional allowlisted VFX; never generate code or frames.")
                 .put("parameters", params);
     }
 
@@ -465,48 +425,27 @@ final class GeminiLiveClient extends WebSocketListener {
     }
 
     private static final String SYSTEM_PROMPT =
-            "You are the live director of an endless interactive AI world, not an assistant and not a conventional game narrator. " +
-            "There are NO buttons to chase, NO correct targets, NO levels, NO countdown, NO game over, and NO required goal. " +
-            "The whole screen is a living canvas. Every player tap is valid and immediately handled locally. Your job is to make the persistent world evolve so the player wonders what one more touch will cause.\n\n" +
+            "You are the live director of an endless AI-reactive canvas. The player taps because they want to discover your next trick. " +
+            "Do not behave like an assistant. Do not explain the renderer. The experience is a chain of short surprising micro-situations, usually 10-30 seconds, with the whole screen always tappable.\n\n" +
 
-            "For every PLAYER_EVENT call apply_game_turn exactly once, immediately. Echo turnId and stateVersion. " +
-            "Always return one complete WorldPlan. The Runtime continuously animates that plan at frame rate; you are choosing WHAT the world becomes, never individual frames or coordinates. " +
-            "Do not create UI elements, buttons, rules, scores, timers, missions, instructions, HTML, JavaScript, or arbitrary code.\n\n" +
+            "For every PLAYER_EVENT call apply_game_turn exactly once and immediately. Echo turnId and stateVersion. " +
+            "Return one ScenePlan plus 0-2 curated actions. Never return HTML, JavaScript, shader code, coordinates for dozens of objects, arbitrary assets, or executable code. " +
+            "Android owns session state and safety. PixiJS owns animation and rendering. Your job is WHAT dramatic beat should happen next, not HOW to draw frames.\n\n" +
 
-            "WORLD CONTINUITY IS CRITICAL. PLAYER_EVENT.worldPlan is the current persistent world. Usually evolve only 1-3 dimensions at a time: " +
-            "for example keep COSMIC+EYES but increase density and change tapReaction, or keep ABYSS but slowly turn JELLYFISH into PORTALS. " +
-            "Do not randomly replace the whole theme every turn. A major world shift should feel caused by player behavior or by a meaningful world_tick. " +
-            "worldRevision tells you how many authored mutations have already happened. world_tick occurs every several seconds even when the player is idle; use it to let the world breathe, grow, drift, or become curious rather than resetting it.\n\n" +
+            "ScenePlan.intent is the dramatic intention: TEASE, ESCAPE, SWARM, REVEAL, ABSORB, FRACTURE, GLITCH, CALM, CELEBRATE. " +
+            "mood is CURIOUS, PLAYFUL, EERIE, CHAOTIC, CALM, TRIUMPHANT. primary/secondary/accent are coherent #RRGGBB colors. " +
+            "energy and tempo are 0.1..1. focusX/focusY are 0..1 and should often track the player's current or repeated tap area.\n\n" +
 
-            "Use the player's behavior as creative material. clickSpeed contains cps, averageIntervalMs, lastIntervalMs, peakCps, deltaCps, trend, tier, fastStreak and totalTaps. " +
-            "Rapid or accelerating taps may make density, motion, chaos, multiplication, cracks, heat, circuitry, or creatures intensify. " +
-            "Slow exploratory taps may make the world reveal detail, grow eyes, open portals, or become delicate. " +
-            "A pause can make the world become still, stare back, breathe, or quietly mutate. Tap coordinates matter: repeated taps in one area can make that region conceptually important even though the Runtime handles the exact local effect. " +
-            "The world should feel like it is noticing the player's habits.\n\n" +
+            "Curated actions: particle_burst, shockwave, portal, black_hole, gravity_pull, world_crack, glitch, swarm, dissolve, screen_shake, flash. " +
+            "Use actions as punctuation, not every tap. Prefer one meaningful effect at the end or turn of a micro-situation. The local Pixi director already gives every tap instant feedback, so do not redundantly request particle_burst on every event.\n\n" +
 
-            "The renderer is now an embedded Godot 4.7 VFX surface with procedural shaders and GPU particles. WorldPlan vocabulary: theme = COSMIC, ABYSS, GARDEN, CIRCUIT, DREAM, INK, LAVA, ICE. " +
-            "motif = ORBS, STARS, EYES, JELLYFISH, VINES, PORTALS, SHARDS, GLYPHS. " +
-            "mood = CALM, CURIOUS, PLAYFUL, EERIE, CHAOTIC. tapReaction = BLOOM, RIPPLE, CRACK, ATTRACT, REPEL, MULTIPLY, WARP. " +
-            "evolution = DRIFT, GROW, PULSE, ORBIT, FLOW, BREATHE. " +
-            "Spatial layout = FIELD (layered floating field), TUNNEL (forward depth corridor), VORTEX (spiral funnel), GATE (portal-like ring architecture), SHARD_STORM (angular debris volume). " +
-            "cameraMotion = DRIFT, FORWARD, ORBIT, FLOAT. composition = CENTER, EDGE, DIAGONAL, SPIRAL, CLUSTERED, HOLLOW_CENTER. " +
-            "environment = FOG, STARDUST, SMOKE, BUBBLES, ASH, POLLEN, GLITCH. materialStyle = GLASS, METAL, BIO, ENERGY, CRYSTAL, INK. " +
-            "depth controls z-spread and spatial scale. particleLevel controls the atmospheric/background layer, pulseStrength controls rhythmic/tap afterglow, contrastLevel controls lighting and foreground silhouette strength. " +
-            "Choose layout + composition as a pair: TUNNEL works well with CENTER/HOLLOW_CENTER, VORTEX with SPIRAL, GATE with HOLLOW_CENTER/CENTER, SHARD_STORM with DIAGONAL/EDGE, FIELD with CLUSTERED/EDGE. These are suggestions, not hard rules. " +
-            "Theme should also have a material identity, not only a palette: COSMIC often ENERGY/GLASS + STARDUST; ABYSS BIO + BUBBLES/FOG; GARDEN BIO + POLLEN; CIRCUIT METAL/ENERGY + GLITCH; DREAM GLASS + FOG/STARDUST; INK INK + SMOKE; LAVA ENERGY/METAL + ASH; ICE CRYSTAL/GLASS + FOG. " +
-            "Preserve continuity: usually evolve only one visual layer at a time. Do not shuffle theme, layout, material, environment and composition all at once unless a major transition is earned. " +
-            "Tap feedback is immediate and local: Godot can bend the procedural field, burst GPU particles, leave tap echoes and persist a short mutation, so use WorldPlan to shape the next persistent state rather than narrating or replaying the same tap. " +
-            "Choose a coherent dark/base primary color, secondary color, and luminous accent. density/motion/scale/depth/particleLevel/pulseStrength/contrastLevel are continuous controls within the schema.\n\n" +
+            "Use player behavior. clickSpeed and tapPattern tell you whether they are frantic, careful, clustered, exploratory, or paused. " +
+            "Rapid taps can make you escalate, fake confidence, swarm, fracture, absorb, or glitch. Slow taps can reveal secrets, become quiet, move focus, or build tension. " +
+            "Continuity matters: keep a situation for several taps, then twist it. Avoid random theme roulette. Aim for a noticeable surprise every 3-6 taps and a larger payoff every 10-20 taps.\n\n" +
 
-            "VOICE IS SELECTIVE BUT NOT OPTIONAL WHEN voiceCue=REQUIRED. " +
-            "On REQUIRED turns, set speech to a non-empty intent, call apply_game_turn first, then after the tool result emit actual audible native audio. The start/live-ready event is REQUIRED, so always greet or react briefly when entering the world. " +
-            "On ENCOURAGED turns, prefer a short natural reaction if there is something interesting to say. On SILENT_OK turns, routine taps should usually stay silent and speech may be empty. " +
-            "If language is zh-TW, speak Traditional Chinese; if en-US, speak English. " +
-            "When speaking, improvise like a live performer reacting in the moment. The function speech text is an intent/caption seed, not a verbatim script. Do not read system state, theme names, CPS numbers, or obvious visual changes. Avoid repetitive phrases such as 'keep going', 'again', or constant praise. Silence is part of the performance.\n\n" +
+            "VOICE IS SELECTIVE. When voiceCue=REQUIRED, speech must be non-empty and after the tool result produce audible native audio. " +
+            "When ENCOURAGED, react briefly only if there is a good line. SILENT_OK usually stays silent. If language is zh-TW speak Traditional Chinese; en-US speak English. " +
+            "Keep lines short, reactive, mischievous and varied. Do not narrate obvious visuals or read metrics.\n\n" +
 
-            "actions are optional curated punctuation, not arbitrary code. Prefer 0-1 action on a meaningful beat and never spam effects every tap. " +
-            "Besides brief shakeScreen/flashScreen, Godot VFX actions are spawn_portal, black_hole, gravity_pull, shockwave, particle_burst, world_crack, and glitch_world. " +
-            "For a Godot VFX action provide x/y in 0..1 and strength in 0.15..1; use the current tap coordinates when appropriate. " +
-            "Never punish a tap. Never tell the player not to tap, wait, aim, find the right thing, or stop. The product invariant is: every touch advances the world.";
-
+            "The invariant: every touch advances the experience. You may tease or misdirect, but never make the player wait for networking, never require a precise impossible target, and never punish them with a dead screen.";
 }
