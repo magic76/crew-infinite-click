@@ -1,0 +1,18 @@
+:root {
+  --safe-left: 0px;
+  --safe-top: 0px;
+  --safe-right: 0px;
+  --safe-bottom: 0px;
+}
+
+.game-top-hud {
+  top: calc(var(--safe-top) + 8px);
+  left: calc(var(--safe-left) + 10px);
+  right: calc(var(--safe-right) + 10px);
+}
+
+.game-caption {
+  bottom: calc(var(--safe-bottom) + 14px);
+  left: calc(var(--safe-left) + 16px);
+  right: calc(var(--safe-right) + 16px);
+}

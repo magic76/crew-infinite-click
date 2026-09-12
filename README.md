@@ -1,142 +1,105 @@
-# AI Infinite Click — 0.31 Interaction Pass
+# AI Infinite Click — 0.33 Sensory Rhythm Pass
 
-0.31 keeps the lightweight Android + WebView + PixiJS architecture and adds three things: system-bar safe areas, procedural sound effects, and safe AI-controlled interaction modes.
+This package is cumulative: it contains the 0.32 safe-area/world-system work plus the 0.33 sensory-rhythm changes.
 
-## 0.31 highlights
+## What 0.33 adds
 
-- Android edge-to-edge background with real `WindowInsets` for top controls and bottom captions.
-- Pixi targets also avoid the status/navigation/UI safe zones.
-- Procedural Web Audio SFX: TAP, WHOOSH, GLITCH, PORTAL, ABSORB, CRACK, REVEAL, SUCCESS, MYSTERY, RHYTHM. No audio asset pack required.
-- New `InteractionPlan`: NONE, TEASE, CHASE, DECOY, WAIT, PREDICT, MIRROR, RHYTHM, REWARD, HIDE.
-- Gemini still cannot emit arbitrary JavaScript/HTML/shader/audio. It only selects validated high-level actions.
-- Preserves the GitHub fixes for Pixi v8 viewport initialization and CSP `unsafe-eval`.
+The goal is **contrast**, not permanent spectacle.
 
-This branch deliberately abandons the Filament/Godot direction.
+### Dynamic sensory density
 
-The product is now an **AI Reactive Canvas**:
+Every situation resolves to one of four client-authoritative levels:
 
-- every tap is immediately fun without waiting for Gemini
-- PixiJS owns rendering and VFX
-- Android owns Gemini Live, audio, session state, haptics and validation
-- Gemini chooses dramatic intent, not pixels, HTML, JS or shader code
-- the whole screen is always tappable
+| Density | Typical visual load | Haptic/audio behavior | Purpose |
+|---|---:|---|---|
+| `CALM` (0) | 2 ambient particles, ~1 creation action | mostly silent / no vibration | tension, waiting, deception |
+| `LIGHT` (1) | 8 ambient particles, ~2 creation actions | occasional soft cue | normal play |
+| `ACTIVE` (2) | 18 ambient particles, ~5 creation actions | selective world-specific feedback | chase / puzzle pressure |
+| `IMPACT` (3) | 34 ambient particles, ~8 creation actions | one short strong event | rare climax |
 
-## Runtime architecture
+`SensoryDirector` is authoritative. Gemini may request a density but cannot force repeated maximum stimulation.
 
-```text
-Android / Java
-├─ MainActivity
-├─ GeminiLiveClient
-├─ GameRuntime
-├─ PlayerProfile
-├─ MomentumEngine
-├─ LocalDirector
-└─ GameView (thin WebView shell)
-      │
-      └─ local HTML runtime
-          ├─ PixiJS WebGL
-          ├─ micro-situation director
-          ├─ particles / trails / portals
-          ├─ shockwaves / glitch / cracks
-          └─ local 60 fps reaction loop
-```
+### Anti-numbness rules
 
-There is **no Godot dependency** and **no Filament dependency**.
+- Real `IMPACT` has a 9 second cooldown.
+- After `IMPACT`, a ~2.6 second recovery window forces the experience back to `CALM/LIGHT`.
+- If 2 of the last 3 situations were already `ACTIVE/IMPACT`, another dense request is downgraded to `LIGHT`.
+- `WAIT` and `HIDE` normally stay sparse.
+- Not every tap vibrates or makes a sound.
+- When visual density is maxed, audio/haptic strength is capped so all channels do not peak together.
+- UI creation/duplication actions are also density-limited, not only particle effects.
 
-## Why this version is different
+## Native haptics
 
-Older versions tried to make one persistent 3D world visually richer. That made the renderer the product.
+New Java files:
 
-0.30 reverses the responsibility:
+- `HapticEngine.java`
+- `HapticJavascriptBridge.java`
 
-```text
-player input
-  -> immediate local Pixi reaction
-  -> Android records behavior
-  -> Gemini chooses next dramatic intent
-  -> validated ScenePlan + 0..2 allowlisted VFX
-  -> Pixi stages the result
-```
+Patterns:
 
-A slow Gemini turn cannot make the screen feel dead because the WebView performs the tap reaction first.
+- `SOFT_TAP`
+- `CORRECT`
+- `WRONG`
+- `WARNING`
+- `ICE_TICK`
+- `DRY_DOUBLE`
+- `DIGITAL_TRIPLE`
+- `THUNDER`
+- `VOID_PULL`
+- `HEARTBEAT`
+- `IMPACT`
 
-## Built-in micro-situations
+Patterns are deliberately short. The engine has its own minimum spacing and the JS `SensoryDirector` intentionally emits `NONE` for many ordinary taps.
 
-The first offline loop intentionally demonstrates ~30 taps of variation:
+## Expanded VFX vocabulary
 
-1. TEASE — target reacts and challenges the player
-2. ESCAPE — target keeps relocating
-3. SWARM — decoys multiply, then collapse
-4. GLITCH — screen slices and signal noise
-5. PORTAL — rings open and warp nearby motion
-6. ABSORB — black-hole pull changes particle trajectories
-7. FRACTURE — cracks propagate from the tap
-8. REVEAL — the scene goes quiet, then pays off
+World-appropriate effects now include:
 
-Gemini can then reshape these beats instead of generating frames.
+- Spring: `PETAL_BLOOM`, `ECHO_RINGS`, `SPOTLIGHT`, `SOFT_FADE`
+- Summer: `STORM_FLASH`, `SHOCKWAVE`, `RAIN_BURST`
+- Autumn: `LEAF_FALL`, `DUST_DISSOLVE`
+- Winter: `FREEZE_CRACK`, `FROST_PULSE`
+- Void: `VOID_SUCTION`, `GRAVITY_WELL`, `BLACKOUT_REVEAL`, `MIRROR_SPLIT`
+- Neon: `GLITCH_BARS`, `NEON_SLICE`, `PIXEL_SCATTER`, `MIRROR_SPLIT`
 
-## Gemini action allowlist
+The same gameplay situation can therefore feel different in different worlds.
 
-Only these renderer actions are accepted:
-
-- `particle_burst`
-- `shockwave`
-- `portal`
-- `black_hole`
-- `gravity_pull`
-- `world_crack`
-- `glitch`
-- `swarm`
-- `dissolve`
-- `screen_shake`
-- `flash`
-
-No arbitrary JavaScript, HTML or shader code is accepted from the model.
-
-## PixiJS loading
-
-The runtime uses PixiJS 8.20.1.
-
-For a small test APK, the HTML runtime first checks for a bundled `pixi.min.js`; if it is missing it loads the pinned CDN copy.
-
-For a production/offline build, vendor it once:
-
-```bash
-./scripts/vendor-pixi.sh
-```
-
-This writes:
+## Files
 
 ```text
-app/src/main/assets/game/pixi.min.js
+android/
+  SafeAreaInsetsController.java
+  WorldExperiencePlan.java
+  GeminiWorldToolSchema.java
+  HapticEngine.java
+  HapticJavascriptBridge.java
+web/
+  safe-area.css
+  safe-area.js
+  world-catalog.js
+  experience-director.js
+  sensory-director.js
+  haptic-bridge.js
+  audio-mood-player.js
+  world-fx-controller.js
+  experience-runtime.js
+tests/
+  experience-director.test.js
+  sensory-director.test.js
+  experience-runtime.test.js
+AGENT_APPLY.md
 ```
 
-After that the game runs without downloading Pixi at runtime.
+## Architectural rule
 
-## Build
+Gemini still chooses high-level play direction. The client owns:
 
-```bash
-gradle :app:assembleDebug
-```
+1. safe area;
+2. low-level action validation;
+3. maximum element count;
+4. sensory density/cooldown;
+5. haptic frequency;
+6. actual visual/audio budgets.
 
-APK:
-
-```text
-app/build/outputs/apk/debug/app-debug.apk
-```
-
-## Debugging
-
-WebView renderer logs:
-
-```bash
-adb logcat | grep -E "chromium|AndroidRuntime|AI Infinite Click"
-```
-
-Desktop inspection while a debug APK is running can be enabled locally with `WebView.setWebContentsDebuggingEnabled(true)` if desired. It is intentionally not forced on in this source.
-
-If Pixi cannot initialize, the app shows `RENDER ERROR` rather than silently switching to an unrelated renderer.
-
-## Current scope
-
-0.30 is a reboot spike. It validates the interaction model and rendering architecture. It intentionally does not try to preserve the 3D worlds from 0.18–0.20.
+Gemini never executes raw JavaScript or arbitrary HTML.

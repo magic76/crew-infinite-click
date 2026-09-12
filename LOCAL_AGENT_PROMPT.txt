@@ -1,0 +1,30 @@
+Apply the cumulative AI Infinite Click 0.33 package to the current project.
+
+Read AGENT_APPLY.md completely before editing.
+
+Rules:
+- Preserve the current GameRuntime, action validation, score/state, Pixi bootstrap, safe-area work, and the existing single Gemini Live session.
+- Do not create a second agent loop or Gemini socket.
+- Integrate HapticEngine/HapticJavascriptBridge only into the trusted local game WebView.
+- Add android.permission.VIBRATE if missing.
+- Load sensory-director.js and haptic-bridge.js before experience-runtime.js.
+- Merge the updated ExperienceRuntime, WorldFxController, AudioMoodPlayer, WorldExperiencePlan and GeminiWorldToolSchema rather than duplicating them.
+- SensoryDirector is authoritative. Never bypass IMPACT cooldown, recovery quiet window, density anti-repeat, or creation-action budgets.
+- Do not add unconditional vibration on every tap.
+- CALM must look genuinely sparse. IMPACT must be rare and brief.
+- Keep all low-level model actions behind the existing validator. No raw JavaScript or arbitrary HTML execution.
+- Preserve synchronous Gemini Live toolResponse behavior.
+- Reuse existing polished VFX when better than the reference implementation, but map them through the new sensory density system.
+
+Run:
+node tests/experience-director.test.js
+node tests/sensory-director.test.js
+node tests/experience-runtime.test.js
+./gradlew assembleDebug
+
+Then report:
+1. modified files,
+2. test results,
+3. APK path,
+4. any integration assumptions,
+5. real-device items still needing manual verification.
