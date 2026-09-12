@@ -10,8 +10,8 @@ android {
         applicationId 'com.magic76.aiclicker'
         minSdk 26
         targetSdk 35
-        versionCode 16
-        versionName '0.16.0-living-canvas'
+        versionCode 18
+        versionName '0.18.0-filament-3d'
     }
 
     buildTypes {
@@ -29,4 +29,8 @@ android {
 
 dependencies {
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+
+    // Native GPU renderer for the Living Canvas.
+    implementation 'com.google.android.filament:filament-android:1.76.1'
+    implementation 'com.google.android.filament:gltfio-android:1.76.1'
 }

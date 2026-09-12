@@ -13,6 +13,7 @@ import android.view.Window;
 
 import android.view.WindowManager;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -29,6 +30,7 @@ public final class MainActivity extends Activity {
     private final LocalDirector localDirector = new LocalDirector();
 
     private GameView gameView;
+    private FilamentWorldView filamentWorldView;
     private GameRuntime runtime;
     private GeminiLiveClient liveClient;
     private SharedPreferences prefs;
@@ -54,14 +56,26 @@ public final class MainActivity extends Activity {
 
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         currentLanguage = AppLanguage.fromCode(prefs.getString(KEY_LANGUAGE, AppLanguage.ZH_TW.code));
+
+        FrameLayout root = new FrameLayout(this);
+        filamentWorldView = new FilamentWorldView(this);
         gameView = new GameView(this);
+        gameView.setWorldSurface(filamentWorldView);
+
+        root.addView(filamentWorldView, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        root.addView(gameView, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+
         runtime = new GameRuntime(this, gameView, this::onRuntimeEvent, this::onGameEnded);
         runtime.setLanguage(currentLanguage);
         gameView.setRuntime(runtime);
         gameView.setSettingsTapListener(this::showApiKeyDialog);
         gameView.setLanguageChangeListener(this::onLanguageChanged);
-        setContentView(gameView);
+
+        setContentView(root);
         runtime.initializeDefaultScene();
+        filamentWorldView.startRendering();
         String key = prefs.getString(KEY_API, "");
         if (key != null && !key.trim().isEmpty()) {
             connectLive(key.trim(), false);
@@ -79,6 +93,12 @@ public final class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         configureSystemBars();
+        if (filamentWorldView != null) filamentWorldView.startRendering();
+    }
+
+    @Override protected void onPause() {
+        if (filamentWorldView != null) filamentWorldView.stopRendering();
+        super.onPause();
     }
 
     @Override protected void onDestroy() {
@@ -86,6 +106,7 @@ public final class MainActivity extends Activity {
         if (turnWatchdog != null) mainHandler.removeCallbacks(turnWatchdog);
         if (completionWatchdog != null) mainHandler.removeCallbacks(completionWatchdog);
         if (liveClient != null) liveClient.close();
+        if (filamentWorldView != null) filamentWorldView.destroyRenderer();
         super.onDestroy();
     }
 
@@ -211,6 +232,11 @@ public final class MainActivity extends Activity {
                 mainHandler.post(() -> {
                     reconnectAttempts = 0;
                     gameView.setConnectionStatus("LIVE");
+                    // App enters the world before the socket is ready. Send a fresh live-start
+                    // so the first audible greeting is produced by Gemini Live, not local fallback.
+                    mainHandler.postDelayed(() -> {
+                        if (!destroyed && runtime.isPlaying()) runtime.sendLiveReadyEvent();
+                    }, 180L);
                 });
             }
 

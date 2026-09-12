@@ -65,7 +65,11 @@ final class GameRuntime {
     }
 
     void initializeDefaultScene() {
-        showStartScreen();
+        startGame();
+    }
+
+    void sendLiveReadyEvent() {
+        if (isPlaying()) dispatchEvent(GameEvent.start());
     }
 
     void showStartScreen() {
@@ -148,6 +152,17 @@ final class GameRuntime {
             root.put("runClicks", runClicks);
             root.put("engagementState", engagementState(now));
             root.put("worldRevision", worldRevision);
+
+            String voiceCue = "SILENT_OK";
+            if ("start".equals(event.type)) {
+                voiceCue = "REQUIRED";
+            } else if ("world_tap".equals(event.type)
+                    && (runClicks == 10 || runClicks == 25 || runClicks == 50 || (runClicks > 0 && runClicks % 75 == 0))) {
+                voiceCue = "ENCOURAGED";
+            } else if ("world_tick".equals(event.type) && worldRevision > 0 && worldRevision % 4 == 0) {
+                voiceCue = "ENCOURAGED";
+            }
+            root.put("voiceCue", voiceCue);
 
             WorldPlan current = view.currentWorldPlan();
             if (current != null) root.put("worldPlan", current.toJson());

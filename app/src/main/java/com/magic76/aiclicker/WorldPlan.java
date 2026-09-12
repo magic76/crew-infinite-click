@@ -10,34 +10,42 @@ final class WorldPlan {
     final String mood;
     final String tapReaction;
     final String evolution;
+    final String layout;
+    final String cameraMotion;
     final String primary;
     final String secondary;
     final String accent;
     final float density;
     final float motion;
     final float scale;
+    final float depth;
 
     private WorldPlan(String theme, String motif, String mood, String tapReaction, String evolution,
+                      String layout, String cameraMotion,
                       String primary, String secondary, String accent,
-                      float density, float motion, float scale) {
+                      float density, float motion, float scale, float depth) {
         this.theme = theme;
         this.motif = motif;
         this.mood = mood;
         this.tapReaction = tapReaction;
         this.evolution = evolution;
+        this.layout = layout;
+        this.cameraMotion = cameraMotion;
         this.primary = primary;
         this.secondary = secondary;
         this.accent = accent;
         this.density = density;
         this.motion = motion;
         this.scale = scale;
+        this.depth = depth;
     }
 
     static WorldPlan defaultPlan() {
         return new WorldPlan(
                 "COSMIC", "ORBS", "CURIOUS", "BLOOM", "DRIFT",
+                "FIELD", "DRIFT",
                 "#070B1A", "#172554", "#7DD3FC",
-                0.48f, 0.42f, 0.62f
+                0.48f, 0.42f, 0.62f, 0.62f
         );
     }
 
@@ -60,6 +68,10 @@ final class WorldPlan {
                 new String[]{"BLOOM","RIPPLE","CRACK","ATTRACT","REPEL","MULTIPLY","WARP"}, "BLOOM");
         String evolution = enumValue(p.optString("evolution", "DRIFT"),
                 new String[]{"DRIFT","GROW","PULSE","ORBIT","FLOW","BREATHE"}, "DRIFT");
+        String layout = enumValue(p.optString("layout", "FIELD"),
+                new String[]{"FIELD","TUNNEL","VORTEX","GATE","SHARD_STORM"}, "FIELD");
+        String cameraMotion = enumValue(p.optString("cameraMotion", "DRIFT"),
+                new String[]{"DRIFT","FORWARD","ORBIT","FLOAT"}, "DRIFT");
 
         JSONObject palette = p.optJSONObject("palette");
         String primary = color(palette == null ? "" : palette.optString("primary", ""), "#070B1A");
@@ -69,9 +81,11 @@ final class WorldPlan {
         float density = clamp((float)p.optDouble("density", 0.48), 0.12f, 1f);
         float motion = clamp((float)p.optDouble("motion", 0.42), 0.05f, 1f);
         float scale = clamp((float)p.optDouble("scale", 0.62), 0.25f, 1f);
+        float depth = clamp((float)p.optDouble("depth", 0.62), 0.15f, 1f);
 
         return new WorldPlan(theme, motif, mood, tap, evolution,
-                primary, secondary, accent, density, motion, scale);
+                layout, cameraMotion,
+                primary, secondary, accent, density, motion, scale, depth);
     }
 
     JSONObject toJson() {
@@ -82,9 +96,12 @@ final class WorldPlan {
             o.put("mood", mood);
             o.put("tapReaction", tapReaction);
             o.put("evolution", evolution);
+            o.put("layout", layout);
+            o.put("cameraMotion", cameraMotion);
             o.put("density", density);
             o.put("motion", motion);
             o.put("scale", scale);
+            o.put("depth", depth);
             o.put("palette", new JSONObject()
                     .put("primary", primary)
                     .put("secondary", secondary)

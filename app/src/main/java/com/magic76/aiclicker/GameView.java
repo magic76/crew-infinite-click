@@ -19,6 +19,7 @@ final class GameView extends View {
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final BackgroundEngine startBackground = new BackgroundEngine();
     private final LivingWorldEngine livingWorldEngine = new LivingWorldEngine();
+    private FilamentWorldView worldSurface;
 
     private final float density;
     private final float scaledDensity;
@@ -27,6 +28,9 @@ final class GameView extends View {
     private final RectF chineseButton = new RectF();
     private final RectF englishButton = new RectF();
     private final RectF connectionButton = new RectF();
+    private final RectF settingsButton = new RectF();
+    private final RectF settingsCloseButton = new RectF();
+    private boolean settingsOpen = false;
 
     private int insetLeft;
     private int insetTop;
@@ -54,12 +58,15 @@ final class GameView extends View {
         super(context);
         density = getResources().getDisplayMetrics().density;
         scaledDensity = getResources().getDisplayMetrics().scaledDensity;
-        setBackgroundColor(Color.rgb(6, 8, 14));
+        setBackgroundColor(Color.TRANSPARENT);
         setFocusable(true);
         livingWorldEngine.reset();
     }
 
     void setRuntime(GameRuntime runtime) { this.runtime = runtime; }
+    void setWorldSurface(FilamentWorldView worldSurface) {
+        this.worldSurface = worldSurface;
+    }
     void setSettingsTapListener(SettingsTapListener listener) { this.settingsTapListener = listener; }
     void setLanguageChangeListener(LanguageChangeListener listener) { this.languageChangeListener = listener; }
 
@@ -76,24 +83,30 @@ final class GameView extends View {
     void clearTransientState() {
         aiCaption = "";
         pressedControl = "";
+        settingsOpen = false;
         flashEndAt = 0L;
         shakeEndAt = 0L;
         startBackground.reset();
         livingWorldEngine.reset();
+        if (worldSurface != null) worldSurface.applyWorldPlan(WorldPlan.defaultPlan());
         postInvalidateOnAnimation();
     }
 
     void onGameTap(float x, float y) {
-        livingWorldEngine.onTap(x, y, runtime == null ? 0.0 : runtime.getMomentum());
+        double momentum = runtime == null ? 0.0 : runtime.getMomentum();
+        livingWorldEngine.onTap(x, y, momentum);
+        if (worldSurface != null) worldSurface.onWorldTap(x, y, momentum);
         postInvalidateOnAnimation();
     }
 
     void applyWorldPlan(WorldPlan plan) {
         livingWorldEngine.applyPlan(plan);
+        if (worldSurface != null) worldSurface.applyWorldPlan(plan);
         postInvalidateOnAnimation();
     }
 
     WorldPlan currentWorldPlan() {
+        if (worldSurface != null) return worldSurface.currentPlan();
         return livingWorldEngine.currentPlan();
     }
 
@@ -146,7 +159,9 @@ final class GameView extends View {
 
         RectF area = contentArea();
         if (runtime.getGameState() == GameRuntime.GameState.PLAYING) {
-            livingWorldEngine.draw(canvas, area);
+            if (worldSurface == null || !worldSurface.isFilamentReady()) {
+                livingWorldEngine.draw(canvas, area);
+            }
             drawHud(canvas);
             drawCaption(canvas);
             postInvalidateOnAnimation();
@@ -187,15 +202,102 @@ final class GameView extends View {
             textPaint.setTypeface(Typeface.DEFAULT);
             textPaint.setTextSize(sp(10));
             textPaint.setColor(Color.argb(105, 220, 224, 235));
-            canvas.drawText(plan.theme + " · " + plan.mood, left, top + dp(16), textPaint);
+            canvas.drawText(plan.theme + " · " + plan.layout + " · " + plan.mood,
+                    left, top + dp(16), textPaint);
         }
 
-        textPaint.setTextSize(sp(10));
-        textPaint.setColor(Color.argb(95, 220, 224, 235));
+        float right = getWidth() - Math.max(dp(18), insetRight + dp(18));
+        settingsButton.set(right - dp(38), top - dp(19), right + dp(4), top + dp(18));
+
+        paint.setColor(Color.argb(52, 255, 255, 255));
+        canvas.drawRoundRect(settingsButton, dp(13), dp(13), paint);
+
+        paint.setStrokeWidth(dp(1.4f));
+        paint.setColor(Color.argb(180, 230, 233, 242));
+        for (int i = 0; i < 3; i++) {
+            float yy = settingsButton.top + dp(10 + i * 8);
+            canvas.drawLine(settingsButton.left + dp(11), yy,
+                    settingsButton.right - dp(11), yy, paint);
+        }
+
+        textPaint.setTypeface(Typeface.DEFAULT);
+        textPaint.setTextSize(sp(9));
+        textPaint.setColor(Color.argb(90, 220, 224, 235));
         float sw = textPaint.measureText(connectionStatus);
         canvas.drawText(connectionStatus,
-                getWidth() - Math.max(dp(18), insetRight + dp(18)) - sw,
-                top, textPaint);
+                settingsButton.left - sw - dp(8), top, textPaint);
+
+        if (settingsOpen) drawSettingsOverlay(canvas);
+    }
+
+    private void drawSettingsOverlay(Canvas canvas) {
+        RectF area = contentArea();
+
+        paint.setColor(Color.argb(150, 0, 0, 0));
+        canvas.drawRect(area, paint);
+
+        float panelW = Math.min(area.width() - dp(32), dp(330));
+        float panelH = dp(270);
+        RectF panel = new RectF(
+                area.centerX() - panelW / 2f,
+                area.centerY() - panelH / 2f,
+                area.centerX() + panelW / 2f,
+                area.centerY() + panelH / 2f
+        );
+
+        paint.setColor(Color.argb(242, 18, 20, 29));
+        canvas.drawRoundRect(panel, dp(24), dp(24), paint);
+
+        textPaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        textPaint.setTextSize(sp(20));
+        textPaint.setColor(Color.WHITE);
+        drawCentered(canvas, runtime.text("設定", "SETTINGS"),
+                panel.centerX(), panel.top + dp(38), panel.width() * 0.82f, textPaint);
+
+        textPaint.setTypeface(Typeface.DEFAULT);
+        textPaint.setTextSize(sp(12));
+        textPaint.setColor(Color.argb(170, 205, 210, 222));
+        drawCentered(canvas, runtime.text("語言", "LANGUAGE"),
+                panel.centerX(), panel.top + dp(78), panel.width() * 0.82f, textPaint);
+
+        float gap = dp(10);
+        float chipW = (panel.width() - dp(54) - gap) / 2f;
+        float chipH = dp(46);
+        chineseButton.set(panel.left + dp(22), panel.top + dp(92),
+                panel.left + dp(22) + chipW, panel.top + dp(92) + chipH);
+        englishButton.set(chineseButton.right + gap, panel.top + dp(92),
+                chineseButton.right + gap + chipW, panel.top + dp(92) + chipH);
+
+        drawLanguageChip(canvas, chineseButton, "中文", runtime.getLanguage() == AppLanguage.ZH_TW);
+        drawLanguageChip(canvas, englishButton, "English", runtime.getLanguage() == AppLanguage.EN);
+
+        textPaint.setTextSize(sp(11));
+        textPaint.setColor(Color.argb(145, 200, 205, 218));
+        drawCentered(canvas,
+                runtime.text("Gemini Live 語音 / 世界導演", "Gemini Live voice / world director"),
+                panel.centerX(), panel.top + dp(164), panel.width() * 0.84f, textPaint);
+
+        connectionButton.set(panel.left + dp(22), panel.top + dp(178),
+                panel.right - dp(22), panel.top + dp(224));
+        paint.setColor(Color.argb(64, 255, 255, 255));
+        canvas.drawRoundRect(connectionButton, dp(16), dp(16), paint);
+
+        textPaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        textPaint.setTextSize(sp(14));
+        textPaint.setColor(Color.WHITE);
+        drawCentered(canvas,
+                connectionStatus + "  ·  " + runtime.text("連線設定", "CONNECTION"),
+                connectionButton.centerX(), connectionButton.centerY() + dp(5),
+                connectionButton.width() * 0.9f, textPaint);
+
+        settingsCloseButton.set(panel.centerX() - dp(62), panel.bottom - dp(36),
+                panel.centerX() + dp(62), panel.bottom - dp(8));
+        textPaint.setTypeface(Typeface.DEFAULT);
+        textPaint.setTextSize(sp(12));
+        textPaint.setColor(Color.argb(180, 215, 219, 230));
+        drawCentered(canvas, runtime.text("關閉", "CLOSE"),
+                settingsCloseButton.centerX(), settingsCloseButton.centerY() + dp(4),
+                settingsCloseButton.width(), textPaint);
     }
 
     private void drawCaption(Canvas canvas) {
@@ -345,11 +447,7 @@ final class GameView extends View {
 
         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
             if (runtime.getGameState() == GameRuntime.GameState.START) {
-                if (chineseButton.contains(x, y)) pressedControl = "zh";
-                else if (englishButton.contains(x, y)) pressedControl = "en";
-                else if (startButton.contains(x, y)) pressedControl = "start";
-                else if (connectionButton.contains(x, y)) pressedControl = "settings";
-                else pressedControl = "";
+                pressedControl = startButton.contains(x, y) ? "start" : "";
                 return true;
             }
 
@@ -358,7 +456,20 @@ final class GameView extends View {
                 return true;
             }
 
-            // PLAYING: the whole canvas is the control.
+            if (settingsOpen) {
+                if (chineseButton.contains(x, y)) pressedControl = "zh";
+                else if (englishButton.contains(x, y)) pressedControl = "en";
+                else if (connectionButton.contains(x, y)) pressedControl = "connection";
+                else if (settingsCloseButton.contains(x, y)) pressedControl = "close_settings";
+                else pressedControl = "settings_overlay";
+                return true;
+            }
+
+            if (settingsButton.contains(x, y)) {
+                pressedControl = "open_settings";
+                return true;
+            }
+
             pressedControl = "world";
             return true;
         }
@@ -370,10 +481,16 @@ final class GameView extends View {
             } else if ("en".equals(pressedControl) && englishButton.contains(x, y)) {
                 runtime.setLanguage(AppLanguage.EN);
                 if (languageChangeListener != null) languageChangeListener.onLanguageChanged(AppLanguage.EN);
+            } else if ("connection".equals(pressedControl) && connectionButton.contains(x, y)) {
+                if (settingsTapListener != null) settingsTapListener.onSettingsTap();
+            } else if ("close_settings".equals(pressedControl)) {
+                settingsOpen = false;
+                postInvalidateOnAnimation();
+            } else if ("open_settings".equals(pressedControl) && settingsButton.contains(x, y)) {
+                settingsOpen = true;
+                postInvalidateOnAnimation();
             } else if ("start".equals(pressedControl) && startButton.contains(x, y)) {
                 runtime.startGame();
-            } else if ("settings".equals(pressedControl) && connectionButton.contains(x, y)) {
-                if (settingsTapListener != null) settingsTapListener.onSettingsTap();
             } else if ("world".equals(pressedControl) && runtime.isPlaying()) {
                 RectF area = contentArea();
                 float nx = clamp((x - area.left) / Math.max(1f, area.width()), 0f, 1f);

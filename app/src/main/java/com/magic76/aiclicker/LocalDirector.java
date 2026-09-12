@@ -61,12 +61,24 @@ final class LocalDirector {
                 break;
         }
 
+        try {
+            String[] layouts = {"FIELD","GATE","TUNNEL","FIELD","SHARD_STORM","VORTEX","TUNNEL","GATE"};
+            String[] cameras = {"DRIFT","FLOAT","FORWARD","DRIFT","ORBIT","ORBIT","FORWARD","FLOAT"};
+            double[] depths = {0.55,0.68,0.86,0.48,0.78,0.92,0.84,0.72};
+            plan.put("layout", layouts[Math.max(0, Math.min(layouts.length - 1, stage))]);
+            plan.put("cameraMotion", cameras[Math.max(0, Math.min(cameras.length - 1, stage))]);
+            plan.put("depth", depths[Math.max(0, Math.min(depths.length - 1, stage))]);
+        } catch (Exception ignored) {}
+
         if (cps >= 3.5 || "ACCELERATING".equals(trend)) {
             try {
                 plan.put("mood", "CHAOTIC");
                 plan.put("motion", Math.min(1.0, plan.optDouble("motion", 0.4) + 0.28));
                 plan.put("density", Math.min(1.0, plan.optDouble("density", 0.5) + 0.18));
                 plan.put("tapReaction", "MULTIPLY");
+                plan.put("layout", "VORTEX");
+                plan.put("cameraMotion", "ORBIT");
+                plan.put("depth", 0.94);
             } catch (Exception ignored) {}
         }
 

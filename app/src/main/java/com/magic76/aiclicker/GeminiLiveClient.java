@@ -99,7 +99,7 @@ final class GeminiLiveClient extends WebSocketListener {
         if (!setupReady || socket == null || contextEnvelope == null) return false;
         try {
             String content = "PLAYER_EVENT\n" + contextEnvelope.toString() +
-                    "\nEvolve the persistent world now. Call apply_game_turn FIRST with a coherent WorldPlan. Speak only if this moment deserves a voice reaction; routine taps and world ticks may stay silent. " +
+                    "\nEvolve the persistent world now. Call apply_game_turn FIRST with a coherent WorldPlan. Respect PLAYER_EVENT.voiceCue. If it is REQUIRED, speech must be non-empty and after the tool result you MUST produce audible native audio. If ENCOURAGED, prefer a brief natural reaction. SILENT_OK may stay silent. " +
                     "If pendingInteraction is present, treat it as one aggregated burst rather than replaying old events.";
             JSONObject turn = new JSONObject();
             turn.put("role", "user");
@@ -325,17 +325,23 @@ final class GeminiLiveClient extends WebSocketListener {
                                 .put("REPEL").put("MULTIPLY").put("WARP")))
                 .put("evolution", new JSONObject().put("type", "string").put("enum",
                         new JSONArray().put("DRIFT").put("GROW").put("PULSE").put("ORBIT").put("FLOW").put("BREATHE")))
+                .put("layout", new JSONObject().put("type", "string").put("enum",
+                        new JSONArray().put("FIELD").put("TUNNEL").put("VORTEX").put("GATE").put("SHARD_STORM")))
+                .put("cameraMotion", new JSONObject().put("type", "string").put("enum",
+                        new JSONArray().put("DRIFT").put("FORWARD").put("ORBIT").put("FLOAT")))
                 .put("palette", paletteSchema)
                 .put("density", schema("number", "0.12..1.0; visual population"))
                 .put("motion", schema("number", "0.05..1.0; continuous local motion"))
-                .put("scale", schema("number", "0.25..1.0; motif size"));
+                .put("scale", schema("number", "0.25..1.0; motif size"))
+                .put("depth", schema("number", "0.15..1.0; depth spread and spatial extrusion"));
 
         JSONObject worldSchema = new JSONObject()
                 .put("type", "object")
                 .put("properties", worldProps)
                 .put("required", new JSONArray()
                         .put("theme").put("motif").put("mood").put("tapReaction")
-                        .put("evolution").put("palette").put("density").put("motion").put("scale"));
+                        .put("evolution").put("layout").put("cameraMotion")
+                        .put("palette").put("density").put("motion").put("scale").put("depth"));
 
         JSONObject fxProps = new JSONObject()
                 .put("type", new JSONObject().put("type", "string")
@@ -459,17 +465,21 @@ final class GeminiLiveClient extends WebSocketListener {
             "A pause can make the world become still, stare back, breathe, or quietly mutate. Tap coordinates matter: repeated taps in one area can make that region conceptually important even though the Runtime handles the exact local effect. " +
             "The world should feel like it is noticing the player's habits.\n\n" +
 
-            "WorldPlan vocabulary: theme = COSMIC, ABYSS, GARDEN, CIRCUIT, DREAM, INK, LAVA, ICE. " +
+            "The renderer is now native GPU 3D using Filament. WorldPlan vocabulary: theme = COSMIC, ABYSS, GARDEN, CIRCUIT, DREAM, INK, LAVA, ICE. " +
             "motif = ORBS, STARS, EYES, JELLYFISH, VINES, PORTALS, SHARDS, GLYPHS. " +
-            "mood = CALM, CURIOUS, PLAYFUL, EERIE, CHAOTIC. " +
-            "tapReaction = BLOOM, RIPPLE, CRACK, ATTRACT, REPEL, MULTIPLY, WARP. " +
+            "mood = CALM, CURIOUS, PLAYFUL, EERIE, CHAOTIC. tapReaction = BLOOM, RIPPLE, CRACK, ATTRACT, REPEL, MULTIPLY, WARP. " +
             "evolution = DRIFT, GROW, PULSE, ORBIT, FLOW, BREATHE. " +
-            "Choose a coherent dark/base primary color, secondary color, and luminous accent. density/motion/scale are 0..1-ish controls within the provided schema.\n\n" +
+            "Spatial layout = FIELD (layered floating field), TUNNEL (forward depth corridor), VORTEX (spiral funnel), GATE (portal-like ring architecture), SHARD_STORM (angular debris volume). " +
+            "cameraMotion = DRIFT, FORWARD, ORBIT, FLOAT. depth controls z-spread and spatial scale. " +
+            "Choose layout, cameraMotion and depth deliberately to create real spatial composition, but preserve continuity: usually keep the current layout/camera and evolve them only when player behavior justifies a larger transition. " +
+            "Tap feedback already creates immediate local 3D ripple/energy, so use WorldPlan to shape the next persistent state rather than narrating or replaying the same tap. " +
+            "Choose a coherent dark/base primary color, secondary color, and luminous accent. density/motion/scale/depth are continuous controls within the schema.\n\n" +
 
-            "VOICE IS SELECTIVE. Routine taps should usually be silent: set speech to an empty string. " +
-            "Speak only when you genuinely noticed something: a sudden speed change, a repeated location habit, an extreme fast streak, a long pause, or a major world transformation. " +
+            "VOICE IS SELECTIVE BUT NOT OPTIONAL WHEN voiceCue=REQUIRED. " +
+            "On REQUIRED turns, set speech to a non-empty intent, call apply_game_turn first, then after the tool result emit actual audible native audio. The start/live-ready event is REQUIRED, so always greet or react briefly when entering the world. " +
+            "On ENCOURAGED turns, prefer a short natural reaction if there is something interesting to say. On SILENT_OK turns, routine taps should usually stay silent and speech may be empty. " +
             "If language is zh-TW, speak Traditional Chinese; if en-US, speak English. " +
-            "When speaking, improvise like a live performer reacting in the moment. Do not read system state, theme names, CPS numbers, or obvious visual changes. Avoid repetitive phrases such as 'keep going', 'again', or constant praise. Silence is part of the performance.\n\n" +
+            "When speaking, improvise like a live performer reacting in the moment. The function speech text is an intent/caption seed, not a verbatim script. Do not read system state, theme names, CPS numbers, or obvious visual changes. Avoid repetitive phrases such as 'keep going', 'again', or constant praise. Silence is part of the performance.\n\n" +
 
             "actions should normally be empty. You may use only a brief shakeScreen or flashScreen for an exceptional authored beat. " +
             "Never punish a tap. Never tell the player not to tap, wait, aim, find the right thing, or stop. The product invariant is: every touch advances the world.";

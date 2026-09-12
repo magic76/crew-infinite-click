@@ -80,3 +80,22 @@ Build this version directly. Verify: (1) tapping empty space increments TAPS/CPS
 
 ## 0.15 voice verification
 Verify with a real Gemini Live key: normal rapid taps should often be silent; meaningful speed/scene moments should be spoken by Gemini native audio; disconnect/demo mode should show captions but produce no Android TTS voice; no event queue should remain blocked longer than the completion watchdog.
+
+## 0.18 Filament local verification
+
+Build 0.18 directly; do not apply older patches first.
+
+Verify on a physical Android device:
+1. App launches directly into the world.
+2. A real 3D scene is visible behind the HUD/settings overlay.
+3. Camera has slow parallax/drift and objects have obvious z-depth.
+4. Repeated taps create expanding 3D ring/energy responses near the tapped area.
+5. FIELD, TUNNEL, VORTEX, GATE and SHARD_STORM plans visibly differ.
+6. DRIFT, FORWARD, ORBIT and FLOAT camera plans visibly differ.
+7. Gemini WorldPlan changes evolve the existing world rather than rebuilding UI.
+8. Settings overlay still switches 中文 / English and opens connection settings.
+9. Gemini Live still speaks on REQUIRED cues.
+10. If Filament initialization fails on a device, the Canvas fallback remains visible.
+
+Useful log filter:
+`Filament|gltfio|AiClicker|GeminiLive`

@@ -163,3 +163,10 @@ Audible speech now comes only from Gemini Live. Android TTS fallback is removed.
 
 ## 0.16 Living Canvas
 The product is now an endless AI-directed procedural world. There are no levels, no timer, no target button and no required objective. Gemini continuously evolves a persistent WorldPlan while the local renderer keeps the world alive at frame rate and every screen tap reacts immediately.
+
+
+## 0.17 Direct World + Settings + Voice
+The app now enters the Living Canvas immediately. Language and Gemini connection settings live in an in-world overlay. Gemini Live receives explicit REQUIRED/ENCOURAGED/SILENT_OK voice cues, and a fresh live-ready start event guarantees an early native-audio opportunity after the socket connects.
+
+## 0.18 Filament 3D
+Living Canvas now renders through native Google Filament on Android. WorldPlan gained spatial layout, camera-motion and depth controls. The overlay remains native Canvas, and the previous procedural 2D renderer remains as a fallback if Filament cannot initialize.
