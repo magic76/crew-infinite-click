@@ -55,10 +55,12 @@ func _ready() -> void:
     get_viewport().size_changed.connect(_resize_world)
     _apply_world_plan(current_plan)
     _connect_bridge()
+    _report_scene_ready()
 
 func _process(delta: float) -> void:
     if bridge == null:
         _connect_bridge()
+        _report_scene_ready()
 
     if shock_progress < 1.0:
         shock_progress = min(1.0, shock_progress + delta * (0.78 + float(current_plan.get("motion", 0.4)) * 1.05))
@@ -87,6 +89,12 @@ func _connect_bridge() -> void:
     var callback := Callable(self, "_on_visual_command")
     if bridge.has_signal("visual_command") and not bridge.is_connected("visual_command", callback):
         bridge.connect("visual_command", callback)
+
+func _report_scene_ready() -> void:
+    if bridge == null:
+        return
+    if bridge.has_method("reportSceneReady"):
+        bridge.reportSceneReady()
 
 func _on_visual_command(raw: String) -> void:
     var data = JSON.parse_string(raw)

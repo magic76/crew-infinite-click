@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
+import android.util.Log;
 import android.view.View;
 import android.view.Window;
 
@@ -31,6 +32,7 @@ import java.util.Collections;
 import java.util.Set;
 
 public final class MainActivity extends FragmentActivity implements GodotHost {
+    private static final String TAG = "InfiniteClickGodot";
     private static final String PREFS = "ai_infinite_click";
     private static final String KEY_API = "gemini_api_key";
     private static final String KEY_LANGUAGE = "game_language";
@@ -131,6 +133,19 @@ public final class MainActivity extends FragmentActivity implements GodotHost {
             if (godotWorldBridge != null) godotWorldBridge.attachPlugin(visualBridgePlugin);
         }
         return Collections.<GodotPlugin>singleton(visualBridgePlugin);
+    }
+
+    @Override public void onGodotSetupCompleted() {
+        Log.i(TAG, "Godot setup completed");
+        if (godotWorldBridge != null) godotWorldBridge.onGodotSetupCompleted();
+    }
+
+    @Override public void onGodotMainLoopStarted() {
+        Log.i(TAG, "Godot main loop started (GodotHost callback)");
+        // GodotFragment explicitly forwards this lifecycle callback to its parent GodotHost.
+        // Use the host callback as the authoritative engine-start signal instead of depending
+        // only on the runtime plugin lifecycle callback.
+        if (godotWorldBridge != null) godotWorldBridge.onGodotMainLoopStarted();
     }
 
     private void onLanguageChanged(AppLanguage language) {

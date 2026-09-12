@@ -2,6 +2,7 @@ package com.magic76.aiclicker;
 
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 
 import org.json.JSONObject;
 
@@ -15,11 +16,14 @@ import java.util.concurrent.atomic.AtomicLong;
  * without coupling them to Gemini tool-call reliability.
  */
 final class GodotWorldBridge implements WorldSurface {
+    private static final String TAG = "InfiniteClickGodot";
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final AtomicLong sequence = new AtomicLong(1L);
 
     private volatile VisualBridgePlugin plugin;
+    private volatile boolean setupCompleted;
     private volatile boolean mainLoopStarted;
+    private volatile boolean sceneReady;
     private volatile boolean ready;
     private volatile boolean destroyed;
     private WorldPlan currentPlan = WorldPlan.defaultPlan();
@@ -27,31 +31,36 @@ final class GodotWorldBridge implements WorldSurface {
     void attachPlugin(VisualBridgePlugin nextPlugin) {
         if (destroyed) return;
         plugin = nextPlugin;
-        // getHostPlugins() can run before the scene has entered its first frame. Do not mark the
-        // renderer ready merely because the Java plugin exists.
-        if (mainLoopStarted) scheduleReadyHandshake();
+        Log.i(TAG, "Runtime plugin attached");
+    }
+
+    void onGodotSetupCompleted() {
+        if (destroyed) return;
+        setupCompleted = true;
+        Log.i(TAG, "Bridge observed Godot setup completion");
     }
 
     void onGodotMainLoopStarted() {
         if (destroyed) return;
         mainLoopStarted = true;
-        scheduleReadyHandshake();
+        Log.i(TAG, "Bridge observed Godot main loop start");
+        maybeBecomeReady();
     }
 
-    private void scheduleReadyHandshake() {
-        mainHandler.removeCallbacks(markReadyRunnable);
-        // Give main.gd enough time to discover the runtime singleton and connect visual_command.
-        mainHandler.postDelayed(markReadyRunnable, 260L);
+    void onGodotSceneReady() {
+        if (destroyed) return;
+        sceneReady = true;
+        Log.i(TAG, "GDScript scene reported ready");
+        maybeBecomeReady();
     }
 
-    private final Runnable markReadyRunnable = new Runnable() {
-        @Override public void run() {
-            if (destroyed || plugin == null || !mainLoopStarted) return;
-            ready = true;
-            sendResetInternal();
-            sendWorldPlanInternal(currentPlan);
-        }
-    };
+    private synchronized void maybeBecomeReady() {
+        if (ready || destroyed || plugin == null || !mainLoopStarted || !sceneReady) return;
+        ready = true;
+        Log.i(TAG, "Godot renderer READY");
+        sendResetInternal();
+        sendWorldPlanInternal(currentPlan);
+    }
 
     @Override public synchronized void applyWorldPlan(WorldPlan plan) {
         if (plan == null) return;
@@ -97,7 +106,10 @@ final class GodotWorldBridge implements WorldSurface {
 
     @Override public String renderStatus() {
         if (ready) return "GODOT";
-        if (plugin != null) return mainLoopStarted ? "GODOT SYNC" : "GODOT LOAD";
+        if (sceneReady && !mainLoopStarted) return "GODOT WAIT LOOP";
+        if (mainLoopStarted && !sceneReady) return "GODOT SCENE";
+        if (setupCompleted) return "GODOT LOOP";
+        if (plugin != null) return "GODOT LOAD";
         return "GODOT INIT";
     }
 
@@ -111,8 +123,9 @@ final class GodotWorldBridge implements WorldSurface {
     void destroy() {
         destroyed = true;
         ready = false;
+        sceneReady = false;
         mainLoopStarted = false;
-        mainHandler.removeCallbacks(markReadyRunnable);
+        setupCompleted = false;
         plugin = null;
     }
 

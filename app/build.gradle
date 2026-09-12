@@ -10,8 +10,8 @@ android {
         applicationId 'com.magic76.aiclicker'
         minSdk 26
         targetSdk 35
-        versionCode 21
-        versionName '0.20-godot-vfx-spike'
+        versionCode 22
+        versionName '0.20.1-godot-ready-fix'
     }
 
     // Godot projects can contain hidden metadata. The 0.20 spike currently uses only source

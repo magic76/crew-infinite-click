@@ -3,6 +3,7 @@ package com.magic76.aiclicker;
 import org.godotengine.godot.Godot;
 import org.godotengine.godot.plugin.GodotPlugin;
 import org.godotengine.godot.plugin.SignalInfo;
+import org.godotengine.godot.plugin.UsedByGodot;
 
 import java.util.Collections;
 import java.util.Set;
@@ -32,7 +33,14 @@ final class VisualBridgePlugin extends GodotPlugin {
 
     @Override public void onGodotMainLoopStarted() {
         super.onGodotMainLoopStarted();
+        // Redundant with the GodotHost callback on MainActivity. Keeping both makes startup
+        // tolerant to lifecycle ordering differences between embedded-engine versions.
         if (bridge != null) bridge.onGodotMainLoopStarted();
+    }
+
+    @UsedByGodot
+    public void reportSceneReady() {
+        if (bridge != null) bridge.onGodotSceneReady();
     }
 
     void emitVisualCommand(String payload) {

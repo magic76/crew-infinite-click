@@ -3,7 +3,6 @@ package com.magic76.aiclicker;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Insets;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.Typeface;
@@ -135,18 +134,10 @@ final class GameView extends View {
     @Override
     public WindowInsets onApplyWindowInsets(WindowInsets insets) {
         if (insets != null) {
-            if (android.os.Build.VERSION.SDK_INT >= 30) {
-                Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
-                insetLeft = bars.left;
-                insetTop = bars.top;
-                insetRight = bars.right;
-                insetBottom = bars.bottom;
-            } else {
-                insetLeft = insets.getSystemWindowInsetLeft();
-                insetTop = insets.getSystemWindowInsetTop();
-                insetRight = insets.getSystemWindowInsetRight();
-                insetBottom = insets.getSystemWindowInsetBottom();
-            }
+            insetLeft = insets.getSystemWindowInsetLeft();
+            insetTop = insets.getSystemWindowInsetTop();
+            insetRight = insets.getSystemWindowInsetRight();
+            insetBottom = insets.getSystemWindowInsetBottom();
         }
         postInvalidateOnAnimation();
         return insets;
@@ -176,7 +167,10 @@ final class GameView extends View {
         RectF area = contentArea();
         if (runtime.getGameState() == GameRuntime.GameState.PLAYING) {
             if (worldSurface == null || !worldSurface.isReady()) {
-                livingWorldEngine.draw(canvas, area);
+                // Deliberately fail black. A pretty 2D fallback hides renderer integration bugs
+                // and made the 0.20 spike look as if Godot was running when it was not.
+                paint.setColor(Color.BLACK);
+                canvas.drawRect(0, 0, getWidth(), getHeight(), paint);
             }
             drawHud(canvas);
             drawCaption(canvas);
