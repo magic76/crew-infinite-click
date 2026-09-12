@@ -8,7 +8,7 @@ const state = {
 };
 const hex = s => parseInt(String(s||'#ffffff').replace('#',''),16) || 0xffffff;
 const rand=(a,b)=>a+Math.random()*(b-a), clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const viewport=()=>state.app&&state.app.renderer&&state.app.renderer.screen||state.app&&state.app.screen||{width:innerWidth,height:innerHeight};
+const viewport=()=>{const r=state.app&&state.app.renderer;return r&&r.screen?r.screen:{width:innerWidth,height:innerHeight};};
 function reportError(e){ const m=String(e&&e.stack||e); const f=document.getElementById('fatal'); f.style.display='grid'; f.textContent='PIXI ERROR\n'+m; try{A&&A.onRendererError(m)}catch(_){} }
 async function boot(){
   try{
