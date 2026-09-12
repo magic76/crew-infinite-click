@@ -98,7 +98,6 @@ final class FilamentWorldView extends TextureView {
 
     FilamentWorldView(Context context) {
         super(context);
-        setBackgroundColor(Color.BLACK);
         for (int i = 0; i < ripples.length; i++) ripples[i] = new RippleState();
 
         try {
