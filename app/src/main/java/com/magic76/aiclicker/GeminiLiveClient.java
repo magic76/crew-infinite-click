@@ -99,7 +99,7 @@ final class GeminiLiveClient extends WebSocketListener {
         if (!setupReady || socket == null || contextEnvelope == null) return false;
         try {
             String content = "PLAYER_EVENT\n" + contextEnvelope.toString() +
-                    "\nDirect the next reactive canvas beat now. Call apply_game_turn FIRST with one ScenePlan plus 0-2 curated visual actions. Respect PLAYER_EVENT.voiceCue. If it is REQUIRED, speech must be non-empty and after the tool result you MUST produce audible native audio. If ENCOURAGED, prefer a brief natural reaction. SILENT_OK may stay silent. " +
+                    "\nDirect the next reactive canvas beat now. Call apply_game_turn FIRST with one ScenePlan, one InteractionPlan, plus 0-2 curated visual/audio actions. Respect PLAYER_EVENT.voiceCue. If it is REQUIRED, speech must be non-empty and after the tool result you MUST produce audible native audio. If ENCOURAGED, prefer a brief natural reaction. SILENT_OK may stay silent. " +
                     "If pendingInteraction is present, treat it as one aggregated burst rather than replaying old events.";
             JSONObject turn = new JSONObject();
             turn.put("role", "user");
@@ -321,16 +321,32 @@ final class GeminiLiveClient extends WebSocketListener {
                 .put("required", new JSONArray().put("intent").put("mood").put("primary").put("secondary")
                         .put("accent").put("energy").put("tempo").put("focusX").put("focusY"));
 
+        JSONObject interactionProps = new JSONObject()
+                .put("mode", new JSONObject().put("type", "string").put("enum", new JSONArray()
+                        .put("NONE").put("TEASE").put("CHASE").put("DECOY").put("WAIT")
+                        .put("PREDICT").put("MIRROR").put("RHYTHM").put("REWARD").put("HIDE")))
+                .put("label", schema("string", "Optional short in-world label, max ~28 chars"))
+                .put("targetX", schema("number", "0..1 normalized interaction target x"))
+                .put("targetY", schema("number", "0..1 normalized interaction target y"))
+                .put("strength", schema("number", "0.1..1 interaction intensity"))
+                .put("durationMs", schema("integer", "250..6000 interaction lifetime"));
+        JSONObject interactionSchema = new JSONObject()
+                .put("type", "object").put("properties", interactionProps)
+                .put("required", new JSONArray().put("mode").put("label").put("targetX").put("targetY").put("strength").put("durationMs"));
+
         JSONObject actionProps = new JSONObject()
                 .put("type", new JSONObject().put("type", "string").put("enum", new JSONArray()
                         .put("particle_burst").put("shockwave").put("portal").put("black_hole")
                         .put("gravity_pull").put("world_crack").put("glitch").put("swarm")
-                        .put("dissolve").put("screen_shake").put("flash")))
+                        .put("dissolve").put("screen_shake").put("flash").put("sound")))
                 .put("x", schema("number", "0..1 normalized x"))
                 .put("y", schema("number", "0..1 normalized y"))
                 .put("strength", schema("number", "0.1..1"))
                 .put("durationMs", schema("integer", "40..600 only for flash/shake"))
-                .put("color", schema("string", "#RRGGBB only for flash"));
+                .put("color", schema("string", "#RRGGBB only for flash"))
+                .put("cue", new JSONObject().put("type", "string").put("enum", new JSONArray()
+                        .put("TAP").put("WHOOSH").put("GLITCH").put("PORTAL").put("ABSORB")
+                        .put("CRACK").put("REVEAL").put("SUCCESS").put("MYSTERY").put("RHYTHM")));
         JSONObject actionSchema = new JSONObject().put("type", "object").put("properties", actionProps)
                 .put("required", new JSONArray().put("type"));
 
@@ -341,12 +357,14 @@ final class GeminiLiveClient extends WebSocketListener {
                         .put("baseStateVersion", schema("integer", "Echo stateVersion from PLAYER_EVENT"))
                         .put("speech", schema("string", "Optional brief spoken reaction; empty is valid for routine taps"))
                         .put("scenePlan", sceneSchema)
+                        .put("interaction", interactionSchema)
                         .put("actions", new JSONObject().put("type", "array").put("items", actionSchema)))
-                .put("required", new JSONArray().put("turnId").put("baseStateVersion").put("speech").put("scenePlan").put("actions"));
+                .put("required", new JSONArray().put("turnId").put("baseStateVersion").put("speech")
+                        .put("scenePlan").put("interaction").put("actions"));
 
         return new JSONObject()
                 .put("name", "apply_game_turn")
-                .put("description", "Direct one beat of an AI-reactive PixiJS canvas. Choose intent and optional allowlisted VFX; never generate code or frames.")
+                .put("description", "Direct one beat of an AI-reactive PixiJS canvas. Choose scene intent, one safe interaction mode, and optional allowlisted VFX/audio; never generate code or frames.")
                 .put("parameters", params);
     }
 
@@ -429,19 +447,27 @@ final class GeminiLiveClient extends WebSocketListener {
             "Do not behave like an assistant. Do not explain the renderer. The experience is a chain of short surprising micro-situations, usually 10-30 seconds, with the whole screen always tappable.\n\n" +
 
             "For every PLAYER_EVENT call apply_game_turn exactly once and immediately. Echo turnId and stateVersion. " +
-            "Return one ScenePlan plus 0-2 curated actions. Never return HTML, JavaScript, shader code, coordinates for dozens of objects, arbitrary assets, or executable code. " +
-            "Android owns session state and safety. PixiJS owns animation and rendering. Your job is WHAT dramatic beat should happen next, not HOW to draw frames.\n\n" +
+            "Return one ScenePlan, one InteractionPlan, plus 0-2 curated visual/audio actions. Never return HTML, JavaScript, shader code, coordinates for dozens of objects, arbitrary assets, or executable code. " +
+            "Android owns session state and safety. PixiJS owns animation, sound effects, and rendering. Your job is WHAT dramatic beat should happen next, not HOW to draw frames.\n\n" +
 
             "ScenePlan.intent is the dramatic intention: TEASE, ESCAPE, SWARM, REVEAL, ABSORB, FRACTURE, GLITCH, CALM, CELEBRATE. " +
             "mood is CURIOUS, PLAYFUL, EERIE, CHAOTIC, CALM, TRIUMPHANT. primary/secondary/accent are coherent #RRGGBB colors. " +
             "energy and tempo are 0.1..1. focusX/focusY are 0..1 and should often track the player's current or repeated tap area.\n\n" +
 
-            "Curated actions: particle_burst, shockwave, portal, black_hole, gravity_pull, world_crack, glitch, swarm, dissolve, screen_shake, flash. " +
-            "Use actions as punctuation, not every tap. Prefer one meaningful effect at the end or turn of a micro-situation. The local Pixi director already gives every tap instant feedback, so do not redundantly request particle_burst on every event.\n\n" +
+            "InteractionPlan is how you actually play with the person for the NEXT few taps. Modes: " +
+            "NONE (visual-only beat), TEASE (taunt/pulse), CHASE (target escapes), DECOY (fake targets), WAIT (reward restraint), " +
+            "PREDICT (mark where you think the next tap will land), MIRROR (world answers opposite their tap), RHYTHM (echo a steady cadence), " +
+            "HIDE (make them search but every tap still reacts), REWARD (clear payoff). Keep one interaction for 2-5 taps when useful; do not switch mechanically every tap. " +
+            "Use label sparingly and keep it very short. targetX/targetY should come from tapPattern, recent focus, or a deliberate counter-move.\n\n" +
 
-            "Use player behavior. clickSpeed and tapPattern tell you whether they are frantic, careful, clustered, exploratory, or paused. " +
-            "Rapid taps can make you escalate, fake confidence, swarm, fracture, absorb, or glitch. Slow taps can reveal secrets, become quiet, move focus, or build tension. " +
-            "Continuity matters: keep a situation for several taps, then twist it. Avoid random theme roulette. Aim for a noticeable surprise every 3-6 taps and a larger payoff every 10-20 taps.\n\n" +
+            "Curated actions: particle_burst, shockwave, portal, black_hole, gravity_pull, world_crack, glitch, swarm, dissolve, screen_shake, flash, sound. " +
+            "For sound, choose cue TAP, WHOOSH, GLITCH, PORTAL, ABSORB, CRACK, REVEAL, SUCCESS, MYSTERY, or RHYTHM. " +
+            "Use actions as punctuation, not every tap. The local Pixi director already gives every tap instant feedback and local SFX.\n\n" +
+
+            "Read player behavior, not personal identity. clickSpeed and tapPattern tell you whether they are frantic, careful, clustered, exploratory, paused, or rhythmic. " +
+            "tapPattern.avgIntervalMs and intervalJitterMs can reveal a steady beat: low jitter is a good RHYTHM opportunity. Repeated-area taps are good for PREDICT or a deliberate fake-out. " +
+            "Rapid taps can escalate into CHASE, DECOY, GLITCH, ABSORB, or FRACTURE. A real pause can trigger WAIT and then REWARD. " +
+            "Continuity matters: build a setup, let the player form an expectation, then break it. Aim for a noticeable surprise every 3-6 taps and a larger payoff every 10-20 taps.\n\n" +
 
             "VOICE IS SELECTIVE. When voiceCue=REQUIRED, speech must be non-empty and after the tool result produce audible native audio. " +
             "When ENCOURAGED, react briefly only if there is a good line. SILENT_OK usually stays silent. If language is zh-TW speak Traditional Chinese; en-US speak English. " +

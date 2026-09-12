@@ -1,4 +1,15 @@
-# AI Infinite Click — 0.30 Pixi Reboot
+# AI Infinite Click — 0.31 Interaction Pass
+
+0.31 keeps the lightweight Android + WebView + PixiJS architecture and adds three things: system-bar safe areas, procedural sound effects, and safe AI-controlled interaction modes.
+
+## 0.31 highlights
+
+- Android edge-to-edge background with real `WindowInsets` for top controls and bottom captions.
+- Pixi targets also avoid the status/navigation/UI safe zones.
+- Procedural Web Audio SFX: TAP, WHOOSH, GLITCH, PORTAL, ABSORB, CRACK, REVEAL, SUCCESS, MYSTERY, RHYTHM. No audio asset pack required.
+- New `InteractionPlan`: NONE, TEASE, CHASE, DECOY, WAIT, PREDICT, MIRROR, RHYTHM, REWARD, HIDE.
+- Gemini still cannot emit arbitrary JavaScript/HTML/shader/audio. It only selects validated high-level actions.
+- Preserves the GitHub fixes for Pixi v8 viewport initialization and CSP `unsafe-eval`.
 
 This branch deliberately abandons the Filament/Godot direction.
 

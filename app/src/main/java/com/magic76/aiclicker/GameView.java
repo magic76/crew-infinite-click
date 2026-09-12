@@ -8,6 +8,7 @@ import android.os.Build;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
 import android.view.View;
+import android.view.WindowInsets;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
@@ -33,6 +34,8 @@ final class GameView extends FrameLayout {
     private final TextView zhButton;
     private final TextView enButton;
     private final TextView settingsButton;
+    private final LayoutParams topLayoutParams;
+    private final LayoutParams captionLayoutParams;
     private GameRuntime runtime;
     private SettingsTapListener settingsTapListener;
     private LanguageChangeListener languageChangeListener;
@@ -40,6 +43,10 @@ final class GameView extends FrameLayout {
     private ScenePlan currentPlan = ScenePlan.defaultPlan();
     private boolean rendererReady = false;
     private String connectionStatus = "DEMO";
+    private int insetLeftPx;
+    private int insetTopPx;
+    private int insetRightPx;
+    private int insetBottomPx;
 
     @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
     GameView(Context context) {
@@ -85,9 +92,9 @@ final class GameView extends FrameLayout {
         top.addView(zhButton, wrapWithRight(6));
         top.addView(enButton, wrapWithRight(6));
         top.addView(settingsButton, wrap());
-        LayoutParams topLp = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.TOP);
-        topLp.setMargins(dp(10), dp(8), dp(10), 0);
-        addView(top, topLp);
+        topLayoutParams = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.TOP);
+        topLayoutParams.setMargins(dp(10), dp(8), dp(10), 0);
+        addView(top, topLayoutParams);
 
         captionView = new TextView(context);
         captionView.setTextColor(Color.WHITE);
@@ -96,9 +103,15 @@ final class GameView extends FrameLayout {
         captionView.setShadowLayer(12f, 0, 2, Color.BLACK);
         captionView.setMaxLines(3);
         captionView.setPadding(dp(22), dp(12), dp(22), dp(12));
-        LayoutParams capLp = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
-        capLp.setMargins(dp(12), 0, dp(12), dp(24));
-        addView(captionView, capLp);
+        captionLayoutParams = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
+        captionLayoutParams.setMargins(dp(12), 0, dp(12), dp(24));
+        addView(captionView, captionLayoutParams);
+
+        setOnApplyWindowInsetsListener((v, insets) -> {
+            applySystemInsets(insets);
+            return insets;
+        });
+        post(this::requestApplyInsets);
 
         zhButton.setOnClickListener(v -> chooseLanguage(AppLanguage.ZH_TW));
         enButton.setOnClickListener(v -> chooseLanguage(AppLanguage.EN));
@@ -140,6 +153,13 @@ final class GameView extends FrameLayout {
         send(o);
     }
 
+    void applyInteraction(InteractionPlan plan) {
+        if (plan == null) return;
+        JSONObject o = command("interaction");
+        try { o.put("interaction", plan.toJson()); } catch (Exception ignored) {}
+        send(o);
+    }
+
     void onGameTap(float x, float y) {
         performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
     }
@@ -160,6 +180,31 @@ final class GameView extends FrameLayout {
         if (action == null) return;
         JSONObject o = command("action");
         try { o.put("action", action); } catch (Exception ignored) {}
+        send(o);
+    }
+
+    private void applySystemInsets(WindowInsets insets) {
+        if (insets == null) return;
+        insetLeftPx = Math.max(0, insets.getSystemWindowInsetLeft());
+        insetTopPx = Math.max(0, insets.getSystemWindowInsetTop());
+        insetRightPx = Math.max(0, insets.getSystemWindowInsetRight());
+        insetBottomPx = Math.max(0, insets.getSystemWindowInsetBottom());
+
+        topLayoutParams.setMargins(insetLeftPx + dp(10), insetTopPx + dp(8), insetRightPx + dp(10), 0);
+        captionLayoutParams.setMargins(insetLeftPx + dp(12), 0, insetRightPx + dp(12), insetBottomPx + dp(24));
+        requestLayout();
+        sendSafeArea();
+    }
+
+    private void sendSafeArea() {
+        float density = Math.max(1f, getResources().getDisplayMetrics().density);
+        JSONObject o = command("safeArea");
+        try {
+            o.put("left", insetLeftPx / density);
+            o.put("top", insetTopPx / density);
+            o.put("right", insetRightPx / density);
+            o.put("bottom", insetBottomPx / density);
+        } catch (Exception ignored) {}
         send(o);
     }
 
@@ -187,7 +232,7 @@ final class GameView extends FrameLayout {
     }
 
     void onHostPause() { webView.onPause(); }
-    void onHostResume() { webView.onResume(); }
+    void onHostResume() { webView.onResume(); requestApplyInsets(); }
 
     @Override protected void onDetachedFromWindow() {
         webView.removeJavascriptInterface("AndroidGame");
@@ -206,6 +251,7 @@ final class GameView extends FrameLayout {
                 JSONObject lang = command("language");
                 try { lang.put("value", language.code); } catch (Exception ignored) {}
                 send(lang);
+                sendSafeArea();
             });
         }
         @JavascriptInterface public void onRendererError(String message) {

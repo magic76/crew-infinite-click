@@ -204,7 +204,12 @@ final class GameRuntime {
             semanticStateVersion++;
         }
 
-        // Optional exceptional screen-level punctuation. No UI creation is accepted.
+        InteractionPlan interaction = InteractionPlan.parse(args);
+        if (interaction != null) {
+            view.applyInteraction(interaction);
+        }
+
+        // Optional exceptional screen/audio punctuation. No arbitrary UI or code is accepted.
         JSONArray actions = args.optJSONArray("actions");
         if (actions != null) {
             int count = Math.min(3, actions.length());
@@ -234,7 +239,8 @@ final class GameRuntime {
     private boolean isVisualAction(String type) {
         return "particle_burst".equals(type) || "shockwave".equals(type) || "portal".equals(type)
                 || "black_hole".equals(type) || "gravity_pull".equals(type) || "world_crack".equals(type)
-                || "glitch".equals(type) || "swarm".equals(type) || "dissolve".equals(type);
+                || "glitch".equals(type) || "swarm".equals(type) || "dissolve".equals(type)
+                || "sound".equals(type);
     }
 
     private JSONObject buildTapPattern() {
@@ -282,6 +288,34 @@ final class GameRuntime {
             if (last != null) {
                 o.put("lastX", round3(last.x));
                 o.put("lastY", round3(last.y));
+            }
+
+            if (tapSamples.size() >= 3) {
+                List<TapSample> samples = new ArrayList<>(tapSamples);
+                double totalInterval = 0.0;
+                int intervalCount = 0;
+                for (int i = 1; i < samples.size(); i++) {
+                    long dt = samples.get(i).at - samples.get(i - 1).at;
+                    if (dt > 0L && dt < 5_000L) {
+                        totalInterval += dt;
+                        intervalCount++;
+                    }
+                }
+                if (intervalCount > 0) {
+                    double avg = totalInterval / intervalCount;
+                    double jitterSq = 0.0;
+                    int jitterCount = 0;
+                    for (int i = 1; i < samples.size(); i++) {
+                        long dt = samples.get(i).at - samples.get(i - 1).at;
+                        if (dt > 0L && dt < 5_000L) {
+                            double diff = dt - avg;
+                            jitterSq += diff * diff;
+                            jitterCount++;
+                        }
+                    }
+                    o.put("avgIntervalMs", Math.round(avg));
+                    o.put("intervalJitterMs", Math.round(Math.sqrt(jitterSq / Math.max(1, jitterCount))));
+                }
             }
         } catch (Exception ignored) {}
         return o;
