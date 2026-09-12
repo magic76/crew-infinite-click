@@ -329,11 +329,22 @@ final class GeminiLiveClient extends WebSocketListener {
                         new JSONArray().put("FIELD").put("TUNNEL").put("VORTEX").put("GATE").put("SHARD_STORM")))
                 .put("cameraMotion", new JSONObject().put("type", "string").put("enum",
                         new JSONArray().put("DRIFT").put("FORWARD").put("ORBIT").put("FLOAT")))
+                .put("composition", new JSONObject().put("type", "string").put("enum",
+                        new JSONArray().put("CENTER").put("EDGE").put("DIAGONAL").put("SPIRAL")
+                                .put("CLUSTERED").put("HOLLOW_CENTER")))
+                .put("environment", new JSONObject().put("type", "string").put("enum",
+                        new JSONArray().put("FOG").put("STARDUST").put("SMOKE").put("BUBBLES")
+                                .put("ASH").put("POLLEN").put("GLITCH")))
+                .put("materialStyle", new JSONObject().put("type", "string").put("enum",
+                        new JSONArray().put("GLASS").put("METAL").put("BIO").put("ENERGY").put("CRYSTAL").put("INK")))
                 .put("palette", paletteSchema)
-                .put("density", schema("number", "0.12..1.0; visual population"))
+                .put("density", schema("number", "0.12..1.0; main visual population"))
                 .put("motion", schema("number", "0.05..1.0; continuous local motion"))
                 .put("scale", schema("number", "0.25..1.0; motif size"))
-                .put("depth", schema("number", "0.15..1.0; depth spread and spatial extrusion"));
+                .put("depth", schema("number", "0.15..1.0; depth spread and spatial extrusion"))
+                .put("particleLevel", schema("number", "0..1; atmospheric layer density"))
+                .put("pulseStrength", schema("number", "0..1; authored pulse and tap afterglow strength"))
+                .put("contrastLevel", schema("number", "0.15..1; lighting and foreground contrast"));
 
         JSONObject worldSchema = new JSONObject()
                 .put("type", "object")
@@ -341,7 +352,9 @@ final class GeminiLiveClient extends WebSocketListener {
                 .put("required", new JSONArray()
                         .put("theme").put("motif").put("mood").put("tapReaction")
                         .put("evolution").put("layout").put("cameraMotion")
-                        .put("palette").put("density").put("motion").put("scale").put("depth"));
+                        .put("composition").put("environment").put("materialStyle")
+                        .put("palette").put("density").put("motion").put("scale").put("depth")
+                        .put("particleLevel").put("pulseStrength").put("contrastLevel"));
 
         JSONObject fxProps = new JSONObject()
                 .put("type", new JSONObject().put("type", "string")
@@ -470,10 +483,14 @@ final class GeminiLiveClient extends WebSocketListener {
             "mood = CALM, CURIOUS, PLAYFUL, EERIE, CHAOTIC. tapReaction = BLOOM, RIPPLE, CRACK, ATTRACT, REPEL, MULTIPLY, WARP. " +
             "evolution = DRIFT, GROW, PULSE, ORBIT, FLOW, BREATHE. " +
             "Spatial layout = FIELD (layered floating field), TUNNEL (forward depth corridor), VORTEX (spiral funnel), GATE (portal-like ring architecture), SHARD_STORM (angular debris volume). " +
-            "cameraMotion = DRIFT, FORWARD, ORBIT, FLOAT. depth controls z-spread and spatial scale. " +
-            "Choose layout, cameraMotion and depth deliberately to create real spatial composition, but preserve continuity: usually keep the current layout/camera and evolve them only when player behavior justifies a larger transition. " +
-            "Tap feedback already creates immediate local 3D ripple/energy, so use WorldPlan to shape the next persistent state rather than narrating or replaying the same tap. " +
-            "Choose a coherent dark/base primary color, secondary color, and luminous accent. density/motion/scale/depth are continuous controls within the schema.\n\n" +
+            "cameraMotion = DRIFT, FORWARD, ORBIT, FLOAT. composition = CENTER, EDGE, DIAGONAL, SPIRAL, CLUSTERED, HOLLOW_CENTER. " +
+            "environment = FOG, STARDUST, SMOKE, BUBBLES, ASH, POLLEN, GLITCH. materialStyle = GLASS, METAL, BIO, ENERGY, CRYSTAL, INK. " +
+            "depth controls z-spread and spatial scale. particleLevel controls the atmospheric/background layer, pulseStrength controls rhythmic/tap afterglow, contrastLevel controls lighting and foreground silhouette strength. " +
+            "Choose layout + composition as a pair: TUNNEL works well with CENTER/HOLLOW_CENTER, VORTEX with SPIRAL, GATE with HOLLOW_CENTER/CENTER, SHARD_STORM with DIAGONAL/EDGE, FIELD with CLUSTERED/EDGE. These are suggestions, not hard rules. " +
+            "Theme should also have a material identity, not only a palette: COSMIC often ENERGY/GLASS + STARDUST; ABYSS BIO + BUBBLES/FOG; GARDEN BIO + POLLEN; CIRCUIT METAL/ENERGY + GLITCH; DREAM GLASS + FOG/STARDUST; INK INK + SMOKE; LAVA ENERGY/METAL + ASH; ICE CRYSTAL/GLASS + FOG. " +
+            "Preserve continuity: usually evolve only one visual layer at a time. Do not shuffle theme, layout, material, environment and composition all at once unless a major transition is earned. " +
+            "Tap feedback now has immediate rings, a medium geometry wave, and a short persistent mutation, so use WorldPlan to shape the next persistent state rather than narrating or replaying the same tap. " +
+            "Choose a coherent dark/base primary color, secondary color, and luminous accent. density/motion/scale/depth/particleLevel/pulseStrength/contrastLevel are continuous controls within the schema.\n\n" +
 
             "VOICE IS SELECTIVE BUT NOT OPTIONAL WHEN voiceCue=REQUIRED. " +
             "On REQUIRED turns, set speech to a non-empty intent, call apply_game_turn first, then after the tool result emit actual audible native audio. The start/live-ready event is REQUIRED, so always greet or react briefly when entering the world. " +
