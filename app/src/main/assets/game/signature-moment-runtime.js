@@ -207,7 +207,7 @@
       const cols=4,rows=4,w=(global.innerWidth||360)/cols,h=(global.innerHeight||640)/rows;this.pieces=[];
       for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){
         const cx=x*w+w/2,cy=y*h+h/2,dx=(cx-(global.innerWidth||360)/2),dy=(cy-(global.innerHeight||640)/2),len=Math.max(1,Math.sqrt(dx*dx+dy*dy));
-        this.pieces.push({sx:x*w,sy:y*h,w,h,cx,cy,vx:(dx/len)*(70+Math.random()*150)+(Math.random()-.5)*70,vy:(dy/len)*(55+Math.random()*120)-40-Math.random()*90,rot:(Math.random()-.5)*1.8});
+        const speed=190+Math.random()*180;this.pieces.push({sx:x*w,sy:y*h,w,h,cx,cy,vx:(dx/len)*speed+(Math.random()-.5)*90,vy:(dy/len)*speed+(Math.random()-.5)*90,rot:(Math.random()-.5)*2.4});
       }
       console.log("16 shards created");
     }
@@ -234,7 +234,7 @@
       if(!this.ctx||!this.snapshot)return;const ctx=this.ctx,dpr=this.dpr,w=global.innerWidth||360,h=global.innerHeight||640;ctx.setTransform(1,0,0,1,0,0);ctx.clearRect(0,0,this.canvas.width,this.canvas.height);ctx.fillStyle="#030303";ctx.fillRect(0,0,this.canvas.width,this.canvas.height);ctx.setTransform(dpr,0,0,dpr,0,0);
       for(const p of this.pieces){
         const t=progress,ease=1-Math.pow(1-t,2.6),tx=p.vx*ease,ty=p.vy*ease+190*ease*ease,rot=p.rot*ease,alpha=1-clamp((t-.72)/.28,0,.7);
-        ctx.save();ctx.globalAlpha=alpha;ctx.translate(p.cx+tx,p.cy+ty);ctx.rotate(rot);ctx.drawImage(this.snapshot,p.sx*dpr,p.sy*dpr,p.w*dpr,p.h*dpr,-p.w/2,-p.h/2,p.w,p.h);ctx.restore();
+        ctx.save();ctx.globalAlpha=alpha;ctx.translate(p.cx+tx,p.cy+ty);ctx.rotate(rot);ctx.drawImage(this.snapshot,p.sx*dpr,p.sy*dpr,p.w*dpr,p.h*dpr,-p.w/2,-p.h/2,p.w,p.h);ctx.strokeStyle="rgba(170,245,255,.72)";ctx.lineWidth=2;ctx.shadowColor="rgba(101,246,255,.42)";ctx.shadowBlur=10;ctx.strokeRect(-p.w/2+1,-p.h/2+1,p.w-2,p.h-2);ctx.restore();
       }
     }
     _fail(message){console.error("SHATTER CAPTURE FAILED",message);if(this.root&&this.root.parentNode)this.root.parentNode.removeChild(this.root);const f=global.document&&global.document.getElementById("fatal");if(f){f.style.display="grid";f.style.color="#ff334f";f.textContent="SHATTER CAPTURE FAILED\n"+message;}try{this.onGameEvent({type:"shatter_capture_failed",error:String(message)});}catch(_){}return false;}
