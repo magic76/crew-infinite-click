@@ -10,8 +10,8 @@ android {
         applicationId 'com.magic76.aiclicker'
         minSdk 26
         targetSdk 35
-        versionCode 22
-        versionName '0.20.1-godot-ready-fix'
+        versionCode 23
+        versionName '0.20.2-godot-thermal-visibility-fix'
     }
 
     // Godot projects can contain hidden metadata. The 0.20 spike currently uses only source

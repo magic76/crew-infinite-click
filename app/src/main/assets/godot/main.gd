@@ -47,14 +47,29 @@ var gravity_stop_at := 0.0
 var portal_stop_at := 0.0
 
 func _ready() -> void:
+    # Embedded mobile renderer: never run uncapped. 45 fps keeps motion fluid enough while
+    # leaving thermal headroom for Gemini audio/network and the Android HUD.
+    Engine.max_fps = 45
+
+    # Connect/report stages before expensive VFX setup. If a later shader/particle line fails,
+    # Android logcat and the tiny HUD status tell us exactly where boot stopped.
+    _connect_bridge()
+    _report_stage("SCRIPT")
+
     _build_background()
-    glow_texture = _make_glow_texture(48)
+    _report_stage("BACKGROUND")
+
+    glow_texture = _make_glow_texture(32)
     _build_particles()
+    _report_stage("PARTICLES")
+
     _build_overlay()
+    _report_stage("OVERLAY")
+
     _resize_world()
     get_viewport().size_changed.connect(_resize_world)
     _apply_world_plan(current_plan)
-    _connect_bridge()
+    _report_stage("WORLD")
     _report_scene_ready()
 
 func _process(delta: float) -> void:
@@ -90,7 +105,15 @@ func _connect_bridge() -> void:
     if bridge.has_signal("visual_command") and not bridge.is_connected("visual_command", callback):
         bridge.connect("visual_command", callback)
 
+func _report_stage(stage: String) -> void:
+    if bridge == null:
+        _connect_bridge()
+    if bridge != null and bridge.has_method("reportStage"):
+        bridge.reportStage(stage)
+
 func _report_scene_ready() -> void:
+    if bridge == null:
+        _connect_bridge()
     if bridge == null:
         return
     if bridge.has_method("reportSceneReady"):
@@ -155,14 +178,14 @@ func _build_particles() -> void:
 
 func _make_burst_particles() -> GPUParticles2D:
     var p := GPUParticles2D.new()
-    p.amount = 220
+    p.amount = 96
     p.lifetime = 1.05
     p.one_shot = true
     p.explosiveness = 0.96
     p.randomness = 0.34
     p.emitting = false
     p.texture = glow_texture
-    p.visibility_rect = Rect2(-1600, -2800, 3200, 5600)
+    p.visibility_rect = Rect2(-900, -1800, 1800, 3600)
     p.material = _make_additive_canvas_material()
 
     var m := ParticleProcessMaterial.new()
@@ -183,14 +206,14 @@ func _make_burst_particles() -> GPUParticles2D:
 
 func _make_gravity_particles() -> GPUParticles2D:
     var p := GPUParticles2D.new()
-    p.amount = 190
+    p.amount = 72
     p.lifetime = 1.8
     p.one_shot = false
     p.explosiveness = 0.58
     p.randomness = 0.30
     p.emitting = false
     p.texture = glow_texture
-    p.visibility_rect = Rect2(-1600, -2800, 3200, 5600)
+    p.visibility_rect = Rect2(-900, -1800, 1800, 3600)
     p.material = _make_additive_canvas_material()
 
     var m := ParticleProcessMaterial.new()
@@ -213,14 +236,14 @@ func _make_gravity_particles() -> GPUParticles2D:
 
 func _make_portal_particles() -> GPUParticles2D:
     var p := GPUParticles2D.new()
-    p.amount = 120
+    p.amount = 56
     p.lifetime = 2.4
     p.one_shot = false
     p.explosiveness = 0.22
     p.randomness = 0.48
     p.emitting = false
     p.texture = glow_texture
-    p.visibility_rect = Rect2(-1600, -2800, 3200, 5600)
+    p.visibility_rect = Rect2(-900, -1800, 1800, 3600)
     p.material = _make_additive_canvas_material()
 
     var m := ParticleProcessMaterial.new()

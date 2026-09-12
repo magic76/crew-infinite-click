@@ -24,33 +24,57 @@ final class GodotWorldBridge implements WorldSurface {
     private volatile boolean setupCompleted;
     private volatile boolean mainLoopStarted;
     private volatile boolean sceneReady;
-    private volatile boolean ready;
+    private volatile boolean ready; // VFX scene handshake complete; safe to send commands.
     private volatile boolean destroyed;
+    private volatile String sceneStage = "INIT";
+    private volatile Runnable stateListener;
     private WorldPlan currentPlan = WorldPlan.defaultPlan();
+
+    void setStateListener(Runnable listener) {
+        stateListener = listener;
+    }
+
+    private void notifyStateChanged() {
+        Runnable listener = stateListener;
+        if (listener != null) mainHandler.post(listener);
+    }
 
     void attachPlugin(VisualBridgePlugin nextPlugin) {
         if (destroyed) return;
         plugin = nextPlugin;
         Log.i(TAG, "Runtime plugin attached");
+        notifyStateChanged();
     }
 
     void onGodotSetupCompleted() {
         if (destroyed) return;
         setupCompleted = true;
         Log.i(TAG, "Bridge observed Godot setup completion");
+        notifyStateChanged();
     }
 
     void onGodotMainLoopStarted() {
         if (destroyed) return;
         mainLoopStarted = true;
+        sceneStage = "LOOP";
         Log.i(TAG, "Bridge observed Godot main loop start");
+        notifyStateChanged();
         maybeBecomeReady();
+    }
+
+    void onGodotStage(String stage) {
+        if (destroyed) return;
+        sceneStage = stage == null || stage.trim().isEmpty() ? "SCENE" : stage.trim();
+        Log.i(TAG, "Godot stage: " + sceneStage);
+        notifyStateChanged();
     }
 
     void onGodotSceneReady() {
         if (destroyed) return;
         sceneReady = true;
+        sceneStage = "READY";
         Log.i(TAG, "GDScript scene reported ready");
+        notifyStateChanged();
         maybeBecomeReady();
     }
 
@@ -58,6 +82,7 @@ final class GodotWorldBridge implements WorldSurface {
         if (ready || destroyed || plugin == null || !mainLoopStarted || !sceneReady) return;
         ready = true;
         Log.i(TAG, "Godot renderer READY");
+        notifyStateChanged();
         sendResetInternal();
         sendWorldPlanInternal(currentPlan);
     }
@@ -101,13 +126,16 @@ final class GodotWorldBridge implements WorldSurface {
     }
 
     @Override public boolean isReady() {
-        return ready;
+        // This answers whether the Godot *surface* should be visible, not whether VFX commands
+        // are ready. As soon as the main loop exists, stop painting an Android black rectangle
+        // over the Godot surface. If GDScript/shader boot fails, Godot's own clear color remains
+        // black while renderStatus/logcat show the exact boot stage.
+        return mainLoopStarted;
     }
 
     @Override public String renderStatus() {
         if (ready) return "GODOT";
-        if (sceneReady && !mainLoopStarted) return "GODOT WAIT LOOP";
-        if (mainLoopStarted && !sceneReady) return "GODOT SCENE";
+        if (mainLoopStarted) return "GODOT " + sceneStage;
         if (setupCompleted) return "GODOT LOOP";
         if (plugin != null) return "GODOT LOAD";
         return "GODOT INIT";
@@ -126,7 +154,9 @@ final class GodotWorldBridge implements WorldSurface {
         sceneReady = false;
         mainLoopStarted = false;
         setupCompleted = false;
+        sceneStage = "INIT";
         plugin = null;
+        stateListener = null;
     }
 
     private void sendResetInternal() {

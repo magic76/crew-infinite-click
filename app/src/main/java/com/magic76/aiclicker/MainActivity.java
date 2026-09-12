@@ -81,6 +81,7 @@ public final class MainActivity extends FragmentActivity implements GodotHost {
         godotWorldBridge = new GodotWorldBridge();
         gameView = new GameView(this);
         gameView.setWorldSurface(godotWorldBridge);
+        godotWorldBridge.setStateListener(() -> gameView.postInvalidateOnAnimation());
         root.addView(gameView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 

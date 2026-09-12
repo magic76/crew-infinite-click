@@ -3,6 +3,7 @@ package com.magic76.aiclicker;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Insets;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.Typeface;
@@ -134,10 +135,18 @@ final class GameView extends View {
     @Override
     public WindowInsets onApplyWindowInsets(WindowInsets insets) {
         if (insets != null) {
-            insetLeft = insets.getSystemWindowInsetLeft();
-            insetTop = insets.getSystemWindowInsetTop();
-            insetRight = insets.getSystemWindowInsetRight();
-            insetBottom = insets.getSystemWindowInsetBottom();
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                insetLeft = bars.left;
+                insetTop = bars.top;
+                insetRight = bars.right;
+                insetBottom = bars.bottom;
+            } else {
+                insetLeft = insets.getSystemWindowInsetLeft();
+                insetTop = insets.getSystemWindowInsetTop();
+                insetRight = insets.getSystemWindowInsetRight();
+                insetBottom = insets.getSystemWindowInsetBottom();
+            }
         }
         postInvalidateOnAnimation();
         return insets;
@@ -174,7 +183,9 @@ final class GameView extends View {
             }
             drawHud(canvas);
             drawCaption(canvas);
-            postInvalidateOnAnimation();
+            // Do not schedule another frame unconditionally. Godot owns the continuous render loop;
+            // Android HUD redraws only on gameplay/status/animation changes. Running both loops at
+            // display refresh rate caused severe thermal load on high-refresh phones.
         } else {
             startBackground.draw(canvas, area.left, area.top, area.right, area.bottom);
             if (runtime.getGameState() == GameRuntime.GameState.START) {

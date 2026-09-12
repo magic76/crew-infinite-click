@@ -39,6 +39,11 @@ final class VisualBridgePlugin extends GodotPlugin {
     }
 
     @UsedByGodot
+    public void reportStage(String stage) {
+        if (bridge != null) bridge.onGodotStage(stage);
+    }
+
+    @UsedByGodot
     public void reportSceneReady() {
         if (bridge != null) bridge.onGodotSceneReady();
     }
