@@ -5,7 +5,7 @@
   const DEBUG=!!window.__INFINITE_CLICK_DEBUG__;
   const state={
     app:null,gameplay:null,bg:null,world:null,target:null,targetCore:null,targetLabel:null,
-    pools:null,ripples:[],decoys:[],fx:null,audio:null,primitiveHost:null,runtime:null,aggregator:null,
+    pools:null,ripples:[],decoys:[],fx:null,mutation:null,audio:null,primitiveHost:null,runtime:null,aggregator:null,
     safe:{left:0,top:0,right:0,bottom:0},language:"zh-TW",lastInputAt:performance.now(),idleStage:0,
     nextTurnId:1,stateVersion:1,pendingGameTurnId:0,pendingGameEvent:null,geminiPending:false,
     frame:{fps:60,lastMs:performance.now(),accMs:0,frames:0,lastLog:0},
@@ -24,7 +24,7 @@
     });
     state.app=app;document.body.appendChild(app.canvas);buildScene();wireRuntime();wireInput();
     app.ticker.add(tick);
-    if(DEBUG)window.PixiGameDebug={app,canvas:app.canvas,runtime:()=>state.runtime,diagnostics};
+    if(DEBUG)window.PixiGameDebug={app,canvas:app.canvas,runtime:()=>state.runtime,mutation:()=>state.mutation,diagnostics};
     try{A&&A.onRendererReady("PIXI_RUNTIME_V2");}catch(_){}
   }
 
@@ -37,6 +37,9 @@
       ripples:new RipplePool(12),
       decoys:new DecoyPool(30)
     };
+    state.mutation=new WorldMutationRuntime(app,{
+      parent:state.gameplay,onStageChange:handleMutationStage,onRupture:handleWorldRupture,onEpoch:handleWorldEpoch
+    });
     state.fx=new WorldFxController(app,{particlePool:state.pools.particles,parent:state.gameplay});
     state.world=new PIXI.Container();state.world.label="world";state.gameplay.addChild(state.world);
     // Keep transient foreground over the main target.
@@ -82,7 +85,8 @@
       onPrimitiveSurface:m=>state.primitiveHost.setSurface(m),
       onPrimitiveTiming:m=>state.primitiveHost.setTiming(m),
       onRuleTwist:(rule,plan)=>applyValidatedPlanToTarget(plan,rule),
-      onInteractionDirective:(directive,context)=>routeDirective(directive,context)
+      onInteractionDirective:(directive,context)=>routeDirective(directive,context),
+      mutationContext:()=>state.mutation&&state.mutation.context?state.mutation.context():null
     });
     state.aggregator=new GeminiEventAggregator({windowMs:500,onFlush:sendDirectiveToNative});
     state.runtime.startSession();
@@ -90,7 +94,7 @@
     renderBackground();
     const event={type:"SESSION_START",special:true};
     const context=state.runtime.aiContext(event,diagnostics());
-    const directive={mode:"GAME_TURN",reason:"session_start",delivery:"TEASE",instruction:"Open with one short in-character line, then choose the first high-level experience intent."};
+    const directive={mode:"GAME_TURN",reason:"session_start",delivery:"DRY",voiceWanted:false,instruction:"Quietly choose the first high-level experience. Do not speak unless there is a specific observation worth saying."};
     state.aggregator.push(event,directive,context,{immediate:true});
   }
 
@@ -123,6 +127,7 @@
     else if(stage===2)setFomoLabel("KEEP GOING",760);
     else setFomoLabel("ONE MORE?",920);
     if(window.GameHaptics)window.GameHaptics.perform(stage>=3?"HEARTBEAT":"SOFT_TAP",stage>=3?.34:.20);
+    if(state.mutation&&typeof state.mutation.promise==="function")state.mutation.promise(stage,px,py);
     if(state.fx&&typeof state.fx.tapPromiseAccent==="function")state.fx.tapPromiseAccent(px,py,progress,stage);
   }
 
@@ -130,6 +135,7 @@
     const j=state.tapJuice;j.jackpots++;
     const level=Math.min(4,1+Math.floor(j.jackpots/2));
     setFomoLabel(["AGAIN.","MORE?","KEEP GOING.","WHAT ELSE?"][j.jackpots%4],900);
+    if(state.mutation&&typeof state.mutation.jackpot==="function")state.mutation.jackpot(px,py,level);
     if(window.GameHaptics)window.GameHaptics.perform("IMPACT",Math.min(.78,.48+level*.07));
     if(state.fx&&typeof state.fx.tapJackpot==="function")state.fx.tapJackpot(px,py,level,j.heat);
     else if(state.fx&&typeof state.fx.tapFrenzyAccent==="function")state.fx.tapFrenzyAccent(px,py,20,1);
@@ -172,7 +178,9 @@
     state.tapJuice.lastAt=t;
     const s=screen(),px=x*s.width,py=y*s.height;
     const fomoProgress=updateFomoCycle(px,py,gap);
-    const streak=state.tapJuice.streak,power=clamp(Math.max((streak-1)/12,fomoProgress*.82),0,1),heat=state.tapJuice.heat;
+    const mutationState=state.mutation&&typeof state.mutation.tap==="function"?state.mutation.tap(px,py,{streak:state.tapJuice.streak,heat:state.tapJuice.heat,fomoProgress}):null;
+    const mutationPressure=mutationState?Number(mutationState.pressure)||0:0;
+    const streak=state.tapJuice.streak,power=clamp(Math.max((streak-1)/12,fomoProgress*.82,mutationPressure*.68),0,1),heat=state.tapJuice.heat;
     const world=state.runtime&&state.runtime.currentPlan&&GameWorldCatalog.WORLDS[state.runtime.currentPlan.world];
     const accent=world&&world.accent!=null?world.accent:0xffffff;
     const secondary=world&&world.secondary!=null?world.secondary:0xffffff;
@@ -224,6 +232,38 @@
     state.runtime.onPlayerEvent(e);
   }
 
+  function handleMutationStage(event){
+    const e=event||{};
+    if(e.stage<=e.previous||e.stage<2)return;
+    const x=state.target&&Number.isFinite(state.target.x)?state.target.x:screen().width/2;
+    const y=state.target&&Number.isFinite(state.target.y)?state.target.y:screen().height/2;
+    if(state.fx&&typeof state.fx.mutationStageAccent==="function")state.fx.mutationStageAccent(e.stage,x,y,e.pressure);
+    if(window.GameHaptics)window.GameHaptics.perform(e.stage>=4?"WARNING":"SOFT_TAP",e.stage>=4?.36:(e.stage===3?.25:.16));
+    if(state.audio&&state.runtime&&state.runtime.currentPlan){
+      const mood=state.runtime.currentPlan.audioMood||"GLITCH";
+      if(typeof state.audio.playClick==="function")state.audio.playClick(mood,.20+e.stage*.08,e.stage*4);
+      if(e.stage>=4)state.audio.play(mood,"trap",.38);
+    }
+  }
+
+  function handleWorldRupture(event){
+    const e=event||{};
+    state.stateVersion++;
+    if(window.GameHaptics)window.GameHaptics.perform("IMPACT",.72);
+    if(e.reason!=="jackpot"&&state.fx&&typeof state.fx.tapJackpot==="function")state.fx.tapJackpot(e.x,e.y,3,1);
+    if(e.reason!=="jackpot"&&state.audio&&state.runtime&&state.runtime.currentPlan&&typeof state.audio.playJackpot==="function")state.audio.playJackpot(state.runtime.currentPlan.audioMood||"GLITCH",3);
+    try{A&&A.onRuntimeSignal(JSON.stringify({type:"WORLD_RUPTURE",world:e.world||"",ruptures:e.ruptures||0,epoch:e.epoch||0,stateVersion:state.stateVersion}));}catch(_){}
+  }
+
+  function handleWorldEpoch(event){
+    const e=event||{};
+    if(!state.runtime||typeof state.runtime.forceLocalWorldMutation!=="function")return;
+    invalidatePendingTurn("world_mutation");
+    const result=state.runtime.forceLocalWorldMutation({epoch:e.epoch||0,ruptures:e.ruptures||0,fromWorld:e.world||""});
+    if(result&&result.ok){state.stateVersion++;renderBackground();}
+    try{A&&A.onRuntimeSignal(JSON.stringify({type:"WORLD_MUTATION",fromWorld:e.world||"",epoch:e.epoch||0,stateVersion:state.stateVersion}));}catch(_){}
+  }
+
   function normalizeEvent(raw){
     const e=Object.assign({},raw||{}),s=screen();e.type=String(e.type||"").toUpperCase();
     if(Number.isFinite(e.x)&&Math.abs(e.x)>1)e.x=clamp(e.x/Math.max(1,s.width),0,1);
@@ -263,6 +303,7 @@
 
   function applyValidatedPlanToTarget(plan,rule){
     if(!plan)return;
+    if(state.mutation&&plan.world)state.mutation.setWorld(plan.world);
     clearDecoys();renderTargetPalette(plan);
     const behavior=String(plan.targetBehavior||"STILL").toUpperCase(),s=screen(),safe=safeBounds();
     state.target.visible=true;state.target.alpha=behavior==="HIDE"?.18:1;
@@ -338,15 +379,16 @@
       const nowT=performance.now(),sinceTap=nowT-state.tapJuice.lastAt;
       const stage=state.tapJuice.promiseStage;
       const promisePulse=stage>=3?.055+Math.sin(nowT/72)*.028:(stage===2?.026+Math.sin(nowT/105)*.014:0);
-      const desired=1+Math.sin(nowT/450)*.025+promisePulse;
+      const mutationMod=state.mutation&&state.mutation.targetModulation?state.mutation.targetModulation(nowT):{scale:1,rotation:0,glow:.18};
+      const desired=mutationMod.scale+Math.sin(nowT/450)*.025+promisePulse;
       if(sinceTap>420)state.tapJuice.heat=Math.max(0,state.tapJuice.heat-dt/2100);
       // Preserve a nearly-complete cycle briefly. The player can see/feel that one more tap is still "alive".
       if(state.tapJuice.cycleTaps>0&&sinceTap>1500){
         state.tapJuice.cycleTaps=0;state.tapJuice.goal=nextFomoGoal();state.tapJuice.promiseStage=0;state.tapJuice.nearMissUsed=false;
       }
       state.target.scale.x+=(desired-state.target.scale.x)*.16;state.target.scale.y=state.target.scale.x;
-      state.target.rotation+=(0-state.target.rotation)*.18;
-      if(state.targetCore)state.targetCore.alpha+=(.96-state.targetCore.alpha)*.14;
+      state.target.rotation+=((mutationMod.rotation||0)-state.target.rotation)*.18;
+      if(state.targetCore){const desiredAlpha=clamp(.88+(mutationMod.glow||.18)*.12,.90,1);state.targetCore.alpha+=(desiredAlpha-state.targetCore.alpha)*.14;}
       if(state.targetLabel&&state.tapJuice.labelUntil&&nowT>state.tapJuice.labelUntil){
         state.tapJuice.labelUntil=0;
         if(["...","KEEP GOING","ONE MORE?","SO CLOSE.","AGAIN.","MORE?","WHAT ELSE?"].includes(String(state.targetLabel.text)))state.targetLabel.text="TOUCH";
@@ -373,6 +415,7 @@
       activeSignature:"NONE",
       geminiRequestPending:state.geminiPending,eventAggregationCount:state.aggregator?state.aggregator.pendingCount():0,
       fomo:{cycleTaps:state.tapJuice.cycleTaps,goal:state.tapJuice.goal,promiseStage:state.tapJuice.promiseStage,jackpots:state.tapJuice.jackpots,heat:Math.round(state.tapJuice.heat*100)/100},
+      mutation:state.mutation&&state.mutation.context?state.mutation.context():null,
       stateVersion:state.stateVersion
     };
   }
@@ -402,6 +445,7 @@
         state.aggregator&&state.aggregator.cancel();
         clearDecoys();for(const r of state.ripples)state.pools.ripples.release(r.g);state.ripples.length=0;
         state.pendingGameTurnId=0;state.pendingGameEvent=null;state.geminiPending=false;state.stateVersion++;
+        if(state.mutation&&state.mutation.reset)state.mutation.reset({clearScars:true});
         Object.assign(state.tapJuice,{lastAt:0,streak:0,lastFrenzyAt:0,heat:0,cycleTaps:0,goal:nextFomoGoal(),promiseStage:0,jackpots:0,nearMissUsed:false,labelUntil:0,lastPromiseAt:0});
       }
     }catch(e){reportError(e);}

@@ -10,8 +10,8 @@ android {
         applicationId 'com.magic76.aiclicker'
         minSdk 26
         targetSdk 35
-        versionCode 379
-        versionName '0.37.9-no-find-it-v6'
+        versionCode 380
+        versionName '0.38.0-world-mutation-v7'
     }
 
     buildTypes {

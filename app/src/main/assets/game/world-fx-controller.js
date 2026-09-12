@@ -203,6 +203,36 @@
     }
 
     /**
+     * One-shot punctuation when persistent world pressure crosses a meaningful stage.
+     * This intentionally ignores sensoryDensity so a quiet plan cannot hide mutation progress.
+     */
+    mutationStageAccent(stage,x,y,pressure){
+      if(!this.worldDef)this.setWorld("NEON_RIFT",.4);
+      if(!this.worldDef)return 0;
+      const st=clamp(Number(stage)||1,1,4),p=clamp(Number(pressure)||0,0,1),size=this._size();
+      const px=Number.isFinite(Number(x))?Number(x):size.width/2,py=Number.isFinite(Number(y))?Number(y):size.height/2;
+      const a=this.worldDef.accent,b=this.worldDef.secondary,world=this.worldDef.id;let made=0;
+      const spawn=(draw,state)=>{if(this._spawn(draw,state))made++;};
+      spawn(g=>ring(g,26+st*8,a,1.5+st*.45,.30+p*.35),{x:px,y:py,life:.38,decay:1,scaleGrowth:2.0+st*.55});
+      if(st>=3)spawn(g=>ring(g,42+st*7,b,1.2+st*.25,.20+p*.25),{x:px,y:py,life:.46,decay:1,scaleGrowth:1.7+st*.45});
+      if(world==="SUMMER_STORM"){
+        for(let i=0;i<st*2;i++)spawn(g=>rect(g,-1,-7,2,14+Math.random()*10,b,.42+p*.30),{x:Math.random()*size.width,y:-18-Math.random()*55,vx:-10,vy:230+Math.random()*100,life:.32,decay:1});
+        if(st>=4)spawn(g=>rect(g,0,0,size.width,size.height,0xffffff,.045),{x:0,y:0,life:.08,decay:1});
+      }else if(world==="WINTER_FROST"){
+        if(st>=3)spawn(g=>{for(let i=0;i<6;i++){const ang=i/6*Math.PI*2,l=35+st*12;g.moveTo(0,0).lineTo(Math.cos(ang)*l,Math.sin(ang)*l);}g.stroke({color:a,width:1.4,alpha:.55+p*.22});},{x:px,y:py,life:.42,decay:1});
+      }else if(world==="VOID_CHAMBER"){
+        for(let i=0;i<2+st;i++){const ang=Math.random()*Math.PI*2,r=70+Math.random()*45,sx=px+Math.cos(ang)*r,sy=py+Math.sin(ang)*r;spawn(g=>circle(g,2.2,b,.58+p*.24),{x:sx,y:sy,vx:(px-sx)*1.1,vy:(py-sy)*1.1,life:.38,decay:1,scaleDecay:1});}
+      }else if(world==="NEON_RIFT"){
+        for(let i=0;i<1+st;i++)spawn(g=>rect(g,0,0,size.width*(.15+Math.random()*.4),2+Math.random()*5,i%2?a:b,.16+p*.16),{x:Math.random()*size.width,y:Math.random()*size.height,vx:(Math.random()-.5)*120,life:.13,decay:1});
+      }else if(world==="AUTUMN_DECAY"){
+        for(let i=0;i<2+st;i++)spawn(g=>rect(g,-3,-2,6+Math.random()*4,4,i%2?a:b,.52+p*.20),{x:px+(Math.random()-.5)*90,y:py-20-Math.random()*50,vx:(Math.random()-.5)*55,vy:45+Math.random()*60,life:.40,decay:1,rotationSpeed:(Math.random()-.5)*3});
+      }else{
+        for(let i=0;i<2+st;i++){const ang=Math.random()*Math.PI*2;spawn(g=>circle(g,2.2+Math.random()*2.8,i%2?a:b,.58+p*.24),{x:px,y:py,vx:Math.cos(ang)*(65+Math.random()*80),vy:Math.sin(ang)*(65+Math.random()*80)-18,gravity:34,life:.35,decay:1});}
+      }
+      return made;
+    }
+
+    /**
      * Cheap local world feedback. This replaces the old generic tap burst so each world
      * keeps a recognizable feel without bringing back a tap-count phase loop.
      */

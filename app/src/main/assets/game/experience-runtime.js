@@ -13,6 +13,7 @@
       this.onRuleTwist=typeof o.onRuleTwist==="function"?o.onRuleTwist:()=>{};
       this.onSpeech=typeof o.onSpeech==="function"?o.onSpeech:()=>{};
       this.onInteractionDirective=typeof o.onInteractionDirective==="function"?o.onInteractionDirective:()=>{};
+      this.mutationContext=typeof o.mutationContext==="function"?o.mutationContext:()=>null;
       this.primitives=o.primitives||new global.InteractionPrimitives({
         fx:this.fx,getPrimaryTarget:this.getPrimaryTarget,
         onInteraction:o.onPrimitiveInteraction,onSpatial:o.onPrimitiveSpatial,onCamera:o.onPrimitiveCamera,
@@ -21,7 +22,7 @@
       this.currentPlan=null;
       this.currentSensoryState=this.sensory.resolve({world:"NEON_RIFT",situation:"WAIT",intensity:.12,surpriseLevel:.06,sensoryDensity:0});
       this.currentSituationStartedAt=0;this.currentSituationMinMs=6500;this.currentSituationMaxMs=18000;
-      this.lastBehaviorAt=0;this.behaviorEnergy=0;
+      this.lastBehaviorAt=0;this.behaviorEnergy=0;this.allowWorldShiftOnce=false;
     }
 
     startSession(preferredWorld) {
@@ -86,7 +87,18 @@
       const safeRaw=Object.assign({},rawPlan||{});
       // Signature moments are retired. Ignore stale/model-provided values unconditionally.
       safeRaw.signatureMoment="NONE";
+      // Persistent local mutation owns world lifespan. AI/fallback may vary situations inside the
+      // world, but only a completed mutation epoch is allowed to shift worlds.
+      const mutation=this.mutationContext()||null;
+      if(!this.allowWorldShiftOnce&&previousWorld&&mutation&&Number(mutation.rupturesUntilWorldShift)>0&&safeRaw.world&&safeRaw.world!==previousWorld){
+        safeRaw.world=previousWorld;
+        // fallbackPlan may already have advanced the director internally; restore the mutation-owned world
+        // before sanitizing so internal director state cannot leak an early world switch.
+        if(this.director&&typeof this.director.startSession==="function")this.director.startSession(previousWorld);
+      }
+      const allowShift=this.allowWorldShiftOnce;this.allowWorldShiftOnce=false;
       const plan=this.director.sanitizePlan(safeRaw);
+      if(allowShift&&safeRaw.world)plan.world=safeRaw.world;
       const sensoryState=this.sensory.resolve(plan);
       const composition=this.composer.compose(plan.composition||{},{
         world:plan.world,density:sensoryState.density,experienceIntent:plan.experienceIntent
@@ -131,6 +143,28 @@
       return this.applyAiPlan(plan);
     }
 
+    /**
+     * WorldMutationRuntime can request a rare local world rupture without creating a second
+     * gameplay owner. ExperienceRuntime still validates/applies the resulting plan.
+     */
+    forceLocalWorldMutation(meta) {
+      const ids=(global.GameWorldCatalog&&global.GameWorldCatalog.WORLD_IDS)||[];
+      const previous=this.currentPlan&&this.currentPlan.world;
+      const candidates=ids.filter(id=>id!==previous);
+      const next=candidates.length?candidates[Math.floor(Math.random()*candidates.length)]:undefined;
+      this.director.startSession(next);
+      const event=Object.assign({type:"WORLD_RUPTURE",special:true},meta||{});
+      const plan=this.director.fallbackPlan(event,.96);
+      plan.world=next||plan.world;
+      plan.intensity=Math.max(.72,Number(plan.intensity)||0);
+      plan.surpriseLevel=.96;
+      plan.sensoryDensity=3;
+      plan.speech="";
+      plan.signatureMoment="NONE";
+      this.allowWorldShiftOnce=true;
+      return this.applyAiPlan(plan);
+    }
+
     shouldRequestNewSituation() {
       if(!this.currentPlan)return true;
       const elapsed=performance.now()-this.currentSituationStartedAt;
@@ -143,6 +177,7 @@
     aiContext(event,gameSnapshot) {
       const ctx=this.director.contextForAi(event||{},this._surpriseLevelForEvent(event));
       ctx.game=gameSnapshot||{};ctx.sensory=this.sensory.contextForAi();ctx.composition=this.composer.contextForAi();
+      ctx.worldMutation=this.mutationContext()||null;
       ctx.runtimeOwner="ExperienceRuntime";
       ctx.instruction=[
         "ExperienceRuntime is the only gameplay owner. Gemini is asynchronous creative direction, never the touch critical path.",
@@ -151,7 +186,8 @@
         "QUIET is almost empty, NORMAL is restrained, BUSY is clearly moving, CHAOS is a rare short punch followed by QUIET.",
         "Speech is personality, not narration. React, tease, predict, question, or fake-reassure.",
         "Compose from existing interaction/spatial/reveal/camera/surface/timing primitives only.",
-        "Signature moments are exclusive finished micro-games. Usually choose NONE.",
+        "WorldMutationRuntime owns persistent local pressure, scars and rupture pacing. Do not reset, narrate, or prematurely switch away from that world.",
+        "Signature moments are retired. Always choose NONE.",
         "Input includes tap, hold, release, drag, slice, idle and wait behavior. Never require model latency for immediate feedback."
       ].join(" ");
       return ctx;
