@@ -80,7 +80,9 @@ final class FilamentWorldView extends TextureView {
     private float lastTapY = 0.5f;
     private float tapEnergy = 0f;
 
-    private final Choreographer.FrameCallback frameCallback = frameTimeNanos -> {
+    private final Choreographer.FrameCallback frameCallback = this::onFrame;
+
+    private void onFrame(long frameTimeNanos) {
         if (!rendering || destroyed) return;
         choreographer.postFrameCallback(frameCallback);
         if (!uiHelper.isReadyToRender() || swapChain == null || renderer == null) return;
@@ -92,7 +94,7 @@ final class FilamentWorldView extends TextureView {
             renderer.endFrame();
             if (assetLoaded && renderableCount > 0) firstFrameRendered = true;
         }
-    };
+    }
 
     FilamentWorldView(Context context) {
         super(context);
