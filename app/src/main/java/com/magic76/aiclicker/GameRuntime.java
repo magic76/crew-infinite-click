@@ -217,11 +217,26 @@ final class GameRuntime {
                     try { color = Color.parseColor(hex); } catch (Exception ignored) {}
                     long duration = clampLong(action.optLong("durationMs", 90L), 50L, 400L);
                     view.flash(color, duration);
+                } else if (isCuratedVisualEffect(type)) {
+                    float x = clamp((float)action.optDouble("x", 0.5), 0f, 1f);
+                    float y = clamp((float)action.optDouble("y", 0.5), 0f, 1f);
+                    float strength = clamp((float)action.optDouble("strength", 0.72), 0.15f, 1f);
+                    view.playVisualEffect(type, x, y, strength);
                 }
             }
         }
 
         view.invalidate();
+    }
+
+    private boolean isCuratedVisualEffect(String type) {
+        return "spawn_portal".equals(type)
+                || "black_hole".equals(type)
+                || "gravity_pull".equals(type)
+                || "shockwave".equals(type)
+                || "particle_burst".equals(type)
+                || "world_crack".equals(type)
+                || "glitch_world".equals(type);
     }
 
     private JSONObject buildTapPattern() {

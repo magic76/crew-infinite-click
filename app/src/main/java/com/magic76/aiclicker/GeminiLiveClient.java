@@ -358,10 +358,16 @@ final class GeminiLiveClient extends WebSocketListener {
 
         JSONObject fxProps = new JSONObject()
                 .put("type", new JSONObject().put("type", "string")
-                        .put("enum", new JSONArray().put("shakeScreen").put("flashScreen")))
+                        .put("enum", new JSONArray()
+                                .put("shakeScreen").put("flashScreen")
+                                .put("spawn_portal").put("black_hole").put("gravity_pull")
+                                .put("shockwave").put("particle_burst").put("world_crack").put("glitch_world")))
                 .put("intensity", schema("number", "shake 0.05..0.45"))
                 .put("durationMs", schema("integer", "60..500"))
-                .put("color", schema("string", "#RRGGBB"));
+                .put("color", schema("string", "#RRGGBB"))
+                .put("x", schema("number", "curated VFX normalized x 0..1"))
+                .put("y", schema("number", "curated VFX normalized y 0..1"))
+                .put("strength", schema("number", "curated VFX strength 0.15..1"));
         JSONObject fxSchema = new JSONObject()
                 .put("type", "object")
                 .put("properties", fxProps)
@@ -478,7 +484,7 @@ final class GeminiLiveClient extends WebSocketListener {
             "A pause can make the world become still, stare back, breathe, or quietly mutate. Tap coordinates matter: repeated taps in one area can make that region conceptually important even though the Runtime handles the exact local effect. " +
             "The world should feel like it is noticing the player's habits.\n\n" +
 
-            "The renderer is now native GPU 3D using Filament. WorldPlan vocabulary: theme = COSMIC, ABYSS, GARDEN, CIRCUIT, DREAM, INK, LAVA, ICE. " +
+            "The renderer is now an embedded Godot 4.7 VFX surface with procedural shaders and GPU particles. WorldPlan vocabulary: theme = COSMIC, ABYSS, GARDEN, CIRCUIT, DREAM, INK, LAVA, ICE. " +
             "motif = ORBS, STARS, EYES, JELLYFISH, VINES, PORTALS, SHARDS, GLYPHS. " +
             "mood = CALM, CURIOUS, PLAYFUL, EERIE, CHAOTIC. tapReaction = BLOOM, RIPPLE, CRACK, ATTRACT, REPEL, MULTIPLY, WARP. " +
             "evolution = DRIFT, GROW, PULSE, ORBIT, FLOW, BREATHE. " +
@@ -489,7 +495,7 @@ final class GeminiLiveClient extends WebSocketListener {
             "Choose layout + composition as a pair: TUNNEL works well with CENTER/HOLLOW_CENTER, VORTEX with SPIRAL, GATE with HOLLOW_CENTER/CENTER, SHARD_STORM with DIAGONAL/EDGE, FIELD with CLUSTERED/EDGE. These are suggestions, not hard rules. " +
             "Theme should also have a material identity, not only a palette: COSMIC often ENERGY/GLASS + STARDUST; ABYSS BIO + BUBBLES/FOG; GARDEN BIO + POLLEN; CIRCUIT METAL/ENERGY + GLITCH; DREAM GLASS + FOG/STARDUST; INK INK + SMOKE; LAVA ENERGY/METAL + ASH; ICE CRYSTAL/GLASS + FOG. " +
             "Preserve continuity: usually evolve only one visual layer at a time. Do not shuffle theme, layout, material, environment and composition all at once unless a major transition is earned. " +
-            "Tap feedback now has immediate rings, a medium geometry wave, and a short persistent mutation, so use WorldPlan to shape the next persistent state rather than narrating or replaying the same tap. " +
+            "Tap feedback is immediate and local: Godot can bend the procedural field, burst GPU particles, leave tap echoes and persist a short mutation, so use WorldPlan to shape the next persistent state rather than narrating or replaying the same tap. " +
             "Choose a coherent dark/base primary color, secondary color, and luminous accent. density/motion/scale/depth/particleLevel/pulseStrength/contrastLevel are continuous controls within the schema.\n\n" +
 
             "VOICE IS SELECTIVE BUT NOT OPTIONAL WHEN voiceCue=REQUIRED. " +
@@ -498,7 +504,9 @@ final class GeminiLiveClient extends WebSocketListener {
             "If language is zh-TW, speak Traditional Chinese; if en-US, speak English. " +
             "When speaking, improvise like a live performer reacting in the moment. The function speech text is an intent/caption seed, not a verbatim script. Do not read system state, theme names, CPS numbers, or obvious visual changes. Avoid repetitive phrases such as 'keep going', 'again', or constant praise. Silence is part of the performance.\n\n" +
 
-            "actions should normally be empty. You may use only a brief shakeScreen or flashScreen for an exceptional authored beat. " +
+            "actions are optional curated punctuation, not arbitrary code. Prefer 0-1 action on a meaningful beat and never spam effects every tap. " +
+            "Besides brief shakeScreen/flashScreen, Godot VFX actions are spawn_portal, black_hole, gravity_pull, shockwave, particle_burst, world_crack, and glitch_world. " +
+            "For a Godot VFX action provide x/y in 0..1 and strength in 0.15..1; use the current tap coordinates when appropriate. " +
             "Never punish a tap. Never tell the player not to tap, wait, aim, find the right thing, or stop. The product invariant is: every touch advances the world.";
 
 }

@@ -19,9 +19,18 @@ import android.widget.TextView;
 
 import org.json.JSONObject;
 
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentActivity;
 
+import org.godotengine.godot.Godot;
+import org.godotengine.godot.GodotFragment;
+import org.godotengine.godot.GodotHost;
+import org.godotengine.godot.plugin.GodotPlugin;
 
-public final class MainActivity extends Activity {
+import java.util.Collections;
+import java.util.Set;
+
+public final class MainActivity extends FragmentActivity implements GodotHost {
     private static final String PREFS = "ai_infinite_click";
     private static final String KEY_API = "gemini_api_key";
     private static final String KEY_LANGUAGE = "game_language";
@@ -30,7 +39,10 @@ public final class MainActivity extends Activity {
     private final LocalDirector localDirector = new LocalDirector();
 
     private GameView gameView;
-    private FilamentWorldView filamentWorldView;
+    private GodotWorldBridge godotWorldBridge;
+    private GodotFragment godotFragment;
+    private VisualBridgePlugin visualBridgePlugin;
+    private Godot pluginGodot;
     private GameRuntime runtime;
     private GeminiLiveClient liveClient;
     private SharedPreferences prefs;
@@ -58,14 +70,22 @@ public final class MainActivity extends Activity {
         currentLanguage = AppLanguage.fromCode(prefs.getString(KEY_LANGUAGE, AppLanguage.ZH_TW.code));
 
         FrameLayout root = new FrameLayout(this);
-        filamentWorldView = new FilamentWorldView(this);
-        gameView = new GameView(this);
-        gameView.setWorldSurface(filamentWorldView);
-
-        root.addView(filamentWorldView, new FrameLayout.LayoutParams(
+        FrameLayout godotContainer = new FrameLayout(this);
+        godotContainer.setId(R.id.godot_fragment_container);
+        godotContainer.setBackgroundColor(Color.BLACK);
+        root.addView(godotContainer, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+
+        godotWorldBridge = new GodotWorldBridge();
+        gameView = new GameView(this);
+        gameView.setWorldSurface(godotWorldBridge);
         root.addView(gameView, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+
+        // GodotFragment owns the engine/render-surface lifecycle. Android keeps the HUD,
+        // Gemini Live and deterministic gameplay as an overlay above it.
+        setContentView(root);
+        attachGodotFragment();
 
         runtime = new GameRuntime(this, gameView, this::onRuntimeEvent, this::onGameEnded);
         runtime.setLanguage(currentLanguage);
@@ -73,15 +93,44 @@ public final class MainActivity extends Activity {
         gameView.setSettingsTapListener(this::showApiKeyDialog);
         gameView.setLanguageChangeListener(this::onLanguageChanged);
 
-        setContentView(root);
         runtime.initializeDefaultScene();
-        filamentWorldView.startRendering();
         String key = prefs.getString(KEY_API, "");
         if (key != null && !key.trim().isEmpty()) {
             connectLive(key.trim(), false);
         } else {
             gameView.setConnectionStatus("DEMO");
         }
+    }
+
+    private void attachGodotFragment() {
+        Fragment existing = getSupportFragmentManager().findFragmentById(R.id.godot_fragment_container);
+        if (existing instanceof GodotFragment) {
+            godotFragment = (GodotFragment) existing;
+            return;
+        }
+
+        godotFragment = new GodotFragment();
+        getSupportFragmentManager()
+                .beginTransaction()
+                .replace(R.id.godot_fragment_container, godotFragment)
+                .commitNowAllowingStateLoss();
+    }
+
+    @Override public Activity getActivity() {
+        return this;
+    }
+
+    @Override public Godot getGodot() {
+        return godotFragment == null ? null : godotFragment.getGodot();
+    }
+
+    @Override public Set<GodotPlugin> getHostPlugins(Godot godot) {
+        if (visualBridgePlugin == null || pluginGodot != godot) {
+            pluginGodot = godot;
+            visualBridgePlugin = new VisualBridgePlugin(godot, godotWorldBridge);
+            if (godotWorldBridge != null) godotWorldBridge.attachPlugin(visualBridgePlugin);
+        }
+        return Collections.<GodotPlugin>singleton(visualBridgePlugin);
     }
 
     private void onLanguageChanged(AppLanguage language) {
@@ -93,11 +142,9 @@ public final class MainActivity extends Activity {
     @Override protected void onResume() {
         super.onResume();
         configureSystemBars();
-        if (filamentWorldView != null) filamentWorldView.startRendering();
     }
 
     @Override protected void onPause() {
-        if (filamentWorldView != null) filamentWorldView.stopRendering();
         super.onPause();
     }
 
@@ -106,7 +153,9 @@ public final class MainActivity extends Activity {
         if (turnWatchdog != null) mainHandler.removeCallbacks(turnWatchdog);
         if (completionWatchdog != null) mainHandler.removeCallbacks(completionWatchdog);
         if (liveClient != null) liveClient.close();
-        if (filamentWorldView != null) filamentWorldView.destroyRenderer();
+        if (godotWorldBridge != null) godotWorldBridge.destroy();
+        visualBridgePlugin = null;
+        pluginGodot = null;
         super.onDestroy();
     }
 

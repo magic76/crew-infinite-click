@@ -3,6 +3,7 @@ package com.magic76.aiclicker;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Insets;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.graphics.Typeface;
@@ -19,7 +20,7 @@ final class GameView extends View {
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final BackgroundEngine startBackground = new BackgroundEngine();
     private final LivingWorldEngine livingWorldEngine = new LivingWorldEngine();
-    private FilamentWorldView worldSurface;
+    private WorldSurface worldSurface;
 
     private final float density;
     private final float scaledDensity;
@@ -64,7 +65,7 @@ final class GameView extends View {
     }
 
     void setRuntime(GameRuntime runtime) { this.runtime = runtime; }
-    void setWorldSurface(FilamentWorldView worldSurface) {
+    void setWorldSurface(WorldSurface worldSurface) {
         this.worldSurface = worldSurface;
     }
     void setSettingsTapListener(SettingsTapListener listener) { this.settingsTapListener = listener; }
@@ -105,6 +106,13 @@ final class GameView extends View {
         postInvalidateOnAnimation();
     }
 
+    void playVisualEffect(String name, float normalizedX, float normalizedY, float strength) {
+        if (worldSurface != null) {
+            worldSurface.playEffect(name, clamp(normalizedX, 0f, 1f), clamp(normalizedY, 0f, 1f),
+                    clamp(strength, 0f, 1f));
+        }
+    }
+
     WorldPlan currentWorldPlan() {
         if (worldSurface != null) return worldSurface.currentPlan();
         return livingWorldEngine.currentPlan();
@@ -127,10 +135,18 @@ final class GameView extends View {
     @Override
     public WindowInsets onApplyWindowInsets(WindowInsets insets) {
         if (insets != null) {
-            insetLeft = insets.getSystemWindowInsetLeft();
-            insetTop = insets.getSystemWindowInsetTop();
-            insetRight = insets.getSystemWindowInsetRight();
-            insetBottom = insets.getSystemWindowInsetBottom();
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
+                insetLeft = bars.left;
+                insetTop = bars.top;
+                insetRight = bars.right;
+                insetBottom = bars.bottom;
+            } else {
+                insetLeft = insets.getSystemWindowInsetLeft();
+                insetTop = insets.getSystemWindowInsetTop();
+                insetRight = insets.getSystemWindowInsetRight();
+                insetBottom = insets.getSystemWindowInsetBottom();
+            }
         }
         postInvalidateOnAnimation();
         return insets;
@@ -159,7 +175,7 @@ final class GameView extends View {
 
         RectF area = contentArea();
         if (runtime.getGameState() == GameRuntime.GameState.PLAYING) {
-            if (worldSurface == null || !worldSurface.isFilamentReady()) {
+            if (worldSurface == null || !worldSurface.isReady()) {
                 livingWorldEngine.draw(canvas, area);
             }
             drawHud(canvas);

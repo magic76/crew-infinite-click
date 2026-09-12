@@ -1,17 +1,17 @@
-# AI Infinite Click — Android MVP 0.10
+# AI Infinite Click — Android MVP 0.20
 
-A 30-second AI-directed click game for Android. Gemini Live acts as a creative director; the local runtime remains authoritative for hit validation, scoring, mechanics, rules, timing and rendering. The model never executes arbitrary HTML/JavaScript.
+An endless AI-directed Living Canvas for Android. Gemini Live acts as a creative director while the local Android runtime remains authoritative for interaction/state. **0.20 embeds Godot 4.7.2 as the visual/VFX surface** so taps can drive procedural shaders, GPU particles, portals, gravity pulls and persistent world mutations without giving the model arbitrary code execution.
 
 ## Current game loop
 
-- Hard 30-second run: START → PLAYING → RESULT.
+- Endless direct-entry Living Canvas; no fixed level/timer is required.
 - Fast local mechanics: `CHASE`, `SHRINK`, `SPLIT`, `BLINK`, `SWARM`.
 - Target system: shape + appearance + semantic role + behavior.
 - Visual worlds: `NEON`, `MINIMAL`, `COMIC`, `GLITCH`, `SPACE`.
 - Structured local rules: role, shape, color, largest/smallest and wait timing.
 - Twists: rule inversion, role swap, ghost/neon transformations and chaos.
-- Gemini Live voice with Android TTS fallback.
-- Offline `LocalDirector` keeps the game playable without a Gemini key.
+- Gemini Live native audio; routine taps can remain silent while local visuals react immediately.
+- Offline `LocalDirector` keeps the world interactive without a Gemini key.
 
 ## 0.10 architecture contract
 
@@ -114,11 +114,12 @@ With an active rule, the rule is authoritative. Without one:
 - `RuleEngine.java` — structured rule state and local correctness evaluation.
 - `DirectorPlan.java` — parsed high-level AI intent.
 - `TapOutcome.java` — unified tap result passed to scoring/feedback.
-- `GameView.java` — Canvas renderer, shape-aware hit testing, HUD and touch handling.
-- `SceneDirector.java` / `BackgroundEngine.java` — visual-world state and ambient/effect rendering.
+- `GameView.java` — Android HUD/input overlay plus Canvas fallback while Godot starts.
+- `GodotWorldBridge.java` / `VisualBridgePlugin.java` — validated Android → Godot visual command transport.
+- `app/src/main/assets/godot/` — procedural shader, GPU particle scene logic and persistent tap VFX.
 - `GeminiLiveClient.java` — Gemini Live WebSocket, DirectorPlan tool schema, audio playback.
 - `LocalDirector.java` — deterministic offline fallback.
-- `MainActivity.java` — Live/fallback coordination, event aggregation and voice/TTS watchdog.
+- `MainActivity.java` — GodotFragment host plus Live/fallback coordination and event watchdogs.
 
 ## Gemini API key
 
@@ -170,3 +171,10 @@ The app now enters the Living Canvas immediately. Language and Gemini connection
 
 ## 0.18 Filament 3D
 Living Canvas now renders through native Google Filament on Android. WorldPlan gained spatial layout, camera-motion and depth controls. The overlay remains native Canvas, and the previous procedural 2D renderer remains as a fallback if Filament cannot initialize.
+
+
+## 0.19 Visual Richness Pass
+Filament world planning gained composition, environment and material identity plus deeper layout-specific spatial treatment. It confirmed that continuing to hand-build a VFX engine on top of Filament would still feel too much like a technical demo.
+
+## 0.20 Godot VFX Spike
+The active visual surface is now embedded Godot 4.7.2. Android still owns Gemini Live and gameplay state; Godot receives validated JSON visual commands and renders a procedural nebula, layout/composition variants, GPU particle bursts, portal rings, gravity pulls, shockwave distortion and persistent tap echoes. The old Canvas LivingWorld renderer stays as a startup/failure fallback. See `CHANGES_0.20.md` and `LOCAL_AGENT_0.20.md`.

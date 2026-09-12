@@ -64,10 +64,23 @@ final class LocalDirector {
         try {
             String[] layouts = {"FIELD","GATE","TUNNEL","FIELD","SHARD_STORM","VORTEX","TUNNEL","GATE"};
             String[] cameras = {"DRIFT","FLOAT","FORWARD","DRIFT","ORBIT","ORBIT","FORWARD","FLOAT"};
+            String[] compositions = {"CENTER","EDGE","HOLLOW_CENTER","DIAGONAL","EDGE","SPIRAL","CLUSTERED","HOLLOW_CENTER"};
+            String[] environments = {"STARDUST","STARDUST","BUBBLES","POLLEN","GLITCH","FOG","FOG","SMOKE"};
+            String[] materials = {"ENERGY","GLASS","BIO","BIO","METAL","GLASS","CRYSTAL","INK"};
             double[] depths = {0.55,0.68,0.86,0.48,0.78,0.92,0.84,0.72};
-            plan.put("layout", layouts[Math.max(0, Math.min(layouts.length - 1, stage))]);
-            plan.put("cameraMotion", cameras[Math.max(0, Math.min(cameras.length - 1, stage))]);
-            plan.put("depth", depths[Math.max(0, Math.min(depths.length - 1, stage))]);
+            double[] particles = {0.68,0.52,0.76,0.64,0.82,0.70,0.58,0.46};
+            double[] pulses = {0.66,0.58,0.52,0.62,0.84,0.88,0.50,0.72};
+            double[] contrasts = {0.72,0.66,0.74,0.58,0.86,0.68,0.76,0.88};
+            int i = Math.max(0, Math.min(layouts.length - 1, stage));
+            plan.put("layout", layouts[i]);
+            plan.put("cameraMotion", cameras[i]);
+            plan.put("composition", compositions[i]);
+            plan.put("environment", environments[i]);
+            plan.put("materialStyle", materials[i]);
+            plan.put("depth", depths[i]);
+            plan.put("particleLevel", particles[i]);
+            plan.put("pulseStrength", pulses[i]);
+            plan.put("contrastLevel", contrasts[i]);
         } catch (Exception ignored) {}
 
         if (cps >= 3.5 || "ACCELERATING".equals(trend)) {

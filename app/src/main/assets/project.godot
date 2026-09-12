@@ -1,0 +1,19 @@
+; Embedded Godot project for AI Infinite Click 0.20.
+; Android remains the host/game runtime; Godot is only the visual/VFX surface.
+config_version=5
+
+[application]
+config/name="AI Infinite Click VFX"
+run/main_scene="res://godot/main.tscn"
+config/use_hidden_project_data_directory=false
+
+[display]
+window/size/viewport_width=1080
+window/size/viewport_height=2400
+window/stretch/mode="canvas_items"
+
+[rendering]
+renderer/rendering_method="mobile"
+renderer/rendering_method.mobile="mobile"
+environment/defaults/default_clear_color=Color(0.004, 0.006, 0.018, 1)
+textures/default_filters/use_nearest_mipmap_filter=false
