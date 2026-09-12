@@ -8,6 +8,7 @@ const state = {
 };
 const hex = s => parseInt(String(s||'#ffffff').replace('#',''),16) || 0xffffff;
 const rand=(a,b)=>a+Math.random()*(b-a), clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const viewport=()=>state.app&&state.app.renderer&&state.app.renderer.screen||state.app&&state.app.screen||{width:innerWidth,height:innerHeight};
 function reportError(e){ const m=String(e&&e.stack||e); const f=document.getElementById('fatal'); f.style.display='grid'; f.textContent='PIXI ERROR\n'+m; try{A&&A.onRendererError(m)}catch(_){} }
 async function boot(){
   try{
@@ -16,9 +17,9 @@ async function boot(){
     await app.init({resizeTo:window, background:'#03050b', antialias:true, autoDensity:true, resolution:Math.min(devicePixelRatio||1,1.5), preference:'webgl'});
     document.getElementById('stage').appendChild(app.canvas);
     buildScene();
-    app.stage.eventMode='static'; app.stage.hitArea=app.screen;
+    app.stage.eventMode='static'; app.stage.hitArea=viewport();
     app.stage.on('pointerdown', ev=>{
-      const p=ev.global, x=clamp(p.x/app.screen.width,0,1), y=clamp(p.y/app.screen.height,0,1);
+      const view=viewport(), p=ev.global, x=clamp(p.x/view.width,0,1), y=clamp(p.y/view.height,0,1);
       localTap(x,y); try{A&&A.onTap(x,y)}catch(_){}
     });
     app.ticker.maxFPS=60;
@@ -36,7 +37,7 @@ function buildScene(){
   createTarget(.5,.52);
 }
 function rebuildBackdrop(){
-  const {width:w,height:h}=state.app.screen,p=state.plan,g=state.layers.bg; g.clear();
+  const {width:w,height:h}=viewport(),p=state.plan,g=state.layers.bg; g.clear();
   g.rect(0,0,w,h).fill(hex(p.primary));
   for(let i=0;i<8;i++){
     const r=Math.max(w,h)*(0.14+i*.09), x=w*(.12+((i*37)%83)/100), y=h*(.08+((i*29)%78)/100);
@@ -44,7 +45,7 @@ function rebuildBackdrop(){
   }
 }
 function createTarget(nx,ny){
-  const L=state.layers, w=state.app.screen.width,h=state.app.screen.height;
+  const L=state.layers, view=viewport(), w=view.width,h=view.height;
   if(state.target){L.world.removeChild(state.target); state.target.destroy({children:true});}
   const c=new PIXI.Container(), halo=new PIXI.Graphics(), core=new PIXI.Graphics();
   halo.circle(0,0,48).stroke({color:hex(state.plan.accent),width:2,alpha:.35});
@@ -85,25 +86,25 @@ function revealBeat(step,x,y){
   state.targetLabel.text=['QUIET','...','LOOK','FOUND IT'][step];
   if(step===0){state.layers.ambient.alpha=.18; state.target.scale.set(.45);} if(step===2) spawnPortal(.5,.5,.35); if(step===3){state.layers.ambient.alpha=1;state.target.scale.set(1);burst(.5,.5,70);flash('#ffffff',120,.25);}
 }
-function ripple(x,y){ const g=new PIXI.Graphics(); g.circle(0,0,12).stroke({color:hex(state.plan.accent),width:3,alpha:.85});g.x=x*state.app.screen.width;g.y=y*state.app.screen.height;state.layers.fx.addChild(g);state.rings.push({g,life:1}); }
+function ripple(x,y){ const g=new PIXI.Graphics(),view=viewport(); g.circle(0,0,12).stroke({color:hex(state.plan.accent),width:3,alpha:.85});g.x=x*view.width;g.y=y*view.height;state.layers.fx.addChild(g);state.rings.push({g,life:1}); }
 function burst(x,y,n){
-  const W=state.app.screen.width,H=state.app.screen.height;
+  const view=viewport(),W=view.width,H=view.height;
   for(let i=0;i<n;i++){const g=new PIXI.Graphics(),r=rand(1.3,4.2);g.circle(0,0,r).fill({color: i%5===0?0xffffff:hex(state.plan.accent),alpha:rand(.55,1)});g.blendMode='add';g.x=x*W;g.y=y*H;state.layers.fx.addChild(g);const a=rand(0,Math.PI*2),s=rand(80,330);state.particles.push({g,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:rand(.35,.9),max:1});}
 }
-function spawnDecoys(n){ const W=state.app.screen.width,H=state.app.screen.height; for(let i=0;i<n;i++){const g=new PIXI.Graphics();g.circle(0,0,rand(8,19)).fill({color:hex(state.plan.accent),alpha:rand(.18,.7)});g.x=rand(.08,.92)*W;g.y=rand(.16,.86)*H;state.layers.fx.addChild(g);state.particles.push({g,vx:rand(-35,35),vy:rand(-35,35),life:rand(.7,1.5),max:1.5});} }
-function spawnPortal(x,y,strength){ const c=new PIXI.Container(),W=state.app.screen.width,H=state.app.screen.height; for(let i=0;i<4;i++){const g=new PIXI.Graphics();g.circle(0,0,28+i*14).stroke({color:i%2?hex(state.plan.accent):0xffffff,width:2+i,alpha:.18+.12*i});c.addChild(g);}c.x=x*W;c.y=y*H;c.blendMode='add';state.layers.fx.addChild(c);state.portals.push({c,life:1.2+strength,spin:(.8+strength)*(.5-Math.random())});}
+function spawnDecoys(n){ const view=viewport(),W=view.width,H=view.height; for(let i=0;i<n;i++){const g=new PIXI.Graphics();g.circle(0,0,rand(8,19)).fill({color:hex(state.plan.accent),alpha:rand(.18,.7)});g.x=rand(.08,.92)*W;g.y=rand(.16,.86)*H;state.layers.fx.addChild(g);state.particles.push({g,vx:rand(-35,35),vy:rand(-35,35),life:rand(.7,1.5),max:1.5});} }
+function spawnPortal(x,y,strength){ const c=new PIXI.Container(),view=viewport(),W=view.width,H=view.height; for(let i=0;i<4;i++){const g=new PIXI.Graphics();g.circle(0,0,28+i*14).stroke({color:i%2?hex(state.plan.accent):0xffffff,width:2+i,alpha:.18+.12*i});c.addChild(g);}c.x=x*W;c.y=y*H;c.blendMode='add';state.layers.fx.addChild(c);state.portals.push({c,life:1.2+strength,spin:(.8+strength)*(.5-Math.random())});}
 function blackHole(x,y,strength){state.blackHole={x,y,strength,until:state.time+.55+strength*.7}; spawnPortal(x,y,strength);screenShake(.05+strength*.08,160);}
-function crack(x,y,n){ const W=state.app.screen.width,H=state.app.screen.height,g=new PIXI.Graphics();for(let i=0;i<n;i++){let px=x*W,py=y*H,a=rand(0,6.28);g.moveTo(px,py);for(let k=0;k<5;k++){px+=Math.cos(a+rand(-.5,.5))*rand(18,62);py+=Math.sin(a+rand(-.5,.5))*rand(18,62);g.lineTo(px,py);} }g.stroke({color:hex(state.plan.accent),width:rand(1,3),alpha:.72});state.layers.fx.addChild(g);state.cracks.push({g,life:1.1});}
-function glitch(strength){ const W=state.app.screen.width,H=state.app.screen.height;for(let i=0;i<8;i++){const g=new PIXI.Graphics();g.rect(0,0,rand(W*.1,W*.7),rand(2,12)).fill({color:i%2?hex(state.plan.accent):0xffffff,alpha:rand(.08,.28)});g.x=rand(0,W);g.y=rand(0,H);state.layers.fx.addChild(g);state.glitches.push({g,life:rand(.08,.24)});}screenShake(.05+strength*.08,100);}
+function crack(x,y,n){ const view=viewport(),W=view.width,H=view.height,g=new PIXI.Graphics();for(let i=0;i<n;i++){let px=x*W,py=y*H,a=rand(0,6.28);g.moveTo(px,py);for(let k=0;k<5;k++){px+=Math.cos(a+rand(-.5,.5))*rand(18,62);py+=Math.sin(a+rand(-.5,.5))*rand(18,62);g.lineTo(px,py);} }g.stroke({color:hex(state.plan.accent),width:rand(1,3),alpha:.72});state.layers.fx.addChild(g);state.cracks.push({g,life:1.1});}
+function glitch(strength){ const view=viewport(),W=view.width,H=view.height;for(let i=0;i<8;i++){const g=new PIXI.Graphics();g.rect(0,0,rand(W*.1,W*.7),rand(2,12)).fill({color:i%2?hex(state.plan.accent):0xffffff,alpha:rand(.08,.28)});g.x=rand(0,W);g.y=rand(0,H);state.layers.fx.addChild(g);state.glitches.push({g,life:rand(.08,.24)});}screenShake(.05+strength*.08,100);}
 function collapseTo(x,y){ state.blackHole={x,y,strength:.8,until:state.time+.55}; }
 function warpAll(x,y){state.blackHole={x,y,strength:1,until:state.time+.8};screenShake(.14,300);}
-function moveTarget(nx,ny,s){ const W=state.app.screen.width,H=state.app.screen.height;state.target.x=nx*W;state.target.y=ny*H;state.targetLabel.x=state.target.x;state.targetLabel.y=state.target.y+60;burst(nx,ny,10);}
+function moveTarget(nx,ny,s){ const view=viewport(),W=view.width,H=view.height;state.target.x=nx*W;state.target.y=ny*H;state.targetLabel.x=state.target.x;state.targetLabel.y=state.target.y+60;burst(nx,ny,10);}
 function pulseTarget(v){if(!state.target)return;state.target.scale.set(v);setTimeout(()=>{if(state.target)state.target.scale.set(1)},110);}
 function screenShake(strength,ms){state.shake=Math.max(state.shake,strength);state.shakeUntil=performance.now()+ms;}
-function flash(color,ms,alpha=.2){const g=state.layers.flash,W=state.app.screen.width,H=state.app.screen.height;g.clear().rect(0,0,W,H).fill({color:hex(color),alpha});setTimeout(()=>g.clear(),ms);}
+function flash(color,ms,alpha=.2){const g=state.layers.flash,view=viewport(),W=view.width,H=view.height;g.clear().rect(0,0,W,H).fill({color:hex(color),alpha});setTimeout(()=>g.clear(),ms);}
 function applyPlan(p){ if(!p)return;state.plan={...state.plan,...p};rebuildBackdrop();for(const a of state.ambient){a.g.tint=hex(state.plan.accent);} if(state.target){createTarget(state.plan.focusX||.5,state.plan.focusY||.52);} }
 function applyAction(a){ if(!a||!a.type)return;const x=clamp(Number(a.x??.5),0,1),y=clamp(Number(a.y??.5),0,1),s=clamp(Number(a.strength??.65),.1,1);switch(a.type){case'particle_burst':burst(x,y,20+Math.floor(50*s));break;case'shockwave':ripple(x,y);ripple(x,y);break;case'portal':spawnPortal(x,y,s);break;case'black_hole':case'gravity_pull':blackHole(x,y,s);break;case'world_crack':crack(x,y,5+Math.floor(s*8));break;case'glitch':glitch(s);break;case'screen_shake':screenShake(s,Number(a.durationMs||180));break;case'flash':flash(a.color||'#ffffff',Number(a.durationMs||90),.22);break;case'swarm':spawnDecoys(4+Math.floor(s*10));break;case'dissolve':burst(x,y,45);if(state.target)state.target.alpha=.15;setTimeout(()=>{if(state.target)state.target.alpha=1},420);break;}}
-function tick(t){ const dt=Math.min(.034,t.deltaMS/1000);state.time+=dt; const W=state.app.screen.width,H=state.app.screen.height;
+function tick(t){ const dt=Math.min(.034,t.deltaMS/1000);state.time+=dt; const view=viewport(),W=view.width,H=view.height;
   for(const a of state.ambient){a.x+=a.vx*dt*(.6+state.plan.tempo);a.y+=a.vy*dt*(.6+state.plan.tempo);if(a.x<0)a.x=1;if(a.x>1)a.x=0;if(a.y<0)a.y=1;if(a.y>1)a.y=0;a.g.x=a.x*W;a.g.y=a.y*H;a.g.alpha=.28+.22*Math.sin(state.time*1.4+a.phase);}
   const bh=state.blackHole&&state.time<state.blackHole.until?state.blackHole:null; if(!bh)state.blackHole=null;
   for(let i=state.particles.length-1;i>=0;i--){const p=state.particles[i];if(bh){const dx=bh.x*W-p.g.x,dy=bh.y*H-p.g.y,d=Math.max(40,Math.hypot(dx,dy));p.vx+=dx/d*700*bh.strength*dt;p.vy+=dy/d*700*bh.strength*dt;}p.vy+=28*dt;p.g.x+=p.vx*dt;p.g.y+=p.vy*dt;p.life-=dt;p.g.alpha=clamp(p.life/p.max,0,1);if(p.life<=0){p.g.destroy();state.particles.splice(i,1);}}
