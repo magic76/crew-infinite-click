@@ -223,8 +223,10 @@ final class GameView extends View {
         textPaint.setTypeface(Typeface.DEFAULT);
         textPaint.setTextSize(sp(9));
         textPaint.setColor(Color.argb(90, 220, 224, 235));
-        float sw = textPaint.measureText(connectionStatus);
-        canvas.drawText(connectionStatus,
+        String rendererStatus = worldSurface == null ? "2D" : worldSurface.renderStatus();
+        String statusText = connectionStatus + " · " + rendererStatus;
+        float sw = textPaint.measureText(statusText);
+        canvas.drawText(statusText,
                 settingsButton.left - sw - dp(8), top, textPaint);
 
         if (settingsOpen) drawSettingsOverlay(canvas);

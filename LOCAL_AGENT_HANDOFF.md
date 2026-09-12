@@ -99,3 +99,12 @@ Verify on a physical Android device:
 
 Useful log filter:
 `Filament|gltfio|AiClicker|GeminiLive`
+
+## 0.18.1 visibility verification
+Install this over 0.18 and check the tiny renderer status next to LIVE/DEMO:
+- `3D` means Filament completed a real frame.
+- `3D WARMUP` means surface + asset are ready but no frame completed yet.
+- `3D SURFACE` / `3D VIEWPORT` localizes Android surface setup issues.
+- `2D FALLBACK` means Filament initialization failed and the Canvas world should still be visible.
+
+The center of the world should never be fully black: before 3D is ready, Canvas fallback stays active; after 3D is ready, a center 3D beacon and dark-blue skybox should be visible.

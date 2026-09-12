@@ -5,9 +5,10 @@ import android.graphics.Color;
 import android.opengl.Matrix;
 import android.view.Choreographer;
 import android.view.Surface;
-import android.view.SurfaceView;
+import android.view.TextureView;
 
 import com.google.android.filament.Camera;
+import com.google.android.filament.Filament;
 import com.google.android.filament.Engine;
 import com.google.android.filament.EntityManager;
 import com.google.android.filament.LightManager;
@@ -35,7 +36,7 @@ import java.util.Locale;
  * Gemini still owns only high-level WorldPlan semantics.
  * This view owns Filament, frame rendering, camera drift, node transforms and 3D tap pulses.
  */
-final class FilamentWorldView extends SurfaceView {
+final class FilamentWorldView extends TextureView {
     private static final int NODE_COUNT = 18;
     private static final int[] RING_NODE_INDICES = {1, 4, 7, 10, 13, 16};
 
@@ -65,7 +66,12 @@ final class FilamentWorldView extends SurfaceView {
     private long planAppliedAt = System.currentTimeMillis();
     private long startAt = 0L;
     private boolean rendering = false;
-    private boolean ready = false;
+    private boolean surfaceReady = false;
+    private boolean viewportReady = false;
+    private boolean assetLoaded = false;
+    private boolean firstFrameRendered = false;
+    private boolean initFailed = false;
+    private int renderableCount = 0;
     private boolean destroyed = false;
     private int viewportWidth = 1;
     private int viewportHeight = 1;
@@ -74,9 +80,7 @@ final class FilamentWorldView extends SurfaceView {
     private float lastTapY = 0.5f;
     private float tapEnergy = 0f;
 
-    private final Choreographer.FrameCallback frameCallback = this::onFrame;
-
-    private void onFrame(long frameTimeNanos) {
+    private final Choreographer.FrameCallback frameCallback = frameTimeNanos -> {
         if (!rendering || destroyed) return;
         choreographer.postFrameCallback(frameCallback);
         if (!uiHelper.isReadyToRender() || swapChain == null || renderer == null) return;
@@ -86,8 +90,9 @@ final class FilamentWorldView extends SurfaceView {
         if (renderer.beginFrame(swapChain, frameTimeNanos)) {
             renderer.render(filamentView);
             renderer.endFrame();
+            if (assetLoaded && renderableCount > 0) firstFrameRendered = true;
         }
-    }
+    };
 
     FilamentWorldView(Context context) {
         super(context);
@@ -95,23 +100,33 @@ final class FilamentWorldView extends SurfaceView {
         for (int i = 0; i < ripples.length; i++) ripples[i] = new RippleState();
 
         try {
-            // Gltfio.init() loads both Filament core and the gltfio JNI layer.
-            // Keep it inside the guarded constructor so unsupported devices can fall back.
+            // Initialize both native layers explicitly; failures are caught and fall back to Canvas.
+            Filament.init();
             Gltfio.init();
             setupFilament(context);
             setupSurface();
             loadWorldAsset(context);
             applyWorldPlan(plan);
-            ready = true;
         } catch (Throwable t) {
             // The overlay keeps a Canvas fallback renderer, so a device-specific Filament
             // failure does not make the entire app unusable.
-            ready = false;
+            initFailed = true;
         }
     }
 
     boolean isFilamentReady() {
-        return ready && !destroyed;
+        return !destroyed && !initFailed && surfaceReady && viewportReady &&
+                assetLoaded && renderableCount > 0 && firstFrameRendered;
+    }
+
+    String renderStatus() {
+        if (destroyed) return "3D DESTROYED";
+        if (initFailed) return "2D FALLBACK";
+        if (!assetLoaded) return "3D ASSET";
+        if (!surfaceReady) return "3D SURFACE";
+        if (!viewportReady) return "3D VIEWPORT";
+        if (!firstFrameRendered) return "3D WARMUP";
+        return "3D";
     }
 
     WorldPlan currentPlan() {
@@ -209,12 +224,18 @@ final class FilamentWorldView extends SurfaceView {
     private void setupFilament(Context context) {
         engine = Engine.create();
         renderer = engine.createRenderer();
+        Renderer.ClearOptions clearOptions = renderer.getClearOptions();
+        clearOptions.clear = true;
+        clearOptions.clearColor = new double[]{0.008, 0.016, 0.055, 1.0};
+        renderer.setClearOptions(clearOptions);
+
         scene = engine.createScene();
         filamentView = engine.createView();
 
         cameraEntity = EntityManager.get().create();
         camera = engine.createCamera(cameraEntity);
         camera.setExposure(16f, 1f / 125f, 100f);
+        camera.setProjection(52.0, 1.0, 0.05, 60.0, Camera.Fov.VERTICAL);
 
         filamentView.setScene(scene);
         filamentView.setCamera(camera);
@@ -230,7 +251,7 @@ final class FilamentWorldView extends SurfaceView {
         }
 
         skybox = new Skybox.Builder()
-                .color(0.01f, 0.015f, 0.035f, 1f)
+                .color(0.025f, 0.045f, 0.11f, 1f)
                 .build(engine);
         scene.setSkybox(skybox);
 
@@ -254,6 +275,8 @@ final class FilamentWorldView extends SurfaceView {
                 if (engine == null) return;
                 if (swapChain != null) engine.destroySwapChain(swapChain);
                 swapChain = engine.createSwapChain(surface, uiHelper.getSwapChainFlags());
+                surfaceReady = swapChain != null;
+                firstFrameRendered = false;
             }
 
             @Override public void onDetachedFromSurface() {
@@ -261,6 +284,8 @@ final class FilamentWorldView extends SurfaceView {
                 engine.destroySwapChain(swapChain);
                 engine.flushAndWait();
                 swapChain = null;
+                surfaceReady = false;
+                firstFrameRendered = false;
             }
 
             @Override public void onResized(int width, int height) {
@@ -270,6 +295,7 @@ final class FilamentWorldView extends SurfaceView {
                 filamentView.setViewport(new Viewport(0, 0, viewportWidth, viewportHeight));
                 double aspect = viewportWidth / (double) viewportHeight;
                 camera.setProjection(52.0, aspect, 0.05, 60.0, Camera.Fov.VERTICAL);
+                viewportReady = viewportWidth > 1 && viewportHeight > 1;
             }
         });
         uiHelper.attachTo(this);
@@ -293,6 +319,13 @@ final class FilamentWorldView extends SurfaceView {
         resourceLoader.loadResources(asset);
         asset.releaseSourceData();
         scene.addEntities(asset.getEntities());
+
+        renderableCount = 0;
+        com.google.android.filament.RenderableManager rm = engine.getRenderableManager();
+        for (int entity : asset.getEntities()) {
+            if (rm.hasComponent(entity)) renderableCount++;
+        }
+        assetLoaded = renderableCount > 0;
 
         for (int i = 0; i < NODE_COUNT; i++) {
             nodeEntities[i] = asset.getFirstEntityByName(String.format(Locale.US, "node_%02d", i));
@@ -450,6 +483,15 @@ final class FilamentWorldView extends SurfaceView {
                 scale *= 0.84f + 0.24f * (float)Math.sin(phase * 2.1f);
             } else if ("BREATHE".equals(plan.evolution)) {
                 scale *= 0.90f + 0.16f * (float)Math.sin(seconds * 1.15f);
+            }
+
+            // Keep one unmistakable renderable in front of the camera. This is both part of
+            // the aesthetic and a visibility guard for the prototype.
+            if (i == 0) {
+                x = 0f;
+                y = (float)Math.sin(seconds * 0.7f) * 0.18f;
+                z = -2.65f;
+                scale = Math.max(scale, 0.78f + 0.12f * (float)Math.sin(seconds * 1.4f));
             }
 
             // Tap energy bends nearby geometry toward the last touch focus.
