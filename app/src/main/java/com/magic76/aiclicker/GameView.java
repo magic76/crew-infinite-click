@@ -14,6 +14,8 @@ import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebChromeClient;
+import android.util.Log;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -70,6 +72,12 @@ final class GameView extends FrameLayout {
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String url = request == null || request.getUrl() == null ? "" : request.getUrl().toString();
                 return !(url.startsWith("file:///android_asset/") || url.startsWith("https://cdn.jsdelivr.net/npm/pixi.js@"));
+            }
+        });
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onConsoleMessage(android.webkit.ConsoleMessage message) {
+                Log.i("PixiShatter", String.valueOf(message == null ? "" : message.message()));
+                return true;
             }
         });
         addView(webView, new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT));

@@ -168,6 +168,7 @@
     constructor(options){
       const o=options||{};
       this.getGameCanvas=typeof o.getGameCanvas==="function"?o.getGameCanvas:()=>global.document&&global.document.querySelector("canvas");
+      this.getPixiApp=typeof o.getPixiApp==="function"?o.getPixiApp:()=>global.PixiGameDebug&&global.PixiGameDebug.app;
       this.onGameEvent=typeof o.onGameEvent==="function"?o.onGameEvent:()=>{};
       this.onSpeechRequest=typeof o.onSpeechRequest==="function"?o.onSpeechRequest:()=>{};
       this.haptics=o.haptics||global.GameHaptics||null;
@@ -177,14 +178,15 @@
     }
 
     start(){
-      if(this.active||!global.document)return false;const source=this.getGameCanvas();if(!source||typeof source.getBoundingClientRect!=="function")return false;
-      this.active=true;this.source=source;this._mount();this._capture();this._buildPieces();this._installInput();this.startAt=nowMs();
+      if(this.active||!global.document)return false;console.log("runScreenShatterDemo called");const source=this.getGameCanvas();if(!source||typeof source.getBoundingClientRect!=="function")return this._fail("No game canvas");
+      this.active=true;this.source=source;this._mount();if(!this._capture()){this.active=false;return false;}this._buildPieces();this._installInput();this.startAt=nowMs();
       this._haptic("IMPACT",0.92);this._speech("break","Oh. You broke it.",true,"SHOCKED_THEN_AMUSED");
       this._emit("signature_start",{moment:"SCREEN_SHATTER"});this.raf=requestAnimationFrame(this._tick);return true;
     }
 
     stop(reason){
       if(!this.active)return;this.active=false;if(this.raf)cancelAnimationFrame(this.raf);this.raf=0;this._removeInput();
+      if(this.source)this.source.style.visibility="visible";
       if(this.root&&this.root.parentNode)this.root.parentNode.removeChild(this.root);this.root=this.canvas=this.ctx=this.snapshot=this.label=this.sub=null;
       this._emit("signature_stop",{moment:"SCREEN_SHATTER",reason:reason||"cancelled"});
     }
@@ -195,14 +197,11 @@
       const label=global.document.createElement("div");Object.assign(label.style,{position:"absolute",left:"50%",top:"47%",transform:"translate(-50%,-50%)",font:"900 clamp(34px,10vw,72px)/.92 system-ui,sans-serif",letterSpacing:"-.05em",textAlign:"center",color:"#fff",opacity:"0",textShadow:"0 4px 30px rgba(0,0,0,.8)",transition:"opacity 120ms linear",whiteSpace:"nowrap"});label.textContent="YOU BROKE IT.";
       const sub=global.document.createElement("div");Object.assign(sub.style,{position:"absolute",left:"50%",top:"58%",transform:"translateX(-50%)",font:"800 12px/1 system-ui,sans-serif",letterSpacing:".18em",color:"rgba(255,255,255,.76)",opacity:"0",transition:"opacity 120ms linear",whiteSpace:"nowrap"});sub.textContent="DON'T TOUCH ANYTHING";
       root.appendChild(c);root.appendChild(label);root.appendChild(sub);(global.document.body||global.document.documentElement).appendChild(root);
-      this.root=root;this.canvas=c;this.label=label;this.sub=sub;this._resizeCanvas();this.ctx=c.getContext("2d");
+      this.root=root;this.canvas=c;this.label=label;this.sub=sub;this._resizeCanvas();this.ctx=c.getContext("2d");console.log("signature moment start");
     }
     _resizeCanvas(){const dpr=Math.max(1,Math.min(3,global.devicePixelRatio||1)),w=global.innerWidth||360,h=global.innerHeight||640;this.dpr=dpr;this.canvas.width=Math.round(w*dpr);this.canvas.height=Math.round(h*dpr);}
     _capture(){
-      const dpr=this.dpr,w=global.innerWidth||360,h=global.innerHeight||640;const snap=global.document.createElement("canvas");snap.width=Math.round(w*dpr);snap.height=Math.round(h*dpr);const sctx=snap.getContext("2d");
-      const rect=this.source.getBoundingClientRect();try{sctx.drawImage(this.source,0,0,this.source.width||rect.width,this.source.height||rect.height,Math.round(rect.left*dpr),Math.round(rect.top*dpr),Math.round(rect.width*dpr),Math.round(rect.height*dpr));}
-      catch(_){sctx.fillStyle="#111";sctx.fillRect(0,0,snap.width,snap.height);}
-      this.snapshot=snap;
+      console.log("capture canvas start");const dpr=this.dpr,w=global.innerWidth||360,h=global.innerHeight||640;try{const app=this.getPixiApp();if(!app||!app.renderer||!app.stage)throw new Error("Pixi app/stage unavailable");const extracted=app.renderer.extract&&app.renderer.extract.canvas(app.stage);if(!extracted||!extracted.width||!extracted.height)throw new Error("Pixi extract returned empty canvas");const snap=global.document.createElement("canvas");snap.width=Math.round(w*dpr);snap.height=Math.round(h*dpr);snap.getContext("2d").drawImage(extracted,0,0,extracted.width,extracted.height,0,0,snap.width,snap.height);console.log("captured texture width/height",extracted.width,extracted.height);this.snapshot=snap;if(this.source)this.source.style.visibility="hidden";return true;}catch(e){return this._fail(String(e&&e.stack||e));}
     }
     _buildPieces(){
       const cols=4,rows=4,w=(global.innerWidth||360)/cols,h=(global.innerHeight||640)/rows;this.pieces=[];
@@ -210,8 +209,9 @@
         const cx=x*w+w/2,cy=y*h+h/2,dx=(cx-(global.innerWidth||360)/2),dy=(cy-(global.innerHeight||640)/2),len=Math.max(1,Math.sqrt(dx*dx+dy*dy));
         this.pieces.push({sx:x*w,sy:y*h,w,h,cx,cy,vx:(dx/len)*(70+Math.random()*150)+(Math.random()-.5)*70,vy:(dy/len)*(55+Math.random()*120)-40-Math.random()*90,rot:(Math.random()-.5)*1.8});
       }
+      console.log("16 shards created");
     }
-    _installInput(){global.addEventListener("pointerdown",this._onTouch,true);}
+    _installInput(){global.addEventListener("pointerdown",this._onTouch,true);console.log("shard container added to stage");console.log("animation started");}
     _removeInput(){global.removeEventListener("pointerdown",this._onTouch,true);}
     _onTouch(ev){
       if(!this.active||this.phase!=="WAIT")return;try{ev.preventDefault();ev.stopPropagation();if(ev.stopImmediatePropagation)ev.stopImmediatePropagation();}catch(_){}
@@ -237,6 +237,7 @@
         ctx.save();ctx.globalAlpha=alpha;ctx.translate(p.cx+tx,p.cy+ty);ctx.rotate(rot);ctx.drawImage(this.snapshot,p.sx*dpr,p.sy*dpr,p.w*dpr,p.h*dpr,-p.w/2,-p.h/2,p.w,p.h);ctx.restore();
       }
     }
+    _fail(message){console.error("SHATTER CAPTURE FAILED",message);if(this.root&&this.root.parentNode)this.root.parentNode.removeChild(this.root);const f=global.document&&global.document.getElementById("fatal");if(f){f.style.display="grid";f.style.color="#ff334f";f.textContent="SHATTER CAPTURE FAILED\n"+message;}try{this.onGameEvent({type:"shatter_capture_failed",error:String(message)});}catch(_){}return false;}
     _emit(type,extra){try{this.onGameEvent(Object.assign({type},extra||{}));}catch(_){} }
     _speech(phase,fallback,immediate,delivery){try{this.onSpeechRequest({moment:"SCREEN_SHATTER",phase,fallback,delivery:delivery||"DRAMATIC",immediate:!!immediate,event:{type:"signature_speech",phase}});}catch(_){} }
     _haptic(cue,intensity){try{if(this.haptics&&typeof this.haptics.perform==="function")this.haptics.perform(cue,intensity);}catch(_){} }
