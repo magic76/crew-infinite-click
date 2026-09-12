@@ -246,6 +246,6 @@ final class GeminiLiveClient extends WebSocketListener {
             "For zh-TW, speak natural Taiwan Mandarin. Avoid literal translations of English meme phrases, game-announcer wording, and the word '玩家'. A good line sounds like something a real person would mutter while watching the behavior. "+
             "Use recentSpeech to avoid repeating the same joke, structure, or sentiment. If you cannot add a new observation, stay silent. "+
             "For GAME_TURN, call apply_world_experience exactly once. Choose WHAT comes next, never raw code, frame data, physics values, or particle coordinates. "+
-            "SCREEN_SHATTER is retired. Signature moments should usually be NONE. Keep the game moving and preserve rapid-tap flow. "+
+            "Do not invent modal mini-games, search overlays, or interaction modes that interrupt rapid-tap flow. Keep the game moving. "+
             "Language follows DIRECTIVE.language. Keep any spoken line very short, specific, and natural.";
 }

@@ -1,0 +1,18 @@
+const fs=require('fs'),assert=require('assert');
+const read=p=>fs.readFileSync(p,'utf8');
+const index=read('app/src/main/assets/game/index.html');
+const runtime=read('app/src/main/assets/game/experience-runtime.js');
+const director=read('app/src/main/assets/game/signature-moment-director.js');
+const sig=read('app/src/main/assets/game/signature-moment-runtime.js');
+const schema=read('app/src/main/java/com/magic76/aiclicker/GeminiWorldToolSchema.java');
+const prompt=read('app/src/main/java/com/magic76/aiclicker/GeminiLiveClient.java');
+assert(!index.includes('signature-moment-runtime.js'),'signature runtime must not be loaded');
+assert(!index.includes('signature-moment-director.js'),'signature director must not be loaded');
+assert(!index.includes('signature-debug.js'),'signature debug must not be loaded');
+assert(runtime.includes('safeRaw.signatureMoment="NONE"'),'stale AI signature values must be neutralized');
+assert(!runtime.includes('signatureMoments.start'),'ExperienceRuntime must not start signature moments');
+assert(director.includes('onPlayerEvent(){return null;}'),'legacy director must be inert');
+assert(sig.includes('start(){return false;}'),'legacy runtime must hard reject starts');
+assert(!schema.includes('FLASHLIGHT_HUNT')&&!schema.includes('SCREEN_SHATTER'),'Gemini schema must expose no retired signature');
+assert(!prompt.includes('FLASHLIGHT_HUNT')&&!prompt.includes('FIND IT'),'Gemini prompt must not mention retired Find It');
+console.log('signature-disabled.test.js PASS');

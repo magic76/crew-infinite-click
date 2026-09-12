@@ -5,7 +5,7 @@
   const DEBUG=!!window.__INFINITE_CLICK_DEBUG__;
   const state={
     app:null,gameplay:null,bg:null,world:null,target:null,targetCore:null,targetLabel:null,
-    pools:null,ripples:[],decoys:[],fx:null,audio:null,primitiveHost:null,signatureMoments:null,runtime:null,aggregator:null,
+    pools:null,ripples:[],decoys:[],fx:null,audio:null,primitiveHost:null,runtime:null,aggregator:null,
     safe:{left:0,top:0,right:0,bottom:0},language:"zh-TW",lastInputAt:performance.now(),idleStage:0,
     nextTurnId:1,stateVersion:1,pendingGameTurnId:0,pendingGameEvent:null,geminiPending:false,
     frame:{fps:60,lastMs:performance.now(),accMs:0,frames:0,lastLog:0},
@@ -24,7 +24,7 @@
     });
     state.app=app;document.body.appendChild(app.canvas);buildScene();wireRuntime();wireInput();
     app.ticker.add(tick);
-    if(DEBUG)window.PixiGameDebug={app,canvas:app.canvas,runtime:()=>state.runtime,signature:()=>state.signatureMoments,diagnostics};
+    if(DEBUG)window.PixiGameDebug={app,canvas:app.canvas,runtime:()=>state.runtime,diagnostics};
     try{A&&A.onRendererReady("PIXI_RUNTIME_V2");}catch(_){}
   }
 
@@ -73,12 +73,8 @@
       gameplayContainer:state.world,getPrimaryTarget:()=>state.target,onGameEvent:handleSemanticEvent,
       onSurfaceMode:mode=>{if(state.targetCore)state.targetCore.alpha=mode==="NONE"?.96:.82;}
     });
-    state.signatureMoments=new SignatureMomentRuntime({
-      app:state.app,gameplayContainer:state.gameplay,haptics:window.GameHaptics,
-      onGameEvent:handleSignatureEvent,onSpeechRequest:sendSignatureSpeech
-    });
     state.runtime=new ExperienceRuntime({
-      fx:state.fx,audio:state.audio,haptics:window.GameHaptics,signatureMoments:state.signatureMoments,
+      fx:state.fx,audio:state.audio,haptics:window.GameHaptics,
       getPrimaryTarget:()=>state.target,
       onPrimitiveInteraction:m=>state.primitiveHost.setInteraction(m),
       onPrimitiveSpatial:m=>state.primitiveHost.setSpatial(m),
@@ -101,14 +97,13 @@
   function wireInput(){
     const stage=state.app.stage;stage.eventMode="static";stage.hitArea=screen();
     stage.on("pointerdown",e=>{
-      if(state.signatureMoments.isActive())return;
       state.lastInputAt=performance.now();state.idleStage=0;
       const p=e.global,n=norm(p.x,p.y);localTouchFeedback(n.x,n.y);
       state.primitiveHost.pointerDown(p.x,p.y);
     });
-    stage.on("pointermove",e=>{if(!state.signatureMoments.isActive()){const p=e.global;state.primitiveHost.pointerMove(p.x,p.y);}});
-    stage.on("pointerup",e=>{if(!state.signatureMoments.isActive()){const p=e.global;localReleaseFeedback();state.primitiveHost.pointerUp(p.x,p.y);}});
-    stage.on("pointerupoutside",e=>{if(!state.signatureMoments.isActive()){const p=e.global;localReleaseFeedback();state.primitiveHost.pointerUp(p.x,p.y);}});
+    stage.on("pointermove",e=>{const p=e.global;state.primitiveHost.pointerMove(p.x,p.y);});
+    stage.on("pointerup",e=>{const p=e.global;localReleaseFeedback();state.primitiveHost.pointerUp(p.x,p.y);});
+    stage.on("pointerupoutside",e=>{const p=e.global;localReleaseFeedback();state.primitiveHost.pointerUp(p.x,p.y);});
   }
 
   function nextFomoGoal(){
@@ -224,27 +219,9 @@
   }
 
   function handleSemanticEvent(raw){
-    if(state.signatureMoments.isActive())return;
     const e=normalizeEvent(raw);
     state.lastInputAt=performance.now();state.idleStage=0;
     state.runtime.onPlayerEvent(e);
-  }
-
-  function handleSignatureEvent(raw){
-    const e=normalizeEvent(raw);
-    if(e.type==="SIGNATURE_START"){
-      invalidatePendingTurn("signature_start");
-    }
-    // Signature runtime owns visuals; only semantic/conversation routing is allowed here.
-    if(["WAIT_BROKEN","WAIT_SUCCESS","HOLD_START","HOLD_COMPLETE","RELEASE_EARLY","TAP"].includes(e.type)){
-      const d=state.runtime.conversation.routePlayerEvent(e,{shouldRequestNewSituation:false,currentPlan:state.runtime.currentPlan,sensory:state.runtime.currentSensoryState});
-      const c=state.runtime.aiContext(e,{signatureActive:true});c.interaction=d;c.conversation=state.runtime.conversation.contextForAi(d,e);
-      routeDirective(d,c);
-    }
-    if(e.type==="SIGNATURE_COMPLETE"){
-      state.stateVersion++;
-      try{A&&A.onRuntimeSignal(JSON.stringify({type:"SIGNATURE_COMPLETE",signature:e.signature||"",stateVersion:state.stateVersion}));}catch(_){}
-    }
   }
 
   function normalizeEvent(raw){
@@ -273,22 +250,6 @@
     }catch(_){if(payload.mode==="GAME_TURN")applyLocalFallback(turnId);}
   }
 
-  function sendSignatureSpeech(req){
-    const r=req||{};
-    if(r.cancelPrevious)invalidatePendingTurn("signature_speech");
-    const event={type:"SIGNATURE_BANTER",special:true,reason:r.reason||"signature"};
-    const context=state.runtime.aiContext(event,{signatureActive:true});
-    const payload={
-      mode:"BANTER",reason:r.reason||"signature",delivery:"SNAP",
-      instruction:"Speak one short in-character line for this signature beat. Suggested meaning: "+String(r.fallback||"").slice(0,80)+". Do not call a tool.",
-      context,behavior:{behavior:"signature_moment",eventCount:1,tapCount:0,durationMs:0,dominantArea:"UNKNOWN",rageClick:false,eventTypes:{SIGNATURE_BANTER:1}},
-      turnId:state.nextTurnId++,baseStateVersion:state.stateVersion
-    };
-    payload.context.turnId=payload.turnId;payload.context.baseStateVersion=payload.baseStateVersion;payload.context.behavior=payload.behavior;
-    state.geminiPending=true;
-    try{A&&A.onExperienceDirective(JSON.stringify(payload));}catch(_){}
-  }
-
   function invalidatePendingTurn(reason){
     state.pendingGameTurnId=0;state.pendingGameEvent=null;state.geminiPending=false;
     try{A&&A.onRuntimeSignal(JSON.stringify({type:"INVALIDATE_GEMINI",reason:String(reason||"state_changed"),stateVersion:++state.stateVersion}));}catch(_){}
@@ -296,13 +257,12 @@
 
   function applyLocalFallback(turnId){
     if(turnId&&state.pendingGameTurnId&&turnId!==state.pendingGameTurnId)return;
-    if(state.signatureMoments.isActive())return;
     state.runtime.fallback(state.pendingGameEvent||{type:"MODEL_UNAVAILABLE"});
     state.pendingGameTurnId=0;state.pendingGameEvent=null;state.geminiPending=false;state.stateVersion++;renderBackground();
   }
 
   function applyValidatedPlanToTarget(plan,rule){
-    if(!plan||state.signatureMoments.isActive())return;
+    if(!plan)return;
     clearDecoys();renderTargetPalette(plan);
     const behavior=String(plan.targetBehavior||"STILL").toUpperCase(),s=screen(),safe=safeBounds();
     state.target.visible=true;state.target.alpha=behavior==="HIDE"?.18:1;
@@ -393,10 +353,8 @@
       }
     }
     const idle=performance.now()-state.lastInputAt;
-    if(!state.signatureMoments.isActive()){
-      if(idle>2800&&state.idleStage===0){state.idleStage=1;state.runtime.onPlayerEvent({type:"IDLE_START",idleMs:Math.round(idle),special:true});}
-      else if(idle>6500&&state.idleStage===1){state.idleStage=2;state.runtime.onPlayerEvent({type:"IDLE_STAGE",stage:2,idleMs:Math.round(idle),special:true});}
-    }
+    if(idle>2800&&state.idleStage===0){state.idleStage=1;state.runtime.onPlayerEvent({type:"IDLE_START",idleMs:Math.round(idle),special:true});}
+    else if(idle>6500&&state.idleStage===1){state.idleStage=2;state.runtime.onPlayerEvent({type:"IDLE_STAGE",stage:2,idleMs:Math.round(idle),special:true});}
     updateFrameDiagnostics(dt);
   }
 
@@ -412,7 +370,7 @@
       fps:state.frame.fps,lastFrameMs:Math.round((state.app&&state.app.ticker&&state.app.ticker.deltaMS||0)*10)/10,
       activeParticles:fx.activeParticles||0,ambientParticles:fx.ambientParticles||0,
       particlePool:fx.pool||null,ripplePool:state.pools&&state.pools.ripples.stats(),decoyPool:state.pools&&state.pools.decoys.stats(),
-      activeSignature:state.signatureMoments&&state.signatureMoments.currentId||"NONE",
+      activeSignature:"NONE",
       geminiRequestPending:state.geminiPending,eventAggregationCount:state.aggregator?state.aggregator.pendingCount():0,
       fomo:{cycleTaps:state.tapJuice.cycleTaps,goal:state.tapJuice.goal,promiseStage:state.tapJuice.promiseStage,jackpots:state.tapJuice.jackpots,heat:Math.round(state.tapJuice.heat*100)/100},
       stateVersion:state.stateVersion
@@ -426,7 +384,7 @@
       else if(msg.op==="language")state.language=String(msg.value||"zh-TW");
       else if(msg.op==="experiencePlan"){
         const turnId=Number(msg.turnId)||0;
-        if(!turnId||turnId!==state.pendingGameTurnId||state.signatureMoments.isActive())return;
+        if(!turnId||turnId!==state.pendingGameTurnId)return;
         const result=state.runtime.applyAiPlan(msg.plan||{});
         if(result&&result.ok){state.stateVersion++;renderBackground();}
         state.pendingGameTurnId=0;state.pendingGameEvent=null;state.geminiPending=false;
@@ -434,14 +392,14 @@
       else if(msg.op==="geminiState")state.geminiPending=!!msg.pending;
       else if(msg.op==="voiceState"&&state.audio)state.audio.setVoiceActive(!!msg.active);
       else if(msg.op==="spokenLine"&&state.runtime)state.runtime.recordSpokenLine(String(msg.text||""));
-      else if(msg.op==="geminiLiveReady"&&state.runtime&&!state.signatureMoments.isActive()){
+      else if(msg.op==="geminiLiveReady"&&state.runtime){
         const event={type:"LIVE_READY",special:true};
         const context=state.runtime.aiContext(event,diagnostics());
         const directive={mode:"GAME_TURN",reason:"live_ready",delivery:"DRY",voiceWanted:false,instruction:"You are live now. Quietly choose the next high-level experience; do not speak unless explicitly requested."};
         state.aggregator.push(event,directive,context,{immediate:true});
       }
       else if(msg.op==="reset"){
-        state.aggregator&&state.aggregator.cancel();state.signatureMoments&&state.signatureMoments.stop("reset");
+        state.aggregator&&state.aggregator.cancel();
         clearDecoys();for(const r of state.ripples)state.pools.ripples.release(r.g);state.ripples.length=0;
         state.pendingGameTurnId=0;state.pendingGameEvent=null;state.geminiPending=false;state.stateVersion++;
         Object.assign(state.tapJuice,{lastAt:0,streak:0,lastFrenzyAt:0,heat:0,cycleTaps:0,goal:nextFomoGoal(),promiseStage:0,jackpots:0,nearMissUsed:false,labelUntil:0,lastPromiseAt:0});

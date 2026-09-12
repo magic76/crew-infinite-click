@@ -13,8 +13,6 @@
       this.onRuleTwist=typeof o.onRuleTwist==="function"?o.onRuleTwist:()=>{};
       this.onSpeech=typeof o.onSpeech==="function"?o.onSpeech:()=>{};
       this.onInteractionDirective=typeof o.onInteractionDirective==="function"?o.onInteractionDirective:()=>{};
-      this.signatureMoments=o.signatureMoments||null;
-      this.signatureDirector=o.signatureDirector||((global.SignatureMomentDirector)?new global.SignatureMomentDirector({}):null);
       this.primitives=o.primitives||new global.InteractionPrimitives({
         fx:this.fx,getPrimaryTarget:this.getPrimaryTarget,
         onInteraction:o.onPrimitiveInteraction,onSpatial:o.onPrimitiveSpatial,onCamera:o.onPrimitiveCamera,
@@ -36,26 +34,6 @@
     onPlayerEvent(event) {
       const e=event||{},type=String(e.type||"").toUpperCase();
       this._recordBehavior(e);
-
-      const signatureActive=this._signatureActive();
-      if(!signatureActive&&this.signatureDirector&&this.signatureMoments){
-        const forced=this.signatureDirector.onPlayerEvent(e,{signatureActive:false,currentPlan:this.currentPlan});
-        if(forced&&forced.id&&this.signatureMoments.start(forced.id,{reason:forced.reason})){
-          if(this.signatureDirector.recordStarted)this.signatureDirector.recordStarted(forced.id);
-          const interaction={mode:"SILENT",reason:"signature_started_locally",event:e,instruction:"Signature moment owns the scene.",delivery:"DRAMATIC"};
-          const context=this.aiContext(e,{});
-          context.interaction=interaction;context.signature={id:forced.id,reason:forced.reason,started:true};
-          this.onInteractionDirective(interaction,context);
-          return context;
-        }
-      }
-
-      // Signature moments own input and sensory staging. Their own runtime emits semantic events.
-      if(this._signatureActive()){
-        const interaction={mode:"SILENT",reason:"signature_exclusive",event:e,instruction:"Signature moment owns the scene.",delivery:"DRAMATIC"};
-        const context=this.aiContext(e,{signatureActive:true});context.interaction=interaction;
-        return context;
-      }
 
       // Continuous gesture samples are first-class local events, but never expensive sensory/model turns.
       // PrimitiveHostRuntime already updates the actual gesture/camera state at frame rate.
@@ -92,7 +70,6 @@
     }
 
     pollIdle(gameSnapshot) {
-      if(this._signatureActive())return null;
       const interaction=this.conversation.pollIdle({currentPlan:this.currentPlan,sensory:this.currentSensoryState});
       if(!interaction)return null;
       const event=interaction.event||{type:"IDLE_START"};
@@ -105,10 +82,10 @@
     recordSpokenLine(text){this.conversation.recordSpeech(text);}
 
     applyAiPlan(rawPlan) {
-      if(this._signatureActive())return {ok:false,reason:"signature_active",signatureMoment:this.signatureMoments.currentId||"UNKNOWN"};
       const previousWorld=this.currentPlan&&this.currentPlan.world;
       const safeRaw=Object.assign({},rawPlan||{});
-      if(String(safeRaw.signatureMoment||"").toUpperCase()==="SCREEN_SHATTER")safeRaw.signatureMoment="NONE";
+      // Signature moments are retired. Ignore stale/model-provided values unconditionally.
+      safeRaw.signatureMoment="NONE";
       const plan=this.director.sanitizePlan(safeRaw);
       const sensoryState=this.sensory.resolve(plan);
       const composition=this.composer.compose(plan.composition||{},{
@@ -118,11 +95,7 @@
       this.currentPlan=plan;this.currentSensoryState=sensoryState;this.currentSituationStartedAt=performance.now();
       const target=this.getPrimaryTarget();
 
-      let signatureStarted=false;
-      if(this.signatureMoments&&plan.signatureMoment&&plan.signatureMoment!=="NONE"){
-        signatureStarted=!!this.signatureMoments.start(plan.signatureMoment,{plan});
-        if(signatureStarted&&this.signatureDirector&&this.signatureDirector.recordStarted)this.signatureDirector.recordStarted(plan.signatureMoment);
-      }
+      const signatureStarted=false;
 
       if(!signatureStarted&&this.primitives&&this.primitives.apply)this.primitives.apply(composition,plan);
 
@@ -151,7 +124,6 @@
     }
 
     fallback(event) {
-      if(this._signatureActive())return {ok:false,reason:"signature_active"};
       const plan=this.director.fallbackPlan(event||{},this._surpriseLevelForEvent(event));
       // Local fallback owns gameplay only; speech is intentionally removed so offline mode never
       // pretends to have Gemini voice.
@@ -202,7 +174,6 @@
       return .12+this.behaviorEnergy*.44+Math.random()*.12;
     }
 
-    _signatureActive(){return !!(this.signatureMoments&&this.signatureMoments.isActive&&this.signatureMoments.isActive());}
   }
 
   global.ExperienceRuntime=ExperienceRuntime;
