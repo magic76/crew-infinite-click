@@ -1,0 +1,13 @@
+const fs=require('fs'),assert=require('assert');
+const game=fs.readFileSync('app/src/main/assets/game/game.js','utf8');
+assert(game.includes('TOY_BOX_PHYSICS_V13'),'v13 renderer id missing');
+assert(game.includes('{id:"hero-peach"')&&game.includes('start:true'),'hero must be the only explicit starting pet');
+const startTrue=(game.match(/start:true/g)||[]).length;assert.equal(startTrue,1,'exactly one pet should start active');
+for(const id of ['hero-peach','spark-one','mint-one','peach-two','spark-two','mint-two'])assert(game.includes(id),'missing slot '+id);
+for(const event of ['"SPLIT"','"MERGE"','"SWARM"','"BOUNCE_PARTY"'])assert(game.includes(event),'missing event '+event);
+assert(game.includes('state.toyEnergy+=.29'),'direct hits must build toy energy');
+assert(game.includes('state.nextEventEnergy=.82+Math.random()*.38'),'event threshold must vary');
+assert(game.includes('pet.activateAt'),'events must spawn pets dynamically');
+assert(game.includes('pet.deactivate()')||game.includes('.deactivate();'),'merge must be able to remove pets');
+assert(game.includes('processPending(t)'),'merge/split-back scheduling missing');
+console.log('toy-box-v13.test.js PASS');

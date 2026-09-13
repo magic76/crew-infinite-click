@@ -1,0 +1,12 @@
+const fs=require('fs'),assert=require('assert'),vm=require('vm');
+const src=fs.readFileSync('app/src/main/assets/game/sprite-pet-runtime.js','utf8');
+const sandbox={window:{performance:{now:()=>0}},console};sandbox.window.window=sandbox.window;
+vm.createContext(sandbox);vm.runInContext(src,sandbox);
+const f=sandbox.window.SpritePetImpactForDistance;assert.equal(typeof f,'function');
+assert.equal(f(20,70,170,305),1,'direct hit must be full impact');
+const near=f(120,70,170,305),aware=f(240,70,170,305);assert(near>.6&&near<1,'near miss needs strong impact');assert(aware>.12&&aware<near,'aware impact should be smaller');assert.equal(f(400,70,170,305),0);
+for(const token of ['setActive(active','activateAt(x,y','deactivate()','setSizeMultiplier','launch(vx,vy','onWallBounce','deformUntil','spinKick'])assert(src.includes(token),'missing physics API '+token);
+assert(src.includes('SOURCE_CACHE=new Map()'),'sprite sources should be cached across duplicate character slots');
+assert(src.includes('AndroidGame.loadAssetData'),'must preserve native sprite asset bridge');
+assert(src.includes('data:image/png;base64,'),'native bridge payload must become data URL');
+console.log('sprite-physics-v13.test.js PASS');

@@ -24,7 +24,7 @@ import android.widget.TextView;
 
 import org.json.JSONObject;
 
-/** Thin Android shell. Pixi/ExperienceRuntime owns gameplay and every animation frame. */
+/** Thin Android shell. v13 is an immersive local toy-box; AI UI stays hidden. */
 final class GameView extends FrameLayout {
     interface SettingsTapListener { void onSettingsTap(); }
     interface LanguageChangeListener { void onLanguageChanged(AppLanguage language); }
@@ -102,6 +102,7 @@ final class GameView extends FrameLayout {
         topLayoutParams = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.TOP);
         topLayoutParams.setMargins(dp(10), dp(8), dp(10), 0);
         addView(top, topLayoutParams);
+        top.setVisibility(View.GONE); // v13: immersive toy-box, no tool chrome
 
         captionView = new TextView(context);
         captionView.setTextColor(Color.WHITE);
@@ -113,6 +114,7 @@ final class GameView extends FrameLayout {
         captionLayoutParams = new LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
         captionLayoutParams.setMargins(dp(12), 0, dp(12), dp(24));
         addView(captionView, captionLayoutParams);
+        captionView.setVisibility(View.GONE); // v13: AI speech/captions disabled
 
         setOnApplyWindowInsetsListener((v, insets) -> { applySystemInsets(insets); return insets; });
         post(this::requestApplyInsets);

@@ -19,7 +19,7 @@ import org.json.JSONObject;
 
 /**
  * Android transport shell only.
- * Gameplay ownership lives in JS ExperienceRuntime; this class never invents or applies a local gameplay plan.
+ * v13 gameplay is fully local in the Pixi toy-box runtime. Gemini is intentionally not auto-connected.
  */
 public final class MainActivity extends Activity {
     private static final String PREFS="ai_infinite_click";
@@ -56,9 +56,8 @@ public final class MainActivity extends Activity {
         gameView.setRuntimeSignalListener(this::onRuntimeSignal);
         setContentView(gameView);
 
-        String key=prefs.getString(KEY_API,"");
-        if(key!=null&&!key.trim().isEmpty())connectLive(key.trim(),false);
-        else gameView.setConnectionStatus("DEMO");
+        // v13: local toy-box first. Do not auto-connect Gemini or spend model/audio resources.
+        gameView.setConnectionStatus("PLAY");
     }
 
     private void onLanguageChanged(AppLanguage language){
@@ -263,7 +262,13 @@ public final class MainActivity extends Activity {
 
     private void configureSystemBars(){
         getWindow().clearFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
-        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE|View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN|View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
+        getWindow().getDecorView().setSystemUiVisibility(
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                |View.SYSTEM_UI_FLAG_FULLSCREEN
+                |View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                |View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                |View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                |View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION);
         getWindow().setStatusBarColor(Color.TRANSPARENT);getWindow().setNavigationBarColor(Color.TRANSPARENT);
     }
 

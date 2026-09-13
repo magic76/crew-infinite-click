@@ -1,0 +1,13 @@
+const fs=require('fs'),assert=require('assert');
+const view=fs.readFileSync('app/src/main/java/com/magic76/aiclicker/GameView.java','utf8');
+const main=fs.readFileSync('app/src/main/java/com/magic76/aiclicker/MainActivity.java','utf8');
+const gradle=fs.readFileSync('app/build.gradle','utf8');
+assert(view.includes('top.setVisibility(View.GONE)'),'top tool chrome must be hidden');
+assert(view.includes('captionView.setVisibility(View.GONE)'),'AI caption must be hidden');
+assert(view.includes('loadAssetData(String path)'),'asset bridge must remain');
+const onCreate=main.slice(main.indexOf('@Override protected void onCreate'),main.indexOf('private void onLanguageChanged'));
+assert(!onCreate.includes('connectLive('),'v13 must not auto-connect Gemini');
+assert(onCreate.includes('setConnectionStatus("PLAY")'),'local play status expected');
+for(const flag of ['SYSTEM_UI_FLAG_IMMERSIVE_STICKY','SYSTEM_UI_FLAG_FULLSCREEN','SYSTEM_UI_FLAG_HIDE_NAVIGATION'])assert(main.includes(flag),'missing immersive flag '+flag);
+assert(gradle.includes('versionCode 391'));assert(gradle.includes("versionName '0.42.0-toy-box-v13'"));
+console.log('immersive-v13.test.js PASS');
