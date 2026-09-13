@@ -166,49 +166,48 @@
     _draw(o,t){
       const b=o.body,a=o.accent,s=o.shadow,p=o.pulse;const colors=TYPE_COLORS[o.type]||TYPE_COLORS.BUMPER,art=global.PremiumToyArt;
       b.clear();a.clear();s.clear();
-      if(art&&art.softShadow)art.softShadow(s,0,o.radius*.76,o.radius*.92,o.radius*.23,.26);else s.ellipse(0,o.radius*.76,o.radius*.9,o.radius*.26).fill({color:0x05040a,alpha:.24});
+      if(art&&art.softShadow)art.softShadow(s,0,o.radius*.76,o.radius*.88,o.radius*.21,.20);else s.ellipse(0,o.radius*.76,o.radius*.88,o.radius*.22).fill({color:0x05040a,alpha:.18});
 
       if(o.type==="BUMPER"){
-        const r=o.radius*(1+p*.07);
-        // Premium arcade puck: dark rubber base, brushed-metal ring, translucent gel dome.
-        b.circle(0,3,r*1.02).fill({color:0x171522,alpha:.96});
-        b.circle(0,0,r*.94).fill({color:0x5a4554,alpha:1}).stroke({color:0xf4e8dd,width:2.2,alpha:.20});
-        b.circle(0,-1,r*.78).fill({color:colors[0],alpha:.92}).stroke({color:colors[1],width:3.2+p*1.8,alpha:.72});
-        b.circle(0,-3,r*.56).fill({color:0x3b2c3a,alpha:.78});
-        b.circle(0,-5,r*.42).fill({color:colors[1],alpha:.24});
-        a.ellipse(-r*.18,-r*.34,r*.32,r*.13).fill({color:0xffffff,alpha:.34});
-        a.roundRect(-r*.34,-r*.09,r*.68,r*.18,r*.09).fill({color:0xf4e8dd,alpha:.74});
+        const r=o.radius*(1+p*.045);
+        // Premium arcade puck: rubber base, warm metal ring, gel center.
+        b.circle(0,3,r*.98).fill({color:0x11121a,alpha:.98});
+        b.circle(0,1,r*.90).fill({color:0x3d313d,alpha:1}).stroke({color:0xf4e8dd,width:1.4,alpha:.18});
+        b.circle(0,-1,r*.74).fill({color:0xe1ae8b,alpha:.82}).stroke({color:0xf5d47b,width:2.2,alpha:.58});
+        b.circle(0,-3,r*.52).fill({color:0xd98791,alpha:.92});
+        a.ellipse(-r*.20,-r*.30,r*.26,r*.10).fill({color:0xffffff,alpha:.26});
+        a.roundRect(-r*.28,-r*.05,r*.56,r*.14,r*.08).fill({color:0xf4e8dd,alpha:.58});
       }else if(o.type==="GIFT"){
-        const r=o.radius,open=o.open,lift=open*9;
-        // Collector capsule crate: cream vinyl shell + muted coral band + metal clasp.
-        b.roundRect(-r*.72,-r*.45+lift,r*1.44,r*.94,12).fill({color:0xe9ddd2,alpha:.98}).stroke({color:0xffffff,width:1.8,alpha:.20});
-        b.roundRect(-r*.60,-r*.34+lift,r*1.20,r*.70,9).fill({color:0xf4e8dd,alpha:.76});
-        b.roundRect(-r*.13,-r*.45+lift,r*.26,r*.94,5).fill({color:colors[1],alpha:.92});
-        b.roundRect(-r*.82,-r*.58-open*13,r*1.64,r*.30,9).fill({color:colors[0],alpha:.98}).stroke({color:0xf4e8dd,width:1.5,alpha:.16});
-        a.roundRect(-r*.18,-r*.08+lift,r*.36,r*.24,5).fill({color:colors[2],alpha:.95}).stroke({color:0xffffff,width:1,alpha:.24});
-        a.ellipse(-r*.28,-r*.50-open*13,r*.23,r*.12).stroke({color:colors[1],width:5,alpha:.86});
-        a.ellipse(r*.28,-r*.50-open*13,r*.23,r*.12).stroke({color:colors[1],width:5,alpha:.86});
-        a.ellipse(-r*.24,-r*.28+lift,r*.25,r*.10).fill({color:0xffffff,alpha:.20});
+        const r=o.radius,open=o.open,lift=open*8;
+        // Designer capsule gift: vinyl shell + coral band + soft bow cap.
+        b.roundRect(-r*.70,-r*.44+lift,r*1.40,r*.92,13).fill({color:0xf0e4d9,alpha:.98}).stroke({color:0xffffff,width:1.5,alpha:.18});
+        b.roundRect(-r*.58,-r*.31+lift,r*1.16,r*.64,9).fill({color:0xffffff,alpha:.22});
+        b.roundRect(-r*.12,-r*.44+lift,r*.24,r*.92,5).fill({color:0xe7a2a3,alpha:.96});
+        b.roundRect(-r*.84,-r*.58-open*11,r*1.68,r*.28,10).fill({color:0xb3a4d0,alpha:.96}).stroke({color:0xf4e8dd,width:1.3,alpha:.14});
+        a.roundRect(-r*.16,-r*.06+lift,r*.32,r*.20,5).fill({color:0xf1d475,alpha:.92}).stroke({color:0xffffff,width:.9,alpha:.22});
+        a.ellipse(-r*.22,-r*.47-open*10,r*.20,r*.10).stroke({color:0xe99592,width:4.2,alpha:.82});
+        a.ellipse(r*.22,-r*.47-open*10,r*.20,r*.10).stroke({color:0xe99592,width:4.2,alpha:.82});
+        a.ellipse(-r*.26,-r*.25+lift,r*.20,r*.08).fill({color:0xffffff,alpha:.16});
       }else if(o.type==="BALLOON"){
-        const r=o.radius*(1+p*.09),yy=Math.sin(t/240+o.phase)*2;
-        // Translucent resin bubble, intentionally not a party balloon.
-        b.circle(0,-r*.04+yy,r*.92).fill({color:0x254553,alpha:.28}).stroke({color:colors[0],width:2.4,alpha:.68});
-        b.circle(0,-r*.06+yy,r*.78).fill({color:colors[0],alpha:.16});
-        b.circle(r*.08,r*.02+yy,r*.46).fill({color:colors[1],alpha:.10});
-        a.ellipse(-r*.25,-r*.34+yy,r*.24,r*.12).fill({color:0xffffff,alpha:.52});
-        a.circle(-r*.36,-r*.17+yy,r*.07).fill({color:0xffffff,alpha:.34});
-        a.roundRect(-r*.10,r*.80+yy,r*.20,r*.16,r*.05).fill({color:0xe9ddd2,alpha:.88});
-        a.moveTo(0,r*.95+yy).bezierCurveTo(-8,r*1.25,9,r*1.55,-4,r*1.82).stroke({color:0xbda9b0,width:1.4,alpha:.38});
+        const r=o.radius*(1+p*.055),yy=Math.sin(t/260+o.phase)*2;
+        // Glassy resin bubble.
+        b.circle(0,-r*.02+yy,r*.84).fill({color:0x2a4758,alpha:.18}).stroke({color:0x9ecde3,width:1.8,alpha:.44});
+        b.circle(0,-r*.02+yy,r*.70).fill({color:0x91bad2,alpha:.10});
+        b.circle(r*.14,r*.08+yy,r*.36).fill({color:0xf5bfd1,alpha:.10});
+        a.ellipse(-r*.22,-r*.30+yy,r*.22,r*.10).fill({color:0xffffff,alpha:.40});
+        a.circle(-r*.34,-r*.15+yy,r*.06).fill({color:0xffffff,alpha:.24});
+        a.roundRect(-r*.10,r*.74+yy,r*.20,r*.14,r*.05).fill({color:0xe9ddd2,alpha:.80});
+        a.moveTo(0,r*.86+yy).bezierCurveTo(-7,r*1.16,8,r*1.42,-3,r*1.68).stroke({color:0xc8b7be,width:1.2,alpha:.26});
       }else if(o.type==="SPRING"){
         const r=o.radius,c=o.compress;
-        // Polished launch pad: smoked metal base, teal coil, warm metallic cap.
-        b.roundRect(-r*.88,r*.12+c*7,r*1.76,r*.38,11).fill({color:0x182229,alpha:.98}).stroke({color:0xf4e8dd,width:1.6,alpha:.16});
-        b.roundRect(-r*.76,-r*.58+c*20,r*1.52,r*.29,10).fill({color:0xd4b55d,alpha:.94}).stroke({color:0xffffff,width:1.6,alpha:.23});
-        b.roundRect(-r*.60,-r*.50+c*20,r*1.20,r*.12,6).fill({color:0xf2d783,alpha:.36});
-        const top=-r*.28+c*16,bottom=r*.12+c*6,steps=6;let px=-r*.48,py=bottom;a.moveTo(px,py);for(let i=1;i<=steps;i++){px=-r*.48+(r*.96)*(i/steps);py=i%2?top:bottom;a.lineTo(px,py);}a.stroke({color:colors[0],width:5,alpha:.88});
-        a.moveTo(-r*.48,bottom+2);for(let i=1;i<=steps;i++){px=-r*.48+(r*.96)*(i/steps);py=i%2?top+4:bottom+2;a.lineTo(px,py);}a.stroke({color:colors[1],width:1.6,alpha:.48});
+        // Polished launch pad with neat platform silhouette.
+        b.roundRect(-r*.92,r*.18+c*7,r*1.84,r*.34,12).fill({color:0x141a21,alpha:.98}).stroke({color:0xffffff,width:1.2,alpha:.12});
+        b.roundRect(-r*.76,-r*.48+c*18,r*1.52,r*.24,10).fill({color:0xe8c967,alpha:.92}).stroke({color:0xffffff,width:1.4,alpha:.18});
+        b.roundRect(-r*.60,-r*.42+c*18,r*1.20,r*.10,6).fill({color:0xffffff,alpha:.18});
+        const top=-r*.22+c*14,bottom=r*.12+c*6,steps=6;let px=-r*.46,py=bottom;a.moveTo(px,py);for(let i=1;i<=steps;i++){px=-r*.46+(r*.92)*(i/steps);py=i%2?top:bottom;a.lineTo(px,py);}a.stroke({color:0x88dbc3,width:4.2,alpha:.90});
+        a.moveTo(-r*.46,bottom+2);for(let i=1;i<=steps;i++){px=-r*.46+(r*.92)*(i/steps);py=i%2?top+4:bottom+2;a.lineTo(px,py);}a.stroke({color:0x6ca5c0,width:1.3,alpha:.46});
       }
-      if(p>.02){a.circle(0,0,o.radius*(.76+p*.42)).stroke({color:colors[1],width:1.7+p*1.6,alpha:.08+p*.22});}
+      if(p>.03){a.ellipse(0,0,o.radius*(.58+p*.08),o.radius*(.28+p*.05)).stroke({color:colors[1],width:1.2,alpha:.05+p*.10});}
     }
   }
 

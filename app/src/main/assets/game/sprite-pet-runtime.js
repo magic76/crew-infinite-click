@@ -37,7 +37,7 @@
       this.app=app;this.parent=o.parent||app.stage;
       this.id=String(o.id||"pet");this.type=String(o.type||"PEACH").toUpperCase();this.temperament=String(o.temperament||"SHY").toUpperCase();
       this.personality=TEMPERAMENTS[this.temperament]||TEMPERAMENTS.SHY;
-      this.scaleFactor=clamp(Number(o.scaleFactor)||1,.55,1.55);this.sizeMultiplier=1;this.sizeTarget=1;this.sizeReturnAt=0;
+      this.scaleFactor=clamp(Number(o.scaleFactor)||1,.55,1.42);this.sizeMultiplier=1;this.sizeTarget=1;this.sizeReturnAt=0;
       this.initial=o.initial||null;
       this.safeBounds=typeof o.safeBounds==="function"?o.safeBounds:()=>({left:56,top:84,right:app.renderer.screen.width-56,bottom:app.renderer.screen.height-90});
       this.onReaction=typeof o.onReaction==="function"?o.onReaction:()=>{};
@@ -261,9 +261,10 @@
     }
     _updateScale(){if(!this.sprite)return;const s=this.app.renderer.screen;this.baseScale=clamp(Math.min(s.width/390,s.height/760)*.27*this.scaleFactor,.17,.43);this.sprite.scale.set(this.facing*this.baseScale*this.sizeMultiplier,this.baseScale*this.sizeMultiplier);}
     _drawShadow(speed){
-      if(!this.sprite||!this.shadow||!this.active)return;const s=Number(speed)||0,scale=this.baseScale*this.sizeMultiplier/.31,w=70*scale*(1+clamp(s/520,0,.38)),c=PET_GLOW[this.type]||0x9d90bd;
-      if(this.aura){this.aura.clear();this.aura.ellipse(this.sprite.x,this.sprite.y+70*scale,w*1.10,20*scale).fill({color:c,alpha:.045+clamp(s/720,0,.035)});this.aura.ellipse(this.sprite.x,this.sprite.y+72*scale,w*.72,11*scale).fill({color:0xffffff,alpha:.025});}
-      this.shadow.clear();this.shadow.ellipse(this.sprite.x,this.sprite.y+78*scale,w,14*scale).fill({color:0x05040a,alpha:.25});this.shadow.ellipse(this.sprite.x,this.sprite.y+76*scale,w*.64,7*scale).fill({color:0x000000,alpha:.24});
+      if(!this.sprite||!this.shadow||!this.active)return;const s=Number(speed)||0,scale=this.baseScale*this.sizeMultiplier/.31,c=PET_GLOW[this.type]||0x9d90bd;
+      const airborne=clamp(Math.abs(this.vy)/700,0,.22),w=66*scale*(1+clamp(s/560,0,.24)-airborne*.35),y=80*scale+airborne*8;
+      if(this.aura){this.aura.clear();this.aura.ellipse(this.sprite.x,this.sprite.y+y-8,w*1.04,15*scale).fill({color:c,alpha:.024+clamp(s/820,0,.020)});this.aura.ellipse(this.sprite.x,this.sprite.y+y-6,w*.68,8*scale).fill({color:0xffffff,alpha:.015});}
+      this.shadow.clear();this.shadow.ellipse(this.sprite.x,this.sprite.y+y,w,11*scale).fill({color:0x05040a,alpha:.17});this.shadow.ellipse(this.sprite.x,this.sprite.y+y-1,w*.60,6*scale).fill({color:0x000000,alpha:.14});
     }
   }
 

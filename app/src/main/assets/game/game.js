@@ -45,7 +45,7 @@
       await pet.init(spec.sheet);state.pets.push(pet);
       if(!spec.start)pet.deactivate();
     }
-    const hero=state.pets[0];if(hero){const s=screen(),b=safeBounds();hero.setActive(true,{x:(b.left+b.right)/2,y:b.top+(b.bottom-b.top)*.50});hero.setSizeMultiplier(1.08);}
+    const hero=state.pets[0];if(hero){const s=screen(),b=safeBounds();hero.setActive(true,{x:(b.left+b.right)/2,y:b.top+(b.bottom-b.top)*.50});hero.setSizeMultiplier(.98);}
     resizeScene();app.ticker.add(tick);
     if(DEBUG)window.PixiGameDebug={app,canvas:app.canvas,pets:()=>state.pets,diagnostics,triggerToyEvent};
     try{A&&A.onRendererReady("PREMIUM_TOY_ART_V16");}catch(_){}
@@ -62,7 +62,7 @@
     state.petLayer=new PIXI.Container();state.petLayer.label="pet-layer";state.world.addChild(state.petLayer);
     state.fxLayer=new PIXI.Container();state.fxLayer.label="fx-layer";state.world.addChild(state.fxLayer);
     state.flash=new PIXI.Graphics();state.flash.eventMode="none";state.stageRoot.addChild(state.flash);
-    state.pools={particles:new ParticlePool(320),ripples:new RipplePool(34)};
+    state.pools={particles:new ParticlePool(320),ripples:new RipplePool(18)};
     renderBackground();window.addEventListener("resize",resizeScene);
   }
 
@@ -253,7 +253,7 @@
   function airTapFx(x,y,type,impact){
     const style=impact>.08?type:"NEUTRAL",colors=FX_PALETTES[style]||FX_PALETTES.NEUTRAL,count=3+Math.floor(Math.min(.3,impact)*9);
     for(let i=0;i<count;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/count+(Math.random()-.5),spd=35+Math.random()*55,c=colors[i%colors.length];drawFxShape(g,style,i,c,.62,.2);g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-18,.20+Math.random()*.08,40,3,.95));}
-    const r=state.pools.ripples.acquire(state.fxLayer);if(r){r.circle(0,0,6).stroke({color:colors[0],width:1.4,alpha:.28});r.x=x;r.y=y;state.ripples.push({g:r,life:.20,max:.20,growth:2.2,alpha:.28});}
+    const r=state.pools.ripples.acquire(state.fxLayer);if(r){r.circle(0,0,6).stroke({color:colors[0],width:1.4,alpha:.28});r.x=x;r.y=y;state.ripples.push({g:r,life:.16,max:.16,growth:1.0,alpha:.14});}
   }
 
   function nearMissFx(x,y,primary){
@@ -272,7 +272,7 @@
     const n=10+Math.min(6,combo);for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/n,s=13+Math.random()*15+combo*1.2,c=colors[(i+1)%colors.length];g.moveTo(-1.3,-s).lineTo(1.3,-s).lineTo(1.3,s).lineTo(-1.3,s).closePath().fill({color:c,alpha:.92});g.rotation=a+Math.PI/2;g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*(220+Math.random()*180),Math.sin(a)*(220+Math.random()*180),.28+combo*.01,0,0,.36));}
   }
 
-  function shockRing(x,y,color,power){const r=state.pools.ripples.acquire(state.fxLayer);if(!r)return;r.circle(0,0,12+power*7).stroke({color,width:3+power*2.5,alpha:.78});r.x=x;r.y=y;state.ripples.push({g:r,life:.34,max:.34,growth:4.5+power*2.4,alpha:.78});}
+  function shockRing(x,y,color,power){const r=state.pools.ripples.acquire(state.fxLayer);if(!r)return;const p=clamp(Number(power)||.5,.2,1.6);r.circle(0,0,8+p*3).stroke({color,width:1.4+p*1.2,alpha:.20+p*.08});r.x=x;r.y=y;state.ripples.push({g:r,life:.18,max:.18,growth:1.25+p*.70,alpha:.20+p*.08});}
 
   function wallImpactFx(x,y,type,speed){const colors=FX_PALETTES[type]||FX_PALETTES.NEUTRAL,n=5+Math.min(10,Math.floor(speed/80));for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.random()*Math.PI*2,spd=55+Math.random()*100;drawFxShape(g,type,i,colors[i%colors.length],.68+speed/900,.5);g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-15,.20+Math.random()*.12,65,5,.85));}}
 
@@ -348,30 +348,30 @@
   function eventBurst(x,y,type,kind,power){
     const style=type==="NEUTRAL"?"PEACH":type,colors=FX_PALETTES[style]||FX_PALETTES.PEACH,n=kind==="SWARM"?52:(kind==="PINBALL"?58:40);
     for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/n+(Math.random()-.5)*.65,spd=150+Math.random()*280;drawFxShape(g,style,i,colors[i%colors.length],1.0+Math.random()*.8,power);g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-65,.34+Math.random()*.22,100,8,.58));}
-    shockRing(x,y,colors[0],1.2);shockRing(x,y,colors[1],.82);
+    shockRing(x,y,colors[0],.85+.25*power);
   }
 
   function bumperObjectFx(x,y,power){
-    const colors=[0xd98791,0xe7bf63,0xffffff],n=12+Math.floor(power*10);shockRing(x,y,colors[0],.75+power*.75);
+    const colors=[0xd98791,0xe7bf63,0xffffff],n=10+Math.floor(power*8);shockRing(x,y,colors[0],.52+power*.28);
     for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/n,s=5+power*5;g.moveTo(0,-s).lineTo(s*.55,-s*.25).lineTo(s,0).lineTo(s*.55,s*.25).lineTo(0,s).lineTo(-s*.55,s*.25).lineTo(-s,0).lineTo(-s*.55,-s*.25).closePath().fill({color:colors[i%3],alpha:.90});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*(115+power*180),Math.sin(a)*(115+power*180),.24+power*.12,0,7,.72));}
   }
 
   function giftObjectFx(x,y,power){
-    const colors=[0x9d90bd,0xe99592,0xe7bf63,0xffffff],n=26+Math.floor(power*16);shockRing(x,y,colors[1],1.0+power*.45);
+    const colors=[0x9d90bd,0xe99592,0xe7bf63,0xffffff],n=20+Math.floor(power*10);shockRing(x,y,colors[1],.62+power*.28);
     for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*Math.random(),spd=90+Math.random()*250+power*80,c=colors[i%colors.length],w=3+Math.random()*5,h=7+Math.random()*10;g.roundRect(-w*.5,-h*.5,w,h,1.5).fill({color:c,alpha:.92});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-120-Math.random()*100,.42+Math.random()*.24,180,10,.35));}
   }
 
   function balloonObjectFx(x,y,power){
-    const colors=[0x79a8be,0xd8a0b4,0xffffff,0xe7bf63],n=18+Math.floor(power*14);shockRing(x,y,colors[0],.85+power*.55);
+    const colors=[0x79a8be,0xd8a0b4,0xffffff,0xe7bf63],n=14+Math.floor(power*10);shockRing(x,y,colors[0],.55+power*.22);
     for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/n+(Math.random()-.5)*.35,spd=85+Math.random()*170,c=colors[i%colors.length],r=2.5+Math.random()*5+power*2;g.circle(0,0,r).fill({color:c,alpha:.72}).stroke({color:0xffffff,width:1,alpha:.35});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-45,.34+Math.random()*.18,-25,4,.60));}
   }
 
   function springObjectFx(x,y,power){
-    const colors=[0x7fc9b5,0x79a8be,0xffffff],n=10+Math.floor(power*8);for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const spread=(i-(n-1)/2)*7,c=colors[i%3],h=18+Math.random()*24+power*18;g.roundRect(-2,-h,4,h,2).fill({color:c,alpha:.78});g.x=x+spread;g.y=y;state.particles.push(particle(g,spread*.9,-(150+Math.random()*160+power*90),.26+Math.random()*.12,150,0,.72));}shockRing(x,y,colors[0],.55+power*.42);
+    const colors=[0x7fc9b5,0x79a8be,0xffffff],n=8+Math.floor(power*6);for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const spread=(i-(n-1)/2)*7,c=colors[i%3],h=18+Math.random()*24+power*18;g.roundRect(-2,-h,4,h,2).fill({color:c,alpha:.78});g.x=x+spread;g.y=y;state.particles.push(particle(g,spread*.9,-(150+Math.random()*160+power*90),.26+Math.random()*.12,150,0,.72));}shockRing(x,y,colors[0],.42+power*.18);
   }
 
   function objectUnlockFx(x,y,type,power){
-    const map={BUMPER:0xd98791,GIFT:0x9d90bd,BALLOON:0x79a8be,SPRING:0x7fc9b5},c=map[type]||0xffffff;shockRing(x,y,c,.72+power*.35);
+    const map={BUMPER:0xd98791,GIFT:0x9d90bd,BALLOON:0x79a8be,SPRING:0x7fc9b5},c=map[type]||0xffffff;shockRing(x,y,c,.46+power*.20);
     for(let i=0;i<8;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/8,s=7+power*4;g.moveTo(0,-s).lineTo(s*.36,-s*.36).lineTo(s,0).lineTo(s*.36,s*.36).lineTo(0,s).lineTo(-s*.36,s*.36).lineTo(-s,0).lineTo(-s*.36,-s*.36).closePath().fill({color:c,alpha:.82});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*110,Math.sin(a)*110-35,.28,60,5,.76));}
   }
 
@@ -400,14 +400,14 @@
   }
 
   function softBloom(x,y,color,power){
-    const g=state.pools.particles.acquire(state.fxLayer);if(!g)return;const p=clamp(Number(power)||.5,.15,1.6),r=26+p*22;
+    const g=state.pools.particles.acquire(state.fxLayer);if(!g)return;const p=clamp(Number(power)||.5,.15,1.4),r=16+p*12;
     try{g.blendMode="add";}catch(_){}
-    g.circle(0,0,r).fill({color,alpha:.045+.035*p});g.circle(0,0,r*.56).fill({color:0xffffff,alpha:.035+.020*p});g.x=x;g.y=y;
-    state.particles.push(particle(g,0,0,.18+Math.min(.08,p*.03),0,0,-1.10));
+    g.circle(0,0,r).fill({color,alpha:.026+.018*p});g.circle(0,0,r*.56).fill({color:0xffffff,alpha:.020+.010*p});g.x=x;g.y=y;
+    state.particles.push(particle(g,0,0,.14+Math.min(.05,p*.02),0,0,-1.15));
   }
 
-  function cameraKick(dx,dy,power){const p=clamp(Number(power)||.2,0,1);const len=Math.max(1,Math.hypot(dx,dy)),ux=dx/len||((Math.random()<.5)?-1:1),uy=dy/len||0;state.cameraVx+=ux*(5+14*p)+(Math.random()-.5)*8*p;state.cameraVy+=uy*(4+11*p)+(Math.random()-.5)*7*p;state.cameraVr+=(Math.random()-.5)*.018*p;}
-  function screenFlash(color,alpha){state.flashColor=color||0xffffff;state.flashAlpha=Math.max(state.flashAlpha,clamp(Number(alpha)||.08,0,.28));}
+  function cameraKick(dx,dy,power){const p=clamp(Number(power)||.2,0,1);const len=Math.max(1,Math.hypot(dx,dy)),ux=dx/len||((Math.random()<.5)?-1:1),uy=dy/len||0;state.cameraVx+=ux*(5+14*p)+(Math.random()-.5)*8*p;state.cameraVy+=uy*(4+11*p)+(Math.random()-.5)*7*p;state.cameraVr+=(Math.random()-.5)*.008*p;}
+  function screenFlash(color,alpha){state.flashColor=color||0xffffff;state.flashAlpha=Math.max(state.flashAlpha,clamp(Number(alpha)||.08,0,.20));}
 
   function renderBackground(){
     if(!state.bg||!state.toys||!state.bgSprite)return;const s=screen(),g=state.bg,t=state.toys,b=safeBounds(),art=window.PremiumToyArt;
@@ -416,22 +416,25 @@
     state.bgSprite.texture=state.bgTexture;state.bgSprite.position.set(0,0);state.bgSprite.width=s.width;state.bgSprite.height=s.height;
     g.clear();t.clear();
 
-    // Collector-toy display frame: muted materials, soft bevels, no classroom-grid decoration.
-    g.roundRect(b.left-30,b.top-30,(b.right-b.left)+60,(b.bottom-b.top)+60,52).fill({color:0x0d0b15,alpha:.34});
-    g.roundRect(b.left-25,b.top-25,(b.right-b.left)+50,(b.bottom-b.top)+50,50).fill({color:0x2a2338,alpha:.54}).stroke({color:0xf4e8dd,width:1.2,alpha:.10});
-    g.roundRect(b.left-12,b.top-12,(b.right-b.left)+24,(b.bottom-b.top)+24,42).fill({color:0x30283f,alpha:.34}).stroke({color:0xffffff,width:1,alpha:.055});
-
     const w=b.right-b.left,h=b.bottom-b.top;
-    // Floor plinth and side cushions use desaturated collector-toy colors.
-    t.roundRect(b.left-22,b.bottom-72,w+44,90,34).fill({color:0x211a2d,alpha:.94}).stroke({color:0xf4e8dd,width:1.1,alpha:.08});
-    t.roundRect(b.left+14,b.bottom-62,w-28,58,24).fill({color:0x3a3048,alpha:.58});
-    t.roundRect(b.left-26,b.top+h*.26,48,h*.34,24).fill({color:0x4a3544,alpha:.30}).stroke({color:0xe99592,width:1.1,alpha:.12});
-    t.roundRect(b.right-22,b.top+h*.18,46,h*.36,23).fill({color:0x29413f,alpha:.26}).stroke({color:0x7fc9b5,width:1.1,alpha:.12});
+    // Cleaner stage silhouette: no giant phone-frame outline.
+    g.roundRect(b.left-8,b.top-6,w+16,h+12,40).fill({color:0x2a2238,alpha:.16});
 
-    // Soft display ledges hint at space without becoming gameplay obstacles.
-    t.roundRect(b.left+w*.12,b.top+h*.17,w*.28,12,6).fill({color:0xf4e8dd,alpha:.055});
-    t.roundRect(b.left+w*.62,b.top+h*.72,w*.25,12,6).fill({color:0x79a8be,alpha:.055});
-    t.ellipse(b.left+w*.50,b.top+h*.48,w*.32,h*.13).fill({color:0x9d90bd,alpha:.025});
+    // Rear spotlight panels.
+    t.roundRect(b.left+w*.08,b.top+h*.16,w*.28,h*.22,28).fill({color:0xf4e8dd,alpha:.030});
+    t.roundRect(b.left+w*.60,b.top+h*.12,w*.22,h*.18,24).fill({color:0x79a8be,alpha:.028});
+    t.roundRect(b.left+w*.14,b.top+h*.48,w*.18,h*.12,18).fill({color:0xe99592,alpha:.026});
+
+    // Toy-box stage and pads.
+    t.roundRect(b.left-8,b.bottom-82,w+16,96,34).fill({color:0x1f1928,alpha:.95}).stroke({color:0xffffff,width:1.0,alpha:.05});
+    t.roundRect(b.left+18,b.bottom-66,w-36,56,24).fill({color:0x3b3048,alpha:.44});
+
+    t.roundRect(b.left+w*.11,b.top+h*.24,w*.18,14,7).fill({color:0xffffff,alpha:.038});
+    t.roundRect(b.left+w*.67,b.top+h*.72,w*.18,14,7).fill({color:0xffffff,alpha:.028});
+
+    // Floor catch light.
+    t.ellipse(b.left+w*.50,b.bottom-18,w*.26,16).fill({color:0xffffff,alpha:.04});
+    t.ellipse(b.left+w*.50,b.bottom-14,w*.34,26).fill({color:0xe99592,alpha:.018});
   }
 
   function safeBounds(){const s=screen(),padX=Math.max(72,s.width*.11),padTop=Math.max(72,state.safe.top+54),padBottom=Math.max(92,state.safe.bottom+76);return {left:padX,top:padTop,right:Math.max(padX+1,s.width-padX),bottom:Math.max(padTop+1,s.height-padBottom)};}
@@ -446,14 +449,14 @@
     const dt=Math.min(50,Number(ticker.deltaMS)||16.67),t=now();processPending(t);updateFrenzy(t);if(state.objectRuntime)state.objectRuntime.tick(dt,activePets());resolveCollisions();
     if(t-state.lastTapAt>900){state.streak=Math.max(0,state.streak-dt/500);state.toyEnergy=Math.max(0,state.toyEnergy-dt/18000);}
     updateCamera(dt);updateFx(dt);updateFlash(dt);
-    const f=state.frame;f.accMs+=dt;f.frames++;if(f.accMs>=500){f.fps=Math.round(f.frames*1000/f.accMs);f.accMs=0;f.frames=0;}if(DEBUG&&t-f.lastLog>1200){f.lastLog=t;console.log("[PremiumToyArt v16]",diagnostics());}
+    const f=state.frame;f.accMs+=dt;f.frames++;if(f.accMs>=500){f.fps=Math.round(f.frames*1000/f.accMs);f.accMs=0;f.frames=0;}if(DEBUG&&t-f.lastLog>1200){f.lastLog=t;console.log("[AssetArt v17]",diagnostics());}
   }
 
   function updateCamera(dt){
     state.cameraVx*=Math.pow(.46,dt/16.67);state.cameraVy*=Math.pow(.46,dt/16.67);state.cameraVr*=Math.pow(.34,dt/16.67);
     state.cameraX+=state.cameraVx;state.cameraY+=state.cameraVy;state.cameraX*=Math.pow(.50,dt/16.67);state.cameraY*=Math.pow(.50,dt/16.67);
     state.cameraRot+=state.cameraVr;state.cameraRot*=Math.pow(.42,dt/16.67);
-    const s=screen();state.world.position.set(s.width/2+clamp(state.cameraX,-16,16),s.height/2+clamp(state.cameraY,-14,14));state.world.rotation=clamp(state.cameraRot,-.016,.016);
+    const s=screen();state.world.position.set(s.width/2+clamp(state.cameraX,-12,12),s.height/2+clamp(state.cameraY,-10,10));state.world.rotation=clamp(state.cameraRot,-.008,.008);
   }
 
   function updateFx(dt){
@@ -463,13 +466,13 @@
 
   function updateFlash(dt){if(!state.flash)return;state.flashAlpha=Math.max(0,state.flashAlpha-dt/650);const s=screen();state.flash.clear();if(state.flashAlpha>.002)state.flash.rect(0,0,s.width,s.height).fill({color:state.flashColor,alpha:state.flashAlpha});}
 
-  function diagnostics(){return {version:"PREMIUM_TOY_ART_V16",fps:state.frame.fps,totalTaps:state.totalTaps,directHits:state.directHits,nearMisses:state.nearMisses,hitCombo:state.hitCombo,collisionChain:state.collisionChain,frenzy:state.frenzyUntil>now(),toyEnergy:Math.round(state.toyEnergy*100)/100,nextEventEnergy:Math.round(state.nextEventEnergy*100)/100,eventCount:state.eventCount,objectEvents:state.objectEvents,objectHits:state.objectHits,objects:state.objectRuntime?state.objectRuntime.context():[],activePets:activePets().length,pets:state.pets.map(p=>p.context()),particlePool:state.pools&&state.pools.particles.stats(),ripplePool:state.pools&&state.pools.ripples.stats(),aiVoice:false,geminiGameplay:false,immersive:true};}
+  function diagnostics(){return {version:"ASSET_ART_V17",fps:state.frame.fps,totalTaps:state.totalTaps,directHits:state.directHits,nearMisses:state.nearMisses,hitCombo:state.hitCombo,collisionChain:state.collisionChain,frenzy:state.frenzyUntil>now(),toyEnergy:Math.round(state.toyEnergy*100)/100,nextEventEnergy:Math.round(state.nextEventEnergy*100)/100,eventCount:state.eventCount,objectEvents:state.objectEvents,objectHits:state.objectHits,objects:state.objectRuntime?state.objectRuntime.context():[],activePets:activePets().length,pets:state.pets.map(p=>p.context()),particlePool:state.pools&&state.pools.particles.stats(),ripplePool:state.pools&&state.pools.ripples.stats(),aiVoice:false,geminiGameplay:false,immersive:true};}
 
   function resetGame(){
     for(const p of state.particles)state.pools.particles.release(p.g);state.particles.length=0;for(const r of state.ripples)state.pools.ripples.release(r.g);state.ripples.length=0;
     state.streak=0;state.hitCombo=0;state.totalTaps=0;state.directHits=0;state.nearMisses=0;state.toyEnergy=0;state.objectEvents=0;state.objectHits=0;if(state.objectRuntime)state.objectRuntime.reset();state.nextEventEnergy=.90;state.eventCount=0;state.pending.length=0;state.lastBumps.clear();state.collisionChain=0;state.lastCollisionChainAt=0;state.lastComboBlastAt=0;state.lastFrenzyAt=0;state.frenzyUntil=0;state.frenzyPower=0;state.nextFrenzyKickAt=0;state.lastTauntAt=0;state.lastTrails.clear();
     state.pets.forEach((pet,i)=>{pet.reset(i,state.pets.length);pet.setActive(i===0);});
-    const hero=state.pets[0],b=safeBounds();if(hero){hero.setActive(true,{x:(b.left+b.right)/2,y:b.top+(b.bottom-b.top)*.50});hero.setSizeMultiplier(1.08);}
+    const hero=state.pets[0],b=safeBounds();if(hero){hero.setActive(true,{x:(b.left+b.right)/2,y:b.top+(b.bottom-b.top)*.50});hero.setSizeMultiplier(.98);}
   }
 
   function receive(msg){try{if(!msg)return;if(msg.op==="safeArea"){state.safe.left=Math.max(0,Number(msg.left)||0);state.safe.top=Math.max(0,Number(msg.top)||0);state.safe.right=Math.max(0,Number(msg.right)||0);state.safe.bottom=Math.max(0,Number(msg.bottom)||0);resizeScene();}else if(msg.op==="reset")resetGame();}catch(e){reportError(e);}}

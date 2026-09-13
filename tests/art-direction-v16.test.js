@@ -7,11 +7,11 @@ const pets=fs.readFileSync('app/src/main/assets/game/sprite-pet-runtime.js','utf
 const gradle=fs.readFileSync('app/build.gradle','utf8');
 assert(index.includes('premium-toy-art.js'),'premium art kit must load');
 assert(art.includes('makeSceneTexture')&&art.includes('createRadialGradient'),'scene must use procedural premium lighting');
-assert(game.includes('PREMIUM_TOY_ART_V16'),'v16 renderer id missing');
+assert(game.includes('ASSET_ART_V17'),'v16 renderer id missing');
 assert(game.includes('state.bgSprite')&&game.includes('softBloom'),'premium background/impact bloom missing');
 assert(!game.slice(game.indexOf('function drawFxShape'),game.indexOf('function cameraKick')).includes('bezierCurveTo(-s*1.45'),'old heart particle language should be gone');
-for(const token of ['Premium arcade puck','Collector capsule crate','Translucent resin bubble','Polished launch pad'])assert(objects.includes(token),'missing premium object art: '+token);
+for(const token of ['Premium arcade puck','Designer capsule gift','Glassy resin bubble','Polished launch pad'])assert(objects.includes(token),'missing premium object art: '+token);
 assert(pets.includes('this.aura=new global.PIXI.Graphics()'),'pet grounding aura missing');
 assert(pets.includes('PET_GLOW'),'pet material glow palette missing');
-assert(gradle.includes('versionCode 394')&&gradle.includes("versionName '0.45.0-premium-toy-art-v16'"),'v16 version missing');
-console.log('art-direction-v16.test.js PASS');
+assert(gradle.includes('versionCode 395')&&gradle.includes("versionName '0.46.0-asset-art-v17'"),'v16 version missing');
+console.log('art-direction-v17-compat.test.js PASS');

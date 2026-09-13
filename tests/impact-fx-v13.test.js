@@ -2,7 +2,7 @@ const fs=require('fs'),assert=require('assert');
 const game=fs.readFileSync('app/src/main/assets/game/game.js','utf8');
 for(const fn of ['airTapFx','nearMissFx','hitFx','wallImpactFx','collisionFx','eventBurst','cameraKick','screenFlash'])assert(game.includes('function '+fn),fn+' missing');
 assert(game.includes('new ParticlePool(320)'),'particle pool must be bounded');
-assert(game.includes('new RipplePool(34)'),'ripple pool must be bounded');
+assert(game.includes('new RipplePool(18)'),'ripple pool must be bounded');
 const hitBranch=game.slice(game.indexOf('if(primary&&primary.reaction==="HIT")'),game.indexOf('}else if(primary&&impact>=.55)'));
 for(const token of ['hitFx(primary,x,y)','cameraKick','screenFlash','GameHaptics.perform("IMPACT"'])assert(hitBranch.includes(token),'hit branch missing '+token);
 const nearStart=game.indexOf('}else if(primary&&impact>=.55)');
