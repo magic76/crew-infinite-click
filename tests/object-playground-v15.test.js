@@ -1,0 +1,17 @@
+const fs=require('fs'),assert=require('assert'),vm=require('vm');
+const game=fs.readFileSync('app/src/main/assets/game/game.js','utf8');
+const runtime=fs.readFileSync('app/src/main/assets/game/toy-object-runtime.js','utf8');
+const index=fs.readFileSync('app/src/main/assets/game/index.html','utf8');
+assert(index.includes('toy-object-runtime.js'),'object runtime must load before game.js');
+assert(game.includes('OBJECT_PLAYGROUND_V15'),'v15 renderer id missing');
+for(const fn of ['handleObjectEvent','giftReward','radialObjectPush','springTapAssist','bumperObjectFx','giftObjectFx','balloonObjectFx','springObjectFx','objectUnlockFx'])assert(game.includes('function '+fn),fn+' missing');
+for(const token of ['state.objectRuntime.tick(dt,activePets())','state.objectRuntime.unlockForHits(state.directHits)','state.objectRuntime.handleTap(x,y','objectEvents:0','objectHits:0'])assert(game.includes(token),'missing object integration '+token);
+for(const type of ['BUMPER','GIFT','BALLOON','SPRING'])assert(runtime.includes('type:"'+type+'"'),'missing object type '+type);
+for(const event of ['BUMPER_HIT','GIFT_OPEN','BALLOON_POP','SPRING_BOING','OBJECT_UNLOCK','OBJECT_RESPAWN'])assert(runtime.includes('type:"'+event+'"'),'missing object event '+event);
+assert(runtime.includes('unlockHits:2')&&runtime.includes('unlockHits:4')&&runtime.includes('unlockHits:7'),'objects should unlock progressively');
+assert(runtime.includes('pet.launch('),'objects must alter pet motion');
+assert(runtime.includes('respawnAt=now()+3600'),'balloon must respawn instead of being one-shot');
+const sandbox={window:{performance:{now:()=>0}},console};sandbox.window.window=sandbox.window;vm.createContext(sandbox);vm.runInContext(runtime,sandbox);
+const specs=sandbox.window.ToyObjectSpecs;assert(Array.isArray(specs)&&specs.length>=5,'bounded object specs missing');
+assert.equal(specs.filter(x=>x.active).length,2,'v15 should start with exactly bumper + spring active');
+console.log('object-playground-v15.test.js PASS');

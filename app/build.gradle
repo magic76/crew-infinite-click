@@ -10,8 +10,8 @@ android {
         applicationId 'com.magic76.aiclicker'
         minSdk 26
         targetSdk 35
-        versionCode 392
-        versionName '0.43.0-chaos-chain-v14'
+        versionCode 393
+        versionName '0.44.0-object-playground-v15'
     }
 
     buildTypes {

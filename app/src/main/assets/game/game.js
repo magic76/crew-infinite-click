@@ -20,11 +20,11 @@
     NEUTRAL:[0xffffff,0xb8b7ff,0xffc8e3,0x8ce7ff]
   };
   const state={
-    app:null,stageRoot:null,world:null,bg:null,toys:null,petLayer:null,fxLayer:null,flash:null,audio:null,pets:[],
+    app:null,stageRoot:null,world:null,bg:null,toys:null,objectLayer:null,objectRuntime:null,petLayer:null,fxLayer:null,flash:null,audio:null,pets:[],
     pools:null,particles:[],ripples:[],safe:{left:0,top:0,right:0,bottom:0},
     lastTapAt:0,lastDirectHitAt:0,lastNearAt:0,lastCollisionAt:0,streak:0,hitCombo:0,totalTaps:0,directHits:0,nearMisses:0,
     collisionChain:0,lastCollisionChainAt:0,lastComboBlastAt:0,lastFrenzyAt:0,frenzyUntil:0,frenzyPower:0,nextFrenzyKickAt:0,lastTauntAt:0,lastTrails:new Map(),
-    toyEnergy:0,nextEventEnergy:.90,eventCount:0,lastEventAt:0,lastBumps:new Map(),pending:[],
+    toyEnergy:0,nextEventEnergy:.90,eventCount:0,lastEventAt:0,lastBumps:new Map(),pending:[],objectEvents:0,objectHits:0,
     cameraX:0,cameraY:0,cameraVx:0,cameraVy:0,cameraRot:0,cameraVr:0,flashAlpha:0,flashColor:0xffffff,
     frame:{fps:60,accMs:0,frames:0,lastLog:0}
   };
@@ -35,6 +35,7 @@
     const app=new PIXI.Application();
     await app.init({resizeTo:window,background:0x100e1b,antialias:true,resolution:Math.min(window.devicePixelRatio||1,1.5),autoDensity:true,powerPreference:"high-performance"});
     state.app=app;document.body.appendChild(app.canvas);buildScene();wireInput();state.audio=new AudioMoodPlayer();
+    state.objectRuntime=new ToyObjectRuntime(app,{parent:state.objectLayer,safeBounds,onEvent:handleObjectEvent});
 
     for(const spec of SLOT_SPECS){
       const pet=new SpritePetRuntime(app,{
@@ -47,7 +48,7 @@
     const hero=state.pets[0];if(hero){const s=screen(),b=safeBounds();hero.setActive(true,{x:(b.left+b.right)/2,y:b.top+(b.bottom-b.top)*.50});hero.setSizeMultiplier(1.08);}
     resizeScene();app.ticker.add(tick);
     if(DEBUG)window.PixiGameDebug={app,canvas:app.canvas,pets:()=>state.pets,diagnostics,triggerToyEvent};
-    try{A&&A.onRendererReady("TOY_BOX_CHAOS_V14");}catch(_){}
+    try{A&&A.onRendererReady("OBJECT_PLAYGROUND_V15");}catch(_){}
   }
 
   function buildScene(){
@@ -56,6 +57,7 @@
     state.world=new PIXI.Container();state.world.label="toy-box-world";state.stageRoot.addChild(state.world);
     state.bg=new PIXI.Graphics();state.world.addChild(state.bg);
     state.toys=new PIXI.Graphics();state.world.addChild(state.toys);
+    state.objectLayer=new PIXI.Container();state.objectLayer.label="object-layer";state.world.addChild(state.objectLayer);
     state.petLayer=new PIXI.Container();state.petLayer.label="pet-layer";state.world.addChild(state.petLayer);
     state.fxLayer=new PIXI.Container();state.fxLayer.label="fx-layer";state.world.addChild(state.fxLayer);
     state.flash=new PIXI.Graphics();state.flash.eventMode="none";state.stageRoot.addChild(state.flash);
@@ -72,6 +74,7 @@
     const t=now(),gap=state.lastTapAt?t-state.lastTapAt:9999;state.lastTapAt=t;state.totalTaps++;
     if(gap<420)state.streak=Math.min(40,state.streak+1);else state.streak=1;
     if(t-state.lastDirectHitAt>760)state.hitCombo=0;
+    const objectTap=state.objectRuntime?state.objectRuntime.handleTap(x,y,{streak:state.streak}):null;
 
     const active=activePets();let closest=null,closestMeasure=null;
     for(const pet of active){const m=pet.measureTap(x,y);if(!closestMeasure||m.distance<closestMeasure.distance){closest=pet;closestMeasure=m;}}
@@ -81,7 +84,7 @@
     const impact=primary?primary.impact:0;
 
     if(primary&&primary.reaction==="HIT"){
-      state.directHits++;state.hitCombo=Math.min(9,state.hitCombo+1);state.lastDirectHitAt=t;
+      state.directHits++;state.hitCombo=Math.min(9,state.hitCombo+1);state.lastDirectHitAt=t;if(state.objectRuntime)state.objectRuntime.unlockForHits(state.directHits);
       state.toyEnergy+=.29+.09*Math.min(3,state.hitCombo)+Math.min(.12,state.streak*.006);
       hitFx(primary,x,y);comboHalo(primary);spreadPanic(primary,.76);cameraKick(primary.x-x,primary.y-y,.72+state.hitCombo*.07);screenFlash(FX_PALETTES[primary.type][0],.10+.025*state.hitCombo);
       if(state.hitCombo>=3&&state.hitCombo%3===0&&t-state.lastComboBlastAt>260){state.lastComboBlastAt=t;comboBlast(primary);}
@@ -96,7 +99,7 @@
       if(state.audio)state.audio.playClick(primary.type==="SPARK"?"GLITCH":"ORGANIC",.20+impact*.20,Math.max(state.streak,Math.round(impact*16)));
     }else{
       airTapFx(x,y,primary&&impact>.08?primary.type:"NEUTRAL",impact);maybeTauntOnMiss(x,y,primary,impact,t);
-      if(window.GameHaptics)window.GameHaptics.perform("SOFT_TAP",.12);
+      if(window.GameHaptics&&!objectTap?.triggered)window.GameHaptics.perform("SOFT_TAP",.12);
       if(state.audio)state.audio.playClick("ORGANIC",.12,Math.min(8,state.streak));
     }
 
@@ -108,6 +111,47 @@
   function handleWallBounce(e){
     if(!e||e.speed<155)return;wallImpactFx(e.x,e.y,e.type,e.speed);cameraKick(0,0,clamp(e.speed/900,.10,.34));
     if(e.speed>360){state.toyEnergy+=.035;const source=state.pets.find(p=>p.id===e.id);if(source)spreadPanic({id:e.id,x:e.x,y:e.y,impact:.6,panic:e.panic||.4},.28);}
+  }
+
+  function handleObjectEvent(e){
+    if(!e)return;state.objectEvents++;const p=clamp(Number(e.power)||.5,.15,1);
+    if(e.type==="BUMPER_HIT"||e.type==="BUMPER_TAP"){
+      if(e.type==="BUMPER_HIT")state.objectHits++;state.toyEnergy+=e.type==="BUMPER_HIT"?.055:.018;bumperObjectFx(e.x,e.y,p);if(e.type==="BUMPER_TAP")radialObjectPush(e.x,e.y,.18+p*.26);cameraKick(0,0,.16+p*.28);
+      if(e.type==="BUMPER_HIT"&&window.GameHaptics)window.GameHaptics.perform("IMPACT",.36+p*.34);
+    }else if(e.type==="GIFT_OPEN"){
+      state.objectHits++;state.toyEnergy+=.15+p*.08;giftObjectFx(e.x,e.y,p);giftReward(e);cameraKick(0,0,.34+p*.28);screenFlash(0xffc8e8,.06+p*.05);
+      if(e.source==="PET"&&window.GameHaptics)window.GameHaptics.perform("IMPACT",.44+p*.30);
+    }else if(e.type==="BALLOON_POP"){
+      state.objectHits++;state.toyEnergy+=.10+p*.06;balloonObjectFx(e.x,e.y,p);radialObjectPush(e.x,e.y,.40+p*.35);cameraKick(0,-1,.20+p*.24);
+      if(e.source==="PET"&&window.GameHaptics)window.GameHaptics.perform("IMPACT",.34+p*.24);
+    }else if(e.type==="SPRING_BOING"||e.type==="SPRING_TAP"){
+      if(e.type==="SPRING_BOING")state.objectHits++;state.toyEnergy+=e.type==="SPRING_BOING"?.05:.012;springObjectFx(e.x,e.y,p);
+      if(e.type==="SPRING_TAP")springTapAssist(e.x,e.y,p);
+      if(e.type==="SPRING_BOING"&&window.GameHaptics)window.GameHaptics.perform("SOFT_TAP",.30+p*.20);
+    }else if(e.type==="OBJECT_UNLOCK"||e.type==="OBJECT_RESPAWN"){
+      objectUnlockFx(e.x,e.y,e.objectType,p);
+    }
+  }
+
+  function giftReward(e){
+    const inactive=state.pets.filter(p=>!p.isActive());
+    if(inactive.length&&Math.random()<.62){
+      const pet=inactive[0],a=-Math.PI*.5+(Math.random()-.5)*1.5,spd=330+Math.random()*150;pet.activateAt(e.x,e.y,{panic:.64,animation:"STARTLED",mode:"PANIC"});pet.launch(Math.cos(a)*spd,Math.sin(a)*spd-90,"PANIC");
+      eventBurst(e.x,e.y,pet.type,"SPLIT",.82);
+    }else if(state.objectRuntime&&state.objectRuntime.activateType("BALLOON",{x:e.x,y:e.y-120})){
+      state.toyEnergy+=.035;
+    }else{
+      for(const pet of activePets()){const pos=pet.position();if(!pos)continue;const d=Math.hypot(pos.x-e.x,pos.y-e.y);if(d<290)pet.nudgeFrom(e.x,e.y,clamp((1-d/290)*.52,.08,.52));}
+    }
+  }
+
+  function radialObjectPush(x,y,power){
+    for(const pet of activePets()){const pos=pet.position();if(!pos)continue;const d=Math.hypot(pos.x-x,pos.y-y);if(d>330)continue;pet.nudgeFrom(x,y,clamp((1-d/330)*power,.06,.78));}
+  }
+
+  function springTapAssist(x,y,power){
+    let pick=null,best=Infinity;for(const pet of activePets()){const pos=pet.position();if(!pos)continue;const d=Math.hypot(pos.x-x,pos.y-y);if(d<best){best=d;pick=pet;}}
+    if(pick&&best<190){const v=pick.velocity();pick.launch((v.vx||0)*.35+(Math.random()-.5)*80,-(430+power*170),"PANIC");}
   }
 
   function spreadPanic(source,multiplier){
@@ -306,6 +350,30 @@
     shockRing(x,y,colors[0],1.2);shockRing(x,y,colors[1],.82);
   }
 
+  function bumperObjectFx(x,y,power){
+    const colors=[0xff6fae,0xffd36f,0xffffff],n=12+Math.floor(power*10);shockRing(x,y,colors[0],.75+power*.75);
+    for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/n,s=5+power*5;g.moveTo(0,-s).lineTo(s*.55,-s*.25).lineTo(s,0).lineTo(s*.55,s*.25).lineTo(0,s).lineTo(-s*.55,s*.25).lineTo(-s,0).lineTo(-s*.55,-s*.25).closePath().fill({color:colors[i%3],alpha:.90});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*(115+power*180),Math.sin(a)*(115+power*180),.24+power*.12,0,7,.72));}
+  }
+
+  function giftObjectFx(x,y,power){
+    const colors=[0x9c7cff,0xff8faf,0xffe28a,0xffffff],n=26+Math.floor(power*16);shockRing(x,y,colors[1],1.0+power*.45);
+    for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*Math.random(),spd=90+Math.random()*250+power*80,c=colors[i%colors.length],w=3+Math.random()*5,h=7+Math.random()*10;g.roundRect(-w*.5,-h*.5,w,h,1.5).fill({color:c,alpha:.92});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-120-Math.random()*100,.42+Math.random()*.24,180,10,.35));}
+  }
+
+  function balloonObjectFx(x,y,power){
+    const colors=[0x77d8ff,0xff9fcb,0xffffff,0xffe28a],n=18+Math.floor(power*14);shockRing(x,y,colors[0],.85+power*.55);
+    for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/n+(Math.random()-.5)*.35,spd=85+Math.random()*170,c=colors[i%colors.length],r=2.5+Math.random()*5+power*2;g.circle(0,0,r).fill({color:c,alpha:.72}).stroke({color:0xffffff,width:1,alpha:.35});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-45,.34+Math.random()*.18,-25,4,.60));}
+  }
+
+  function springObjectFx(x,y,power){
+    const colors=[0x76e6bf,0x8ce7ff,0xffffff],n=10+Math.floor(power*8);for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const spread=(i-(n-1)/2)*7,c=colors[i%3],h=18+Math.random()*24+power*18;g.roundRect(-2,-h,4,h,2).fill({color:c,alpha:.78});g.x=x+spread;g.y=y;state.particles.push(particle(g,spread*.9,-(150+Math.random()*160+power*90),.26+Math.random()*.12,150,0,.72));}shockRing(x,y,colors[0],.55+power*.42);
+  }
+
+  function objectUnlockFx(x,y,type,power){
+    const map={BUMPER:0xff6fae,GIFT:0x9c7cff,BALLOON:0x77d8ff,SPRING:0x76e6bf},c=map[type]||0xffffff;shockRing(x,y,c,.72+power*.35);
+    for(let i=0;i<8;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/8,s=7+power*4;g.moveTo(0,-s).lineTo(s*.36,-s*.36).lineTo(s,0).lineTo(s*.36,s*.36).lineTo(0,s).lineTo(-s*.36,s*.36).lineTo(-s,0).lineTo(-s*.36,-s*.36).closePath().fill({color:c,alpha:.82});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*110,Math.sin(a)*110-35,.28,60,5,.76));}
+  }
+
   function tinyReactionSpark(x,y,type,intensity){if(Math.random()>.55)return;const colors=FX_PALETTES[type]||FX_PALETTES.NEUTRAL,g=state.pools.particles.acquire(state.fxLayer);if(!g)return;drawFxShape(g,type,1,colors[1],.70+intensity*1.5,intensity);g.x=x;g.y=y;state.particles.push(particle(g,(Math.random()-.5)*45,-35,.20,0,3,1.1));}
 
   function particle(g,vx,vy,life,gravity,spin,scaleDecay){return {g,vx,vy,life,max:life,gravity:gravity||0,spin:spin||0,scaleDecay:scaleDecay||0};}
@@ -346,14 +414,14 @@
   function resizeScene(){
     if(!state.app)return;const s=screen();state.app.stage.hitArea=s;
     if(state.world){state.world.pivot.set(s.width/2,s.height/2);state.world.position.set(s.width/2+state.cameraX,s.height/2+state.cameraY);}
-    renderBackground();for(const pet of state.pets)pet.resize();
+    renderBackground();if(state.objectRuntime)state.objectRuntime.resize();for(const pet of state.pets)pet.resize();
   }
 
   function tick(ticker){
-    const dt=Math.min(50,Number(ticker.deltaMS)||16.67),t=now();processPending(t);updateFrenzy(t);resolveCollisions();
+    const dt=Math.min(50,Number(ticker.deltaMS)||16.67),t=now();processPending(t);updateFrenzy(t);if(state.objectRuntime)state.objectRuntime.tick(dt,activePets());resolveCollisions();
     if(t-state.lastTapAt>900){state.streak=Math.max(0,state.streak-dt/500);state.toyEnergy=Math.max(0,state.toyEnergy-dt/18000);}
     updateCamera(dt);updateFx(dt);updateFlash(dt);
-    const f=state.frame;f.accMs+=dt;f.frames++;if(f.accMs>=500){f.fps=Math.round(f.frames*1000/f.accMs);f.accMs=0;f.frames=0;}if(DEBUG&&t-f.lastLog>1200){f.lastLog=t;console.log("[ToyBox v14]",diagnostics());}
+    const f=state.frame;f.accMs+=dt;f.frames++;if(f.accMs>=500){f.fps=Math.round(f.frames*1000/f.accMs);f.accMs=0;f.frames=0;}if(DEBUG&&t-f.lastLog>1200){f.lastLog=t;console.log("[ObjectPlayground v15]",diagnostics());}
   }
 
   function updateCamera(dt){
@@ -370,11 +438,11 @@
 
   function updateFlash(dt){if(!state.flash)return;state.flashAlpha=Math.max(0,state.flashAlpha-dt/650);const s=screen();state.flash.clear();if(state.flashAlpha>.002)state.flash.rect(0,0,s.width,s.height).fill({color:state.flashColor,alpha:state.flashAlpha});}
 
-  function diagnostics(){return {version:"TOY_BOX_CHAOS_V14",fps:state.frame.fps,totalTaps:state.totalTaps,directHits:state.directHits,nearMisses:state.nearMisses,hitCombo:state.hitCombo,collisionChain:state.collisionChain,frenzy:state.frenzyUntil>now(),toyEnergy:Math.round(state.toyEnergy*100)/100,nextEventEnergy:Math.round(state.nextEventEnergy*100)/100,eventCount:state.eventCount,activePets:activePets().length,pets:state.pets.map(p=>p.context()),particlePool:state.pools&&state.pools.particles.stats(),ripplePool:state.pools&&state.pools.ripples.stats(),aiVoice:false,geminiGameplay:false,immersive:true};}
+  function diagnostics(){return {version:"OBJECT_PLAYGROUND_V15",fps:state.frame.fps,totalTaps:state.totalTaps,directHits:state.directHits,nearMisses:state.nearMisses,hitCombo:state.hitCombo,collisionChain:state.collisionChain,frenzy:state.frenzyUntil>now(),toyEnergy:Math.round(state.toyEnergy*100)/100,nextEventEnergy:Math.round(state.nextEventEnergy*100)/100,eventCount:state.eventCount,objectEvents:state.objectEvents,objectHits:state.objectHits,objects:state.objectRuntime?state.objectRuntime.context():[],activePets:activePets().length,pets:state.pets.map(p=>p.context()),particlePool:state.pools&&state.pools.particles.stats(),ripplePool:state.pools&&state.pools.ripples.stats(),aiVoice:false,geminiGameplay:false,immersive:true};}
 
   function resetGame(){
     for(const p of state.particles)state.pools.particles.release(p.g);state.particles.length=0;for(const r of state.ripples)state.pools.ripples.release(r.g);state.ripples.length=0;
-    state.streak=0;state.hitCombo=0;state.totalTaps=0;state.directHits=0;state.nearMisses=0;state.toyEnergy=0;state.nextEventEnergy=.90;state.eventCount=0;state.pending.length=0;state.lastBumps.clear();state.collisionChain=0;state.lastCollisionChainAt=0;state.lastComboBlastAt=0;state.lastFrenzyAt=0;state.frenzyUntil=0;state.frenzyPower=0;state.nextFrenzyKickAt=0;state.lastTauntAt=0;state.lastTrails.clear();
+    state.streak=0;state.hitCombo=0;state.totalTaps=0;state.directHits=0;state.nearMisses=0;state.toyEnergy=0;state.objectEvents=0;state.objectHits=0;if(state.objectRuntime)state.objectRuntime.reset();state.nextEventEnergy=.90;state.eventCount=0;state.pending.length=0;state.lastBumps.clear();state.collisionChain=0;state.lastCollisionChainAt=0;state.lastComboBlastAt=0;state.lastFrenzyAt=0;state.frenzyUntil=0;state.frenzyPower=0;state.nextFrenzyKickAt=0;state.lastTauntAt=0;state.lastTrails.clear();
     state.pets.forEach((pet,i)=>{pet.reset(i,state.pets.length);pet.setActive(i===0);});
     const hero=state.pets[0],b=safeBounds();if(hero){hero.setActive(true,{x:(b.left+b.right)/2,y:b.top+(b.bottom-b.top)*.50});hero.setSizeMultiplier(1.08);}
   }
