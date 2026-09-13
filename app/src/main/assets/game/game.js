@@ -20,7 +20,12 @@
     state.pet=new SpritePetRuntime(app,{parent:state.petLayer,safeBounds,onReaction:handlePetReaction,onModeChange:handlePetMode});
     // Use the explicit Android asset URL; Pixi's relative resolver can produce
     // an invalid file URL inside WebView when the document base is file://.
-    await state.pet.init("file:///android_asset/game/sprites/cutie-sheet.png");
+    let sheetUrl="sprites/cutie-sheet.png";
+    try{
+      const encoded=A&&A.loadAssetData?A.loadAssetData("game/sprites/cutie-sheet.png"):"";
+      if(encoded)sheetUrl="data:image/png;base64,"+encoded;
+    }catch(_){/* browser preview keeps the relative URL */}
+    await state.pet.init(sheetUrl);
     resizeScene();app.ticker.add(tick);
     if(DEBUG)window.PixiGameDebug={app,canvas:app.canvas,pet:()=>state.pet,diagnostics};
     try{A&&A.onRendererReady("SPRITE_PET_V11");}catch(_){}

@@ -15,6 +15,9 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.util.Log;
+import android.util.Base64;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -195,6 +198,12 @@ final class GameView extends FrameLayout {
 
     private final class JsBridge {
         @JavascriptInterface public boolean isDebug(){return BuildConfig.DEBUG;}
+        @JavascriptInterface public String loadAssetData(String path){
+            try(InputStream in=getResources().getAssets().open(path);ByteArrayOutputStream out=new ByteArrayOutputStream()){
+                byte[] buf=new byte[16384];int n;while((n=in.read(buf))>0)out.write(buf,0,n);
+                return Base64.encodeToString(out.toByteArray(),Base64.NO_WRAP);
+            }catch(Exception e){Log.e("InfiniteClick","asset load failed: "+path,e);return "";}
+        }
         @JavascriptInterface public void onRendererReady(String renderer){
             post(()->{rendererReady=true;statusView.setText(connectionStatus);setLanguage(language);sendSafeArea();});
         }
