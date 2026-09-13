@@ -18,7 +18,9 @@
     state.app=app;document.body.appendChild(app.canvas);buildScene();wireInput();
     state.audio=new AudioMoodPlayer();
     state.pet=new SpritePetRuntime(app,{parent:state.petLayer,safeBounds,onReaction:handlePetReaction,onModeChange:handlePetMode});
-    await state.pet.init("sprites/cutie-sheet.png");
+    // Use the explicit Android asset URL; Pixi's relative resolver can produce
+    // an invalid file URL inside WebView when the document base is file://.
+    await state.pet.init("file:///android_asset/game/sprites/cutie-sheet.png");
     resizeScene();app.ticker.add(tick);
     if(DEBUG)window.PixiGameDebug={app,canvas:app.canvas,pet:()=>state.pet,diagnostics};
     try{A&&A.onRendererReady("SPRITE_PET_V11");}catch(_){}
