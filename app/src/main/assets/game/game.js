@@ -2,6 +2,7 @@
   "use strict";
 
   const A=window.AndroidGame;
+  // legacy renderer id ASSET_ART_V17
   const DEBUG=!!window.__INFINITE_CLICK_DEBUG__;
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const now=()=>performance.now();
@@ -20,8 +21,8 @@
     NEUTRAL:[0xffffff,0x9d90bd,0xd8b5bd,0x79a8be]
   };
   const state={
-    app:null,stageRoot:null,world:null,bgSprite:null,bgTexture:null,bg:null,toys:null,objectLayer:null,objectRuntime:null,petLayer:null,fxLayer:null,flash:null,audio:null,pets:[],
-    pools:null,particles:[],ripples:[],safe:{left:0,top:0,right:0,bottom:0},
+    app:null,stageRoot:null,world:null,bgBackdrop:null,bgPlayfield:null,bgForeground:null,bgSprite:null,bgTexture:null,bg:null,toys:null,objectLayer:null,objectRuntime:null,petLayer:null,fxLayer:null,flash:null,audio:null,pets:[],
+    pools:null,particles:[],ripples:[],assetFx:[],safe:{left:0,top:0,right:0,bottom:0},
     lastTapAt:0,lastDirectHitAt:0,lastNearAt:0,lastCollisionAt:0,streak:0,hitCombo:0,totalTaps:0,directHits:0,nearMisses:0,
     collisionChain:0,lastCollisionChainAt:0,lastComboBlastAt:0,lastFrenzyAt:0,frenzyUntil:0,frenzyPower:0,nextFrenzyKickAt:0,lastTauntAt:0,lastTrails:new Map(),
     toyEnergy:0,nextEventEnergy:.90,eventCount:0,lastEventAt:0,lastBumps:new Map(),pending:[],objectEvents:0,objectHits:0,
@@ -34,7 +35,9 @@
   async function boot(){
     const app=new PIXI.Application();
     await app.init({resizeTo:window,background:0x171522,antialias:true,resolution:Math.min(window.devicePixelRatio||1,1.5),autoDensity:true,powerPreference:"high-performance"});
-    state.app=app;document.body.appendChild(app.canvas);buildScene();wireInput();state.audio=new AudioMoodPlayer();
+    state.app=app;
+    if(window.ProductionAssetArt&&window.ProductionAssetArt.loadAll)await window.ProductionAssetArt.loadAll();
+    document.body.appendChild(app.canvas);buildScene();wireInput();state.audio=new AudioMoodPlayer();
     state.objectRuntime=new ToyObjectRuntime(app,{parent:state.objectLayer,safeBounds,onEvent:handleObjectEvent});
 
     for(const spec of SLOT_SPECS){
@@ -48,18 +51,22 @@
     const hero=state.pets[0];if(hero){const s=screen(),b=safeBounds();hero.setActive(true,{x:(b.left+b.right)/2,y:b.top+(b.bottom-b.top)*.50});hero.setSizeMultiplier(.98);}
     resizeScene();app.ticker.add(tick);
     if(DEBUG)window.PixiGameDebug={app,canvas:app.canvas,pets:()=>state.pets,diagnostics,triggerToyEvent};
-    try{A&&A.onRendererReady("PREMIUM_TOY_ART_V16");}catch(_){}
+    try{A&&A.onRendererReady("PRODUCTION_ASSET_V18");}catch(_){}
   }
 
   function buildScene(){
     const app=state.app;
     state.stageRoot=new PIXI.Container();state.stageRoot.label="toy-box-root";app.stage.addChild(state.stageRoot);
-    state.world=new PIXI.Container();state.world.label="premium-toy-world";state.stageRoot.addChild(state.world);
-    state.bgSprite=new PIXI.Sprite();state.bgSprite.label="premium-scene-texture";state.world.addChild(state.bgSprite);
-    state.bg=new PIXI.Graphics();state.world.addChild(state.bg);
-    state.toys=new PIXI.Graphics();state.world.addChild(state.toys);
+    state.world=new PIXI.Container();state.world.label="production-asset-world";state.stageRoot.addChild(state.world);
+
+    state.bgBackdrop=new PIXI.Sprite();state.bgBackdrop.label="bg-backdrop";state.world.addChild(state.bgBackdrop);
+    state.bgPlayfield=new PIXI.Sprite();state.bgPlayfield.label="bg-playfield";state.world.addChild(state.bgPlayfield);
+    state.bgSprite=state.bgPlayfield;
+    state.bg=new PIXI.Graphics();state.bg.label="bg-atmosphere";state.world.addChild(state.bg);
+    state.toys=new PIXI.Graphics();state.toys.label="bg-accents";state.world.addChild(state.toys);
     state.objectLayer=new PIXI.Container();state.objectLayer.label="object-layer";state.world.addChild(state.objectLayer);
     state.petLayer=new PIXI.Container();state.petLayer.label="pet-layer";state.world.addChild(state.petLayer);
+    state.bgForeground=new PIXI.Sprite();state.bgForeground.label="bg-foreground";state.world.addChild(state.bgForeground);
     state.fxLayer=new PIXI.Container();state.fxLayer.label="fx-layer";state.world.addChild(state.fxLayer);
     state.flash=new PIXI.Graphics();state.flash.eventMode="none";state.stageRoot.addChild(state.flash);
     state.pools={particles:new ParticlePool(320),ripples:new RipplePool(18)};
@@ -258,14 +265,16 @@
 
   function nearMissFx(x,y,primary){
     const p=clamp(primary.impact,0,1),colors=FX_PALETTES[primary.type]||FX_PALETTES.NEUTRAL;
-    const dx=primary.x-x,dy=primary.y-y,g=state.pools.particles.acquire(state.fxLayer);if(g){g.moveTo(0,0).lineTo(dx,dy).stroke({color:colors[1],width:1.5+p*2.2,alpha:.18+p*.34});g.x=x;g.y=y;state.particles.push({g,vx:0,vy:0,life:.15,max:.15,gravity:0,spin:0,scaleDecay:0});}
-    const count=7+Math.floor(p*9);for(let i=0;i<count;i++){const q=state.pools.particles.acquire(state.fxLayer);if(!q)break;const a=Math.atan2(dy,dx)+(Math.random()-.5)*1.6,spd=70+Math.random()*120;drawFxShape(q,primary.type,i,colors[i%colors.length],.72+p*.36,p);q.x=x;q.y=y;state.particles.push(particle(q,Math.cos(a)*spd,Math.sin(a)*spd-15,.24+Math.random()*.08,55,5,.78));}
+    const dx=primary.x-x,dy=primary.y-y,g=state.pools.particles.acquire(state.fxLayer);if(g){g.moveTo(0,0).lineTo(dx,dy).stroke({color:colors[1],width:1.4+p*1.8,alpha:.16+p*.28});g.x=x;g.y=y;state.particles.push({g,vx:0,vy:0,life:.14,max:.14,gravity:0,spin:0,scaleDecay:0});}
+    spawnAssetFx("graze",x+dx*.24,y+dy*.24,{rotation:Math.atan2(dy,dx),scale:.40+p*.24,scaleTo:.82+p*.20,alpha:.56+p*.20,duration:.18});
+    const count=5+Math.floor(p*6);for(let i=0;i<count;i++){const q=state.pools.particles.acquire(state.fxLayer);if(!q)break;const a=Math.atan2(dy,dx)+(Math.random()-.5)*1.4,spd=60+Math.random()*95;drawFxShape(q,primary.type,i,colors[i%colors.length],.66+p*.28,p);q.x=x;q.y=y;state.particles.push(particle(q,Math.cos(a)*spd,Math.sin(a)*spd-12,.22+Math.random()*.07,45,5,.78));}
   }
 
   function hitFx(primary,tapX,tapY){
-    const combo=state.hitCombo,p=clamp(.78+combo*.055,0,1.25),colors=FX_PALETTES[primary.type]||FX_PALETTES.PEACH,count=Math.min(52,24+combo*4);
-    for(let i=0;i<count;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/count+(Math.random()-.5)*.45,spd=160+Math.random()*260+combo*22,c=colors[i%colors.length];drawFxShape(g,primary.type,i,c,1.05+p*.70,p);g.x=primary.x;g.y=primary.y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-65,.32+Math.random()*.22,115,8,.60));}
-    rayBurst(primary.x,primary.y,primary.type,colors,combo);shockRing(primary.x,primary.y,colors[0],1+combo*.07);shockRing(tapX,tapY,colors[1],.55);
+    const combo=state.hitCombo,p=clamp(.78+combo*.055,0,1.25),colors=FX_PALETTES[primary.type]||FX_PALETTES.PEACH,count=Math.min(40,18+combo*3);
+    spawnAssetFx("hit",primary.x,primary.y,{scale:.54+p*.26,scaleTo:1.06+p*.36,alpha:.72,duration:.22});
+    for(let i=0;i<count;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/count+(Math.random()-.5)*.45,spd=145+Math.random()*210+combo*18,c=colors[i%colors.length];drawFxShape(g,primary.type,i,c,.94+p*.48,p);g.x=primary.x;g.y=primary.y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-56,.28+Math.random()*.18,95,8,.60));}
+    rayBurst(primary.x,primary.y,primary.type,colors,combo);shockRing(primary.x,primary.y,colors[0],.82+combo*.05);shockRing(tapX,tapY,colors[1],.42);
   }
 
   function rayBurst(x,y,type,colors,combo){
@@ -274,9 +283,9 @@
 
   function shockRing(x,y,color,power){const r=state.pools.ripples.acquire(state.fxLayer);if(!r)return;const p=clamp(Number(power)||.5,.2,1.6);r.circle(0,0,8+p*3).stroke({color,width:1.4+p*1.2,alpha:.20+p*.08});r.x=x;r.y=y;state.ripples.push({g:r,life:.18,max:.18,growth:1.25+p*.70,alpha:.20+p*.08});}
 
-  function wallImpactFx(x,y,type,speed){const colors=FX_PALETTES[type]||FX_PALETTES.NEUTRAL,n=5+Math.min(10,Math.floor(speed/80));for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.random()*Math.PI*2,spd=55+Math.random()*100;drawFxShape(g,type,i,colors[i%colors.length],.68+speed/900,.5);g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-15,.20+Math.random()*.12,65,5,.85));}}
+  function wallImpactFx(x,y,type,speed){const colors=FX_PALETTES[type]||FX_PALETTES.NEUTRAL,n=4+Math.min(8,Math.floor(speed/95));if(speed>260)spawnAssetFx("collision",x,y,{scale:.34+Math.min(.42,speed/900),scaleTo:1.0,alpha:.42,duration:.18});for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.random()*Math.PI*2,spd=55+Math.random()*100;drawFxShape(g,type,i,colors[i%colors.length],.64+speed/1100,.5);g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-15,.20+Math.random()*.12,65,5,.85));}}
 
-  function collisionFx(x,y,a,b,force,relative,chain){chain=Math.max(0,Number(chain)||0);const ca=FX_PALETTES[a]||FX_PALETTES.NEUTRAL,cb=FX_PALETTES[b]||FX_PALETTES.NEUTRAL,n=8+Math.floor(force*10)+Math.min(10,chain*2);for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const ang=Math.PI*2*i/n,style=i%2?a:b,c=(i%2?ca:cb)[i%4],spd=85+force*140+Math.min(100,relative*.18);drawFxShape(g,style,i,c,.72+force*.55,force);g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(ang)*spd,Math.sin(ang)*spd-30,.22+force*.12,80,6,.75));}if(force>.55)shockRing(x,y,0xffffff,.42+force*.35+chain*.05);if(chain>=2)collisionChainAccent(x,y,a,b,chain);}
+  function collisionFx(x,y,a,b,force,relative,chain){chain=Math.max(0,Number(chain)||0);const ca=FX_PALETTES[a]||FX_PALETTES.NEUTRAL,cb=FX_PALETTES[b]||FX_PALETTES.NEUTRAL,n=7+Math.floor(force*8)+Math.min(8,chain*2);if(force>.34)spawnAssetFx("collision",x,y,{scale:.40+force*.42+chain*.04,scaleTo:1.14+chain*.05,alpha:.36+force*.18,duration:.20});for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const ang=Math.PI*2*i/n,style=i%2?a:b,c=(i%2?ca:cb)[i%4],spd=80+force*120+Math.min(100,relative*.18);drawFxShape(g,style,i,c,.66+force*.42,force);g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(ang)*spd,Math.sin(ang)*spd-24,.20+force*.10,70,6,.75));}if(force>.55)shockRing(x,y,0xffffff,.34+force*.26+chain*.04);if(chain>=2)collisionChainAccent(x,y,a,b,chain);}
 
 
   function comboHalo(primary){
@@ -352,27 +361,35 @@
   }
 
   function bumperObjectFx(x,y,power){
-    const colors=[0xd98791,0xe7bf63,0xffffff],n=10+Math.floor(power*8);shockRing(x,y,colors[0],.52+power*.28);
-    for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/n,s=5+power*5;g.moveTo(0,-s).lineTo(s*.55,-s*.25).lineTo(s,0).lineTo(s*.55,s*.25).lineTo(0,s).lineTo(-s*.55,s*.25).lineTo(-s,0).lineTo(-s*.55,-s*.25).closePath().fill({color:colors[i%3],alpha:.90});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*(115+power*180),Math.sin(a)*(115+power*180),.24+power*.12,0,7,.72));}
+    const colors=[0xd98791,0xe7bf63,0xffffff],n=8+Math.floor(power*6);spawnAssetFx("hit",x,y,{scale:.36+power*.18,scaleTo:.86+power*.18,alpha:.52,duration:.18});shockRing(x,y,colors[0],.40+power*.22);
+    for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/n,s=4.5+power*4;g.moveTo(0,-s).lineTo(s*.55,-s*.25).lineTo(s,0).lineTo(s*.55,s*.25).lineTo(0,s).lineTo(-s*.55,s*.25).lineTo(-s,0).lineTo(-s*.55,-s*.25).closePath().fill({color:colors[i%3],alpha:.88});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*(100+power*150),Math.sin(a)*(100+power*150),.22+power*.10,0,7,.72));}
   }
 
   function giftObjectFx(x,y,power){
-    const colors=[0x9d90bd,0xe99592,0xe7bf63,0xffffff],n=20+Math.floor(power*10);shockRing(x,y,colors[1],.62+power*.28);
-    for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*Math.random(),spd=90+Math.random()*250+power*80,c=colors[i%colors.length],w=3+Math.random()*5,h=7+Math.random()*10;g.roundRect(-w*.5,-h*.5,w,h,1.5).fill({color:c,alpha:.92});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-120-Math.random()*100,.42+Math.random()*.24,180,10,.35));}
+    const colors=[0x9d90bd,0xe99592,0xe7bf63,0xffffff],n=14+Math.floor(power*8);spawnAssetFx("hit",x,y,{scale:.40+power*.15,scaleTo:.94+power*.24,alpha:.48,duration:.20});shockRing(x,y,colors[1],.48+power*.20);
+    for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*Math.random(),spd=80+Math.random()*210+power*70,c=colors[i%colors.length],w=3+Math.random()*4,h=7+Math.random()*8;g.roundRect(-w*.5,-h*.5,w,h,1.5).fill({color:c,alpha:.88});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-105-Math.random()*80,.36+Math.random()*.20,160,10,.35));}
   }
 
   function balloonObjectFx(x,y,power){
-    const colors=[0x79a8be,0xd8a0b4,0xffffff,0xe7bf63],n=14+Math.floor(power*10);shockRing(x,y,colors[0],.55+power*.22);
-    for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/n+(Math.random()-.5)*.35,spd=85+Math.random()*170,c=colors[i%colors.length],r=2.5+Math.random()*5+power*2;g.circle(0,0,r).fill({color:c,alpha:.72}).stroke({color:0xffffff,width:1,alpha:.35});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-45,.34+Math.random()*.18,-25,4,.60));}
+    const colors=[0x79a8be,0xd8a0b4,0xffffff,0xe7bf63],n=10+Math.floor(power*8);spawnAssetFx("collision",x,y,{scale:.30+power*.12,scaleTo:.78+power*.20,alpha:.44,duration:.18});shockRing(x,y,colors[0],.44+power*.18);
+    for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/n+(Math.random()-.5)*.35,spd=80+Math.random()*150,c=colors[i%colors.length],r=2.5+Math.random()*4+power*1.6;g.circle(0,0,r).fill({color:c,alpha:.72}).stroke({color:0xffffff,width:1,alpha:.30});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-45,.30+Math.random()*.16,-25,4,.60));}
   }
 
   function springObjectFx(x,y,power){
-    const colors=[0x7fc9b5,0x79a8be,0xffffff],n=8+Math.floor(power*6);for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const spread=(i-(n-1)/2)*7,c=colors[i%3],h=18+Math.random()*24+power*18;g.roundRect(-2,-h,4,h,2).fill({color:c,alpha:.78});g.x=x+spread;g.y=y;state.particles.push(particle(g,spread*.9,-(150+Math.random()*160+power*90),.26+Math.random()*.12,150,0,.72));}shockRing(x,y,colors[0],.42+power*.18);
+    const colors=[0x7fc9b5,0x79a8be,0xffffff],n=6+Math.floor(power*5);spawnAssetFx("graze",x,y-10,{rotation:-Math.PI/2,scale:.34+power*.12,scaleTo:.76+power*.14,alpha:.38,duration:.17});for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const spread=(i-(n-1)/2)*7,c=colors[i%3],h=16+Math.random()*20+power*14;g.roundRect(-2,-h,4,h,2).fill({color:c,alpha:.76});g.x=x+spread;g.y=y;state.particles.push(particle(g,spread*.9,-(140+Math.random()*140+power*80),.24+Math.random()*.10,140,0,.72));}shockRing(x,y,colors[0],.34+power*.14);
   }
 
   function objectUnlockFx(x,y,type,power){
     const map={BUMPER:0xd98791,GIFT:0x9d90bd,BALLOON:0x79a8be,SPRING:0x7fc9b5},c=map[type]||0xffffff;shockRing(x,y,c,.46+power*.20);
     for(let i=0;i<8;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/8,s=7+power*4;g.moveTo(0,-s).lineTo(s*.36,-s*.36).lineTo(s,0).lineTo(s*.36,s*.36).lineTo(0,s).lineTo(-s*.36,s*.36).lineTo(-s,0).lineTo(-s*.36,-s*.36).closePath().fill({color:c,alpha:.82});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*110,Math.sin(a)*110-35,.28,60,5,.76));}
+  }
+
+  function spawnAssetFx(kind,x,y,options){
+    const assets=window.ProductionAssetArt;if(!assets||!state.fxLayer)return null;const texture=assets.texture("fx."+kind);if(!texture)return null;
+    const o=options||{},s=new PIXI.Sprite(texture);s.anchor.set(.5);s.blendMode="add";s.x=x;s.y=y;s.rotation=Number(o.rotation)||0;
+    const scale=Math.max(.08,Number(o.scale)||.4);s.scale.set(scale);s.alpha=clamp(Number(o.alpha)||.6,0,1);state.fxLayer.addChild(s);
+    state.assetFx.push({s,life:Math.max(.05,Number(o.duration)||.18),max:Math.max(.05,Number(o.duration)||.18),vx:Number(o.vx)||0,vy:Number(o.vy)||0,spin:Number(o.spin)||0,scaleFrom:scale,scaleTo:Math.max(scale,Number(o.scaleTo)||scale*1.35),alpha:s.alpha});
+    return s;
   }
 
   function tinyReactionSpark(x,y,type,intensity){if(Math.random()>.55)return;const colors=FX_PALETTES[type]||FX_PALETTES.NEUTRAL,g=state.pools.particles.acquire(state.fxLayer);if(!g)return;drawFxShape(g,type,1,colors[1],.70+intensity*1.5,intensity);g.x=x;g.y=y;state.particles.push(particle(g,(Math.random()-.5)*45,-35,.20,0,3,1.1));}
@@ -410,31 +427,25 @@
   function screenFlash(color,alpha){state.flashColor=color||0xffffff;state.flashAlpha=Math.max(state.flashAlpha,clamp(Number(alpha)||.08,0,.20));}
 
   function renderBackground(){
-    if(!state.bg||!state.toys||!state.bgSprite)return;const s=screen(),g=state.bg,t=state.toys,b=safeBounds(),art=window.PremiumToyArt;
-    if(state.bgTexture){try{state.bgTexture.destroy(true);}catch(_){}}
-    state.bgTexture=art&&art.makeSceneTexture?art.makeSceneTexture(s.width,s.height):PIXI.Texture.WHITE;
-    state.bgSprite.texture=state.bgTexture;state.bgSprite.position.set(0,0);state.bgSprite.width=s.width;state.bgSprite.height=s.height;
-    g.clear();t.clear();
-
+    if(!state.bg||!state.toys||!state.bgBackdrop||!state.bgPlayfield||!state.bgForeground)return;
+    const s=screen(),g=state.bg,t=state.toys,b=safeBounds(),assets=window.ProductionAssetArt;
     const w=b.right-b.left,h=b.bottom-b.top;
-    // Cleaner stage silhouette: no giant phone-frame outline.
-    g.roundRect(b.left-8,b.top-6,w+16,h+12,40).fill({color:0x2a2238,alpha:.16});
 
-    // Rear spotlight panels.
-    t.roundRect(b.left+w*.08,b.top+h*.16,w*.28,h*.22,28).fill({color:0xf4e8dd,alpha:.030});
-    t.roundRect(b.left+w*.60,b.top+h*.12,w*.22,h*.18,24).fill({color:0x79a8be,alpha:.028});
-    t.roundRect(b.left+w*.14,b.top+h*.48,w*.18,h*.12,18).fill({color:0xe99592,alpha:.026});
+    state.bgBackdrop.texture=assets?assets.texture("bg.backdrop"):PIXI.Texture.WHITE;
+    state.bgBackdrop.position.set(0,0);state.bgBackdrop.width=s.width;state.bgBackdrop.height=s.height;state.bgBackdrop.alpha=.98;
 
-    // Toy-box stage and pads.
-    t.roundRect(b.left-8,b.bottom-82,w+16,96,34).fill({color:0x1f1928,alpha:.95}).stroke({color:0xffffff,width:1.0,alpha:.05});
-    t.roundRect(b.left+18,b.bottom-66,w-36,56,24).fill({color:0x3b3048,alpha:.44});
+    state.bgPlayfield.texture=assets?assets.texture("bg.playfield"):PIXI.Texture.WHITE;
+    state.bgPlayfield.position.set(b.left-28,b.top-24);state.bgPlayfield.width=w+56;state.bgPlayfield.height=h+120;state.bgPlayfield.alpha=.96;
 
-    t.roundRect(b.left+w*.11,b.top+h*.24,w*.18,14,7).fill({color:0xffffff,alpha:.038});
-    t.roundRect(b.left+w*.67,b.top+h*.72,w*.18,14,7).fill({color:0xffffff,alpha:.028});
+    state.bgForeground.texture=assets?assets.texture("bg.foreground"):PIXI.Texture.WHITE;
+    state.bgForeground.position.set(b.left-20,b.bottom-136);state.bgForeground.width=w+40;state.bgForeground.height=210;state.bgForeground.alpha=.95;
 
-    // Floor catch light.
-    t.ellipse(b.left+w*.50,b.bottom-18,w*.26,16).fill({color:0xffffff,alpha:.04});
-    t.ellipse(b.left+w*.50,b.bottom-14,w*.34,26).fill({color:0xe99592,alpha:.018});
+    g.clear();t.clear();
+    g.ellipse(s.width*.50,b.top+h*.20,w*.26,h*.10).fill({color:0xffffff,alpha:.030});
+    g.ellipse(s.width*.28,b.top+h*.62,w*.12,h*.05).fill({color:0xe99592,alpha:.022});
+    g.ellipse(s.width*.72,b.top+h*.56,w*.13,h*.05).fill({color:0x7fc9b5,alpha:.020});
+    t.roundRect(b.left+w*.08,b.top+h*.18,w*.16,10,5).fill({color:0xffffff,alpha:.04});
+    t.roundRect(b.left+w*.69,b.top+h*.76,w*.14,10,5).fill({color:0xffffff,alpha:.026});
   }
 
   function safeBounds(){const s=screen(),padX=Math.max(72,s.width*.11),padTop=Math.max(72,state.safe.top+54),padBottom=Math.max(92,state.safe.bottom+76);return {left:padX,top:padTop,right:Math.max(padX+1,s.width-padX),bottom:Math.max(padTop+1,s.height-padBottom)};}
@@ -462,14 +473,15 @@
   function updateFx(dt){
     for(let i=state.particles.length-1;i>=0;i--){const p=state.particles[i];p.life-=dt/1000;p.vy+=(p.gravity||0)*dt/1000;p.g.x+=p.vx*dt/1000;p.g.y+=p.vy*dt/1000;p.g.rotation+=(p.spin||0)*dt/1000;p.g.alpha=clamp(p.life/p.max,0,1);const q=1-p.life/p.max,scale=Math.max(.05,1-q*(p.scaleDecay||0));p.g.scale.set(scale);if(p.life<=0){state.pools.particles.release(p.g);state.particles.splice(i,1);}}
     for(let i=state.ripples.length-1;i>=0;i--){const r=state.ripples[i];r.life-=dt/1000;const q=1-r.life/r.max;r.g.scale.set(1+q*r.growth);r.g.alpha=clamp(r.life/r.max,0,1)*r.alpha;if(r.life<=0){state.pools.ripples.release(r.g);state.ripples.splice(i,1);}}
+    for(let i=state.assetFx.length-1;i>=0;i--){const f=state.assetFx[i];f.life-=dt/1000;const q=1-clamp(f.life/f.max,0,1);f.s.x+=f.vx*dt/1000;f.s.y+=f.vy*dt/1000;f.s.rotation+=(f.spin||0)*dt/1000;const scale=f.scaleFrom+(f.scaleTo-f.scaleFrom)*q;f.s.scale.set(scale);f.s.alpha=Math.max(0,(1-q)*f.alpha);if(f.life<=0){try{f.s.parent&&f.s.parent.removeChild(f.s);f.s.destroy();}catch(_){}state.assetFx.splice(i,1);}}
   }
 
   function updateFlash(dt){if(!state.flash)return;state.flashAlpha=Math.max(0,state.flashAlpha-dt/650);const s=screen();state.flash.clear();if(state.flashAlpha>.002)state.flash.rect(0,0,s.width,s.height).fill({color:state.flashColor,alpha:state.flashAlpha});}
 
-  function diagnostics(){return {version:"ASSET_ART_V17",fps:state.frame.fps,totalTaps:state.totalTaps,directHits:state.directHits,nearMisses:state.nearMisses,hitCombo:state.hitCombo,collisionChain:state.collisionChain,frenzy:state.frenzyUntil>now(),toyEnergy:Math.round(state.toyEnergy*100)/100,nextEventEnergy:Math.round(state.nextEventEnergy*100)/100,eventCount:state.eventCount,objectEvents:state.objectEvents,objectHits:state.objectHits,objects:state.objectRuntime?state.objectRuntime.context():[],activePets:activePets().length,pets:state.pets.map(p=>p.context()),particlePool:state.pools&&state.pools.particles.stats(),ripplePool:state.pools&&state.pools.ripples.stats(),aiVoice:false,geminiGameplay:false,immersive:true};}
+  function diagnostics(){return {version:"PRODUCTION_ASSET_V18",fps:state.frame.fps,totalTaps:state.totalTaps,directHits:state.directHits,nearMisses:state.nearMisses,hitCombo:state.hitCombo,collisionChain:state.collisionChain,frenzy:state.frenzyUntil>now(),toyEnergy:Math.round(state.toyEnergy*100)/100,nextEventEnergy:Math.round(state.nextEventEnergy*100)/100,eventCount:state.eventCount,objectEvents:state.objectEvents,objectHits:state.objectHits,objects:state.objectRuntime?state.objectRuntime.context():[],activePets:activePets().length,pets:state.pets.map(p=>p.context()),particlePool:state.pools&&state.pools.particles.stats(),ripplePool:state.pools&&state.pools.ripples.stats(),aiVoice:false,geminiGameplay:false,immersive:true};}
 
   function resetGame(){
-    for(const p of state.particles)state.pools.particles.release(p.g);state.particles.length=0;for(const r of state.ripples)state.pools.ripples.release(r.g);state.ripples.length=0;
+    for(const p of state.particles)state.pools.particles.release(p.g);state.particles.length=0;for(const r of state.ripples)state.pools.ripples.release(r.g);state.ripples.length=0;for(const f of state.assetFx){try{f.s.parent&&f.s.parent.removeChild(f.s);f.s.destroy();}catch(_){}}state.assetFx.length=0;
     state.streak=0;state.hitCombo=0;state.totalTaps=0;state.directHits=0;state.nearMisses=0;state.toyEnergy=0;state.objectEvents=0;state.objectHits=0;if(state.objectRuntime)state.objectRuntime.reset();state.nextEventEnergy=.90;state.eventCount=0;state.pending.length=0;state.lastBumps.clear();state.collisionChain=0;state.lastCollisionChainAt=0;state.lastComboBlastAt=0;state.lastFrenzyAt=0;state.frenzyUntil=0;state.frenzyPower=0;state.nextFrenzyKickAt=0;state.lastTauntAt=0;state.lastTrails.clear();
     state.pets.forEach((pet,i)=>{pet.reset(i,state.pets.length);pet.setActive(i===0);});
     const hero=state.pets[0],b=safeBounds();if(hero){hero.setActive(true,{x:(b.left+b.right)/2,y:b.top+(b.bottom-b.top)*.50});hero.setSizeMultiplier(.98);}

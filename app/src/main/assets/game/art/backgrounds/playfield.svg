@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1380">
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#302647"/>
+      <stop offset="55%" stop-color="#221b34"/>
+      <stop offset="100%" stop-color="#181320"/>
+    </linearGradient>
+    <linearGradient id="lip" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#47395d"/>
+      <stop offset="100%" stop-color="#241d35"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="12"/></filter>
+  </defs>
+  <rect x="28" y="36" width="844" height="1266" rx="64" fill="#0a0811" opacity="0.22" filter="url(#shadow)"/>
+  <rect x="36" y="42" width="828" height="1248" rx="60" fill="url(#panel)"/>
+  <rect x="48" y="56" width="804" height="1220" rx="54" fill="none" stroke="#ffffff" stroke-opacity="0.07" stroke-width="4"/>
+  <rect x="74" y="108" width="210" height="128" rx="28" fill="#fff2e8" opacity="0.045"/>
+  <rect x="598" y="120" width="170" height="98" rx="24" fill="#9ed1df" opacity="0.035"/>
+  <rect x="82" y="1180" width="736" height="70" rx="28" fill="url(#lip)" opacity="0.85"/>
+  <ellipse cx="450" cy="1205" rx="190" ry="16" fill="#ffffff" opacity="0.06"/>
+  <ellipse cx="450" cy="1152" rx="290" ry="44" fill="#f3b7c7" opacity="0.028"/>
+</svg>
