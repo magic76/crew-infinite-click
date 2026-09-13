@@ -51,8 +51,18 @@
     }
 
     async init(sheetUrl){
-      const base=await global.PIXI.Assets.load(sheetUrl);
-      if(!base||!base.source)throw new Error(this.id+" sprite sheet failed to load");
+      const requested=String(sheetUrl||"");
+      let sourceUrl=requested;
+      try{
+        const rel=requested.replace(/^\/+/,"");
+        const encoded=global.AndroidGame&&global.AndroidGame.loadAssetData?global.AndroidGame.loadAssetData("game/"+rel):"";
+        if(encoded)sourceUrl="data:image/png;base64,"+encoded;
+      }catch(_){/* browser preview keeps the relative URL */}
+      const image=await new Promise((resolve,reject)=>{
+        const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error(this.id+" sprite sheet failed to load"));img.src=sourceUrl;
+      });
+      const base=global.PIXI.Texture.from(image);
+      if(!base||!base.source)throw new Error(this.id+" sprite sheet texture failed");
       this.frames=[];
       for(let row=0;row<GRID_ROWS;row++)for(let col=0;col<GRID_COLUMNS;col++){
         this.frames.push(new global.PIXI.Texture({source:base.source,frame:new global.PIXI.Rectangle(col*CELL,row*CELL,CELL,CELL)}));
