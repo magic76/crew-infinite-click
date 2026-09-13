@@ -1,0 +1,10 @@
+const fs=require('fs'),assert=require('assert');
+const game=fs.readFileSync('app/src/main/assets/game/game.js','utf8');
+for(const type of ['PEACH','SPARK','MINT','NEUTRAL'])assert(game.includes(type+':[')||game.includes(type+': ['),type+' FX palette missing');
+assert(game.includes('bezierCurveTo'),'peach heart/puff shape missing');
+assert(game.includes('style==="SPARK"'),'spark-specific FX missing');
+assert(game.includes('style==="MINT"'),'mint-specific FX missing');
+assert(game.includes('const size=.72+p*.95'),'FX size must scale with proximity impact');
+assert(game.includes('Math.floor(p*24)'),'FX density must scale with proximity impact');
+assert(game.includes('rayBurst'),'direct hits need rare high-impact rays');
+console.log('fx-variety-v12.test.js PASS');

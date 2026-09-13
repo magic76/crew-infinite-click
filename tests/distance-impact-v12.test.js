@@ -1,0 +1,13 @@
+const fs=require('fs'),assert=require('assert'),vm=require('vm');
+const src=fs.readFileSync('app/src/main/assets/game/sprite-pet-runtime.js','utf8');
+const sandbox={window:{performance:{now:()=>0}},console};sandbox.window.window=sandbox.window;
+vm.createContext(sandbox);vm.runInContext(src,sandbox);
+const f=sandbox.window.SpritePetImpactForDistance;assert.equal(typeof f,'function');
+const hit=f(30,60,150,300),edge=f(100,60,150,300),aware=f(220,60,150,300),far=f(400,60,150,300);
+assert(hit===1,'direct hit must be full impact');
+assert(edge<hit&&edge>.55,'near impact should smoothly decay');
+assert(aware<edge&&aware>.12,'aware impact should be smaller but nonzero');
+assert(far===0,'far impact must be zero');
+assert(src.includes('receiveGroupPanic'),'group panic API missing');
+assert(src.includes('nudgeFrom'),'collision nudge API missing');
+console.log('distance-impact-v12.test.js PASS');

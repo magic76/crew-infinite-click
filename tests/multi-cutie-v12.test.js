@@ -1,0 +1,11 @@
+const fs=require('fs'),assert=require('assert');
+const game=fs.readFileSync('app/src/main/assets/game/game.js','utf8');
+assert(game.includes('const PET_SPECS=['),'PET_SPECS missing');
+for(const id of ['peach-shy','spark-trickster','mint-curious','peach-goofy'])assert(game.includes(id),'missing '+id);
+for(const type of ['type:"PEACH"','type:"SPARK"','type:"MINT"'])assert(game.includes(type),'missing '+type);
+assert(game.includes('state.pets.push(pet)'),'must spawn multiple pets');
+assert(game.includes('for(const pet of state.pets)'),'must route taps to multiple pets');
+assert(game.includes('resolveCollisions()'),'pet collision loop missing');
+assert(game.includes('spreadPanic(primary)'),'panic propagation missing');
+assert(game.includes('maybeGroupSurprise'),'group surprise missing');
+console.log('multi-cutie-v12.test.js PASS');
