@@ -1,0 +1,13 @@
+const fs=require('fs'),assert=require('assert');
+const p='app/src/main/assets/game/sprites/cutie-sheet.png';
+const b=fs.readFileSync(p);
+assert.strictEqual(b.toString('ascii',1,4),'PNG','asset must be PNG');
+const width=b.readUInt32BE(16),height=b.readUInt32BE(20);
+assert.strictEqual(width,2048,'sprite sheet width must be 2048');
+assert.strictEqual(height,1024,'sprite sheet height must be 1024');
+const src=fs.readFileSync('app/src/main/assets/game/sprite-pet-runtime.js','utf8');
+assert(src.includes('GRID_COLUMNS=4,GRID_ROWS=2,CELL=512'),'runtime must use exact 4x2 512 grid');
+assert(src.includes('new global.PIXI.Texture({source:base.source,frame:new global.PIXI.Rectangle'),'runtime must slice the atlas into Pixi textures');
+assert(src.includes('new global.PIXI.AnimatedSprite'),'pet must use AnimatedSprite rather than swapping whole images');
+for(const name of ['IDLE','HOP','STARTLED','RUN','PANIC','CELEBRATE'])assert(src.includes(name+':{frames:'),name+' animation missing');
+console.log('sprite-sheet-v11.test.js PASS');

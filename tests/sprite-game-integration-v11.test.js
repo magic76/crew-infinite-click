@@ -1,0 +1,11 @@
+const fs=require('fs'),assert=require('assert');
+const game=fs.readFileSync('app/src/main/assets/game/game.js','utf8');
+const html=fs.readFileSync('app/src/main/assets/game/index.html','utf8');
+assert(html.includes('sprite-pet-runtime.js'),'sprite runtime must be active');
+for(const retired of ['storm-control-scene-runtime.js','promise-runtime.js','world-mutation-runtime.js','experience-runtime.js','gemini-event-aggregator.js','conversation-director.js'])assert(!html.includes(retired),retired+' must not be loaded in v11');
+assert(game.includes('state.pet.handleTap(p.x,p.y'),'screen taps must route into pet behavior');
+assert(game.includes('tapBurst(p.x,p.y'),'every tap must get local FX at exact tap location');
+assert(game.includes('petHitBurst'),'direct pet hits need a stronger burst');
+assert(game.includes('aiVoice:false,geminiGameplay:false'),'diagnostics must declare AI speech/gameplay disabled');
+assert(game.includes('All Gemini/voice messages are intentionally ignored in v11'),'runtime must ignore model/voice messages');
+console.log('sprite-game-integration-v11.test.js PASS');

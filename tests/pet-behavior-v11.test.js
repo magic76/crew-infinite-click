@@ -1,0 +1,10 @@
+const fs=require('fs'),assert=require('assert');
+const src=fs.readFileSync('app/src/main/assets/game/sprite-pet-runtime.js','utf8');
+assert(src.includes('if(d<=directRadius)'),'direct-hit branch missing');
+assert(src.includes('else if(d<=nearRadius)'),'near/flee branch missing');
+assert(src.includes('reaction="CURIOUS"'),'distant curiosity branch missing');
+assert(src.includes('this.panic=clamp(this.panic+.24'),'direct hits must build panic');
+assert(src.includes('this.chaseStreak=Math.min(20,this.chaseStreak+1)'),'rapid chasing must build a streak');
+assert(src.includes('this.facing=this.vx<0?-1:1'),'pet must face movement direction');
+assert(src.includes('this.sprite.scale.set(this.facing*sx,sy)'),'left/right flip must be applied via scale.x');
+console.log('pet-behavior-v11.test.js PASS');
