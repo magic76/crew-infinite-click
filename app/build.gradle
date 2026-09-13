@@ -10,8 +10,8 @@ android {
         applicationId 'com.magic76.aiclicker'
         minSdk 26
         targetSdk 35
-        versionCode 385
-        versionName '0.40.1-sprite-asset-fix'
+        versionCode 386
+        versionName '0.40.2-sprite-image-loader-fix'
     }
 
     buildTypes {

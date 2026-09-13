@@ -32,8 +32,17 @@
     }
 
     async init(sheetUrl){
-      const base=await global.PIXI.Assets.load(sheetUrl);
-      if(!base||!base.source)throw new Error("cutie sprite sheet failed to load");
+      // Android WebView can reject file:///android_asset URLs in Pixi's
+      // fetch-based Assets loader. Let the WebView image decoder load it,
+      // then wrap the decoded image in a Pixi texture.
+      const image=await new Promise((resolve,reject)=>{
+        const img=new Image();
+        img.onload=()=>resolve(img);
+        img.onerror=()=>reject(new Error("cutie sprite sheet failed to load: "+sheetUrl));
+        img.src=sheetUrl;
+      });
+      const base=global.PIXI.Texture.from(image);
+      if(!base||!base.source)throw new Error("cutie sprite sheet texture failed");
       this.frames=[];
       for(let row=0;row<GRID_ROWS;row++){
         for(let col=0;col<GRID_COLUMNS;col++){
