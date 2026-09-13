@@ -23,6 +23,7 @@
     app:null,stageRoot:null,world:null,bg:null,toys:null,petLayer:null,fxLayer:null,flash:null,audio:null,pets:[],
     pools:null,particles:[],ripples:[],safe:{left:0,top:0,right:0,bottom:0},
     lastTapAt:0,lastDirectHitAt:0,lastNearAt:0,lastCollisionAt:0,streak:0,hitCombo:0,totalTaps:0,directHits:0,nearMisses:0,
+    collisionChain:0,lastCollisionChainAt:0,lastComboBlastAt:0,lastFrenzyAt:0,frenzyUntil:0,frenzyPower:0,nextFrenzyKickAt:0,lastTauntAt:0,lastTrails:new Map(),
     toyEnergy:0,nextEventEnergy:.90,eventCount:0,lastEventAt:0,lastBumps:new Map(),pending:[],
     cameraX:0,cameraY:0,cameraVx:0,cameraVy:0,cameraRot:0,cameraVr:0,flashAlpha:0,flashColor:0xffffff,
     frame:{fps:60,accMs:0,frames:0,lastLog:0}
@@ -46,7 +47,7 @@
     const hero=state.pets[0];if(hero){const s=screen(),b=safeBounds();hero.setActive(true,{x:(b.left+b.right)/2,y:b.top+(b.bottom-b.top)*.50});hero.setSizeMultiplier(1.08);}
     resizeScene();app.ticker.add(tick);
     if(DEBUG)window.PixiGameDebug={app,canvas:app.canvas,pets:()=>state.pets,diagnostics,triggerToyEvent};
-    try{A&&A.onRendererReady("TOY_BOX_PHYSICS_V13");}catch(_){}
+    try{A&&A.onRendererReady("TOY_BOX_CHAOS_V14");}catch(_){}
   }
 
   function buildScene(){
@@ -82,16 +83,19 @@
     if(primary&&primary.reaction==="HIT"){
       state.directHits++;state.hitCombo=Math.min(9,state.hitCombo+1);state.lastDirectHitAt=t;
       state.toyEnergy+=.29+.09*Math.min(3,state.hitCombo)+Math.min(.12,state.streak*.006);
-      hitFx(primary,x,y);spreadPanic(primary,.76);cameraKick(primary.x-x,primary.y-y,.72+state.hitCombo*.07);screenFlash(FX_PALETTES[primary.type][0],.10+.025*state.hitCombo);
+      hitFx(primary,x,y);comboHalo(primary);spreadPanic(primary,.76);cameraKick(primary.x-x,primary.y-y,.72+state.hitCombo*.07);screenFlash(FX_PALETTES[primary.type][0],.10+.025*state.hitCombo);
+      if(state.hitCombo>=3&&state.hitCombo%3===0&&t-state.lastComboBlastAt>260){state.lastComboBlastAt=t;comboBlast(primary);}
+      if(state.hitCombo>=5&&activePets().length>=2&&t-state.lastFrenzyAt>5200)startPinballFrenzy(primary,"HIT_CHAIN");
       if(window.GameHaptics)window.GameHaptics.perform("IMPACT",clamp(.52+state.hitCombo*.055,.52,.88));
       if(state.audio)state.audio.playJackpot(primary.type==="SPARK"?"GLITCH":"ORGANIC",Math.min(4,1+Math.floor(state.hitCombo/2)));
     }else if(primary&&impact>=.55){
       state.nearMisses++;state.lastNearAt=t;state.toyEnergy+=.07+impact*.07;
-      nearMissFx(x,y,primary);spreadPanic(primary,.28+impact*.25);cameraKick(primary.x-x,primary.y-y,.16+impact*.12);
+      nearMissFx(x,y,primary);if(impact>=.76)grazeWhipFx(x,y,primary);spreadPanic(primary,.28+impact*.25);cameraKick(primary.x-x,primary.y-y,.16+impact*.12);
+      if(impact>=.84)state.toyEnergy+=.035;
       if(window.GameHaptics)window.GameHaptics.perform("SOFT_TAP",.18+impact*.18);
       if(state.audio)state.audio.playClick(primary.type==="SPARK"?"GLITCH":"ORGANIC",.20+impact*.20,Math.max(state.streak,Math.round(impact*16)));
     }else{
-      airTapFx(x,y,primary&&impact>.08?primary.type:"NEUTRAL",impact);
+      airTapFx(x,y,primary&&impact>.08?primary.type:"NEUTRAL",impact);maybeTauntOnMiss(x,y,primary,impact,t);
       if(window.GameHaptics)window.GameHaptics.perform("SOFT_TAP",.12);
       if(state.audio)state.audio.playClick("ORGANIC",.12,Math.min(8,state.streak));
     }
@@ -123,15 +127,16 @@
     const active=activePets(),inactive=state.pets.filter(p=>!p.isActive());state.eventCount++;
     let kind;
     if(active.length===1)kind="SPLIT";
-    else if(active.length===2)kind=Math.random()<.72?"SPLIT":"BOUNCE_PARTY";
-    else if(active.length===3)kind=Math.random()<.58?"SPLIT":"BOUNCE_PARTY";
-    else if(active.length>=4)kind=Math.random()<.48?"MERGE":(inactive.length?"SWARM":"BOUNCE_PARTY");
+    else if(active.length===2)kind=Math.random()<.66?"SPLIT":"BOUNCE_PARTY";
+    else if(active.length===3){const r=Math.random();kind=r<.48?"SPLIT":(r<.73?"PINBALL":"BOUNCE_PARTY");}
+    else if(active.length>=4){const r=Math.random();kind=r<.36?"MERGE":(r<.62?"PINBALL":(inactive.length?"SWARM":"BOUNCE_PARTY"));}
     else kind="BOUNCE_PARTY";
     if(kind==="SPLIT"&&!inactive.length)kind="MERGE";
     const origin=source&&Number.isFinite(source.x)?{x:source.x,y:source.y}:{x:point.x,y:point.y};
     if(kind==="SPLIT")splitEvent(source,origin);
     else if(kind==="MERGE")mergeEvent(source,origin);
     else if(kind==="SWARM")swarmEvent(origin);
+    else if(kind==="PINBALL")startPinballFrenzy(source||origin,"ENERGY_EVENT");
     else bounceParty(origin);
   }
 
@@ -192,9 +197,11 @@
       const dx=pb.x-pa.x,dy=pb.y-pa.y,d=Math.hypot(dx,dy),min=a.collisionRadius()+b.collisionRadius();if(d>=min||d<=0)continue;
       const key=a.id+"|"+b.id,last=state.lastBumps.get(key)||0;if(t-last<250)continue;state.lastBumps.set(key,t);
       const va=a.velocity(),vb=b.velocity(),relative=Math.hypot(va.vx-vb.vx,va.vy-vb.vy),force=clamp((min-d)/Math.max(1,min)+relative/850+.18,.22,.92);
-      a.nudgeFrom(pb.x,pb.y,force);b.nudgeFrom(pa.x,pa.y,force);const x=(pa.x+pb.x)/2,y=(pa.y+pb.y)/2;collisionFx(x,y,a.type,b.type,force,relative);
-      if(relative>230){state.toyEnergy+=.025;cameraKick(dx,dy,.10+force*.22);}
-      if(relative>380&&t-state.lastCollisionAt>500){state.lastCollisionAt=t;spreadPanic({id:a.id,x,y,impact:.58,panic:.5},.35);}
+      let chain=0;if(relative>210){chain=t-state.lastCollisionChainAt<900?Math.min(9,state.collisionChain+1):1;state.collisionChain=chain;state.lastCollisionChainAt=t;}
+      a.nudgeFrom(pb.x,pb.y,clamp(force+chain*.035,.22,1));b.nudgeFrom(pa.x,pa.y,clamp(force+chain*.035,.22,1));const x=(pa.x+pb.x)/2,y=(pa.y+pb.y)/2;collisionFx(x,y,a.type,b.type,force,relative,chain);
+      if(relative>230){state.toyEnergy+=.025+chain*.006;cameraKick(dx,dy,.10+force*.22+chain*.018);}
+      if(relative>380&&t-state.lastCollisionAt>420){state.lastCollisionAt=t;spreadPanic({id:a.id,x,y,impact:.58+chain*.03,panic:.5},.35+chain*.025);}
+      if(chain>=3&&relative>300&&t-state.lastFrenzyAt>5000)startPinballFrenzy({id:a.id,type:a.type,x,y},"COLLISION_CHAIN");
     }
   }
 
@@ -224,10 +231,77 @@
 
   function wallImpactFx(x,y,type,speed){const colors=FX_PALETTES[type]||FX_PALETTES.NEUTRAL,n=5+Math.min(10,Math.floor(speed/80));for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.random()*Math.PI*2,spd=55+Math.random()*100;drawFxShape(g,type,i,colors[i%colors.length],.68+speed/900,.5);g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-15,.20+Math.random()*.12,65,5,.85));}}
 
-  function collisionFx(x,y,a,b,force,relative){const ca=FX_PALETTES[a]||FX_PALETTES.NEUTRAL,cb=FX_PALETTES[b]||FX_PALETTES.NEUTRAL,n=8+Math.floor(force*10);for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const ang=Math.PI*2*i/n,style=i%2?a:b,c=(i%2?ca:cb)[i%4],spd=85+force*140+Math.min(100,relative*.18);drawFxShape(g,style,i,c,.72+force*.55,force);g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(ang)*spd,Math.sin(ang)*spd-30,.22+force*.12,80,6,.75));}if(force>.55)shockRing(x,y,0xffffff,.42+force*.35);}
+  function collisionFx(x,y,a,b,force,relative,chain){chain=Math.max(0,Number(chain)||0);const ca=FX_PALETTES[a]||FX_PALETTES.NEUTRAL,cb=FX_PALETTES[b]||FX_PALETTES.NEUTRAL,n=8+Math.floor(force*10)+Math.min(10,chain*2);for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const ang=Math.PI*2*i/n,style=i%2?a:b,c=(i%2?ca:cb)[i%4],spd=85+force*140+Math.min(100,relative*.18);drawFxShape(g,style,i,c,.72+force*.55,force);g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(ang)*spd,Math.sin(ang)*spd-30,.22+force*.12,80,6,.75));}if(force>.55)shockRing(x,y,0xffffff,.42+force*.35+chain*.05);if(chain>=2)collisionChainAccent(x,y,a,b,chain);}
+
+
+  function comboHalo(primary){
+    const combo=Math.max(1,state.hitCombo),colors=FX_PALETTES[primary.type]||FX_PALETTES.PEACH,n=Math.min(6,2+Math.floor(combo/2));
+    for(let i=0;i<n;i++){
+      const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=-Math.PI*.85+(i/Math.max(1,n-1))*Math.PI*.70,r=46+combo*2.2;
+      drawFxShape(g,primary.type,i,colors[(i+1)%colors.length],.62+combo*.035,.6);g.x=primary.x+Math.cos(a)*r;g.y=primary.y+Math.sin(a)*r-24;
+      state.particles.push(particle(g,Math.cos(a)*18,-26-Math.random()*12,.24+combo*.008,0,4,.82));
+    }
+  }
+
+  function comboBlast(primary){
+    const colors=FX_PALETTES[primary.type]||FX_PALETTES.PEACH,combo=Math.max(3,state.hitCombo);state.toyEnergy+=.08+.01*Math.min(combo,8);
+    shockRing(primary.x,primary.y,colors[0],1.35+combo*.05);shockRing(primary.x,primary.y,0xffffff,.92+combo*.04);
+    for(const pet of activePets()){
+      if(pet.id===primary.id)continue;const pos=pet.position();if(!pos)continue;const d=Math.hypot(pos.x-primary.x,pos.y-primary.y);if(d>360)continue;
+      const f=clamp((1-d/360)*(.46+combo*.035),.08,.72);pet.nudgeFrom(primary.x,primary.y,f);
+    }
+    cameraKick(0,0,.42+combo*.035);screenFlash(colors[1],.055+combo*.008);
+    if(window.GameHaptics)window.GameHaptics.perform("IMPACT",clamp(.46+combo*.035,.46,.78));
+  }
+
+  function grazeWhipFx(x,y,primary){
+    const colors=FX_PALETTES[primary.type]||FX_PALETTES.NEUTRAL,dx=primary.x-x,dy=primary.y-y,len=Math.max(1,Math.hypot(dx,dy)),nx=-dy/len,ny=dx/len;
+    for(let i=-1;i<=1;i++){
+      const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const off=i*7;
+      g.moveTo(nx*off,ny*off).lineTo(dx*.78+nx*off,dy*.78+ny*off).stroke({color:colors[(i+2)%colors.length],width:1.2+primary.impact*1.8,alpha:.18+primary.impact*.30});g.x=x;g.y=y;
+      state.particles.push({g,vx:dx*.10,vy:dy*.10,life:.12,max:.12,gravity:0,spin:0,scaleDecay:.12});
+    }
+    const pet=state.pets.find(p=>p.id===primary.id);if(pet)pet.nudgeFrom(x,y,.18+primary.impact*.20);
+  }
+
+  function maybeTauntOnMiss(x,y,primary,impact,t){
+    if(impact>.10||t-state.lastTauntAt<2400||t-state.lastDirectHitAt<900||Math.random()>.18)return;
+    const pets=activePets();if(!pets.length)return;let pick=null,best=Infinity;
+    for(const pet of pets){const pos=pet.position();if(!pos)continue;const d=Math.hypot(pos.x-x,pos.y-y);if(d<best){best=d;pick=pet;}}
+    if(!pick)return;state.lastTauntAt=t;
+    if(Math.random()<.55)pick.celebrate();else pick.synchronize("HOP",{x,y});
+    const pos=pick.position();if(pos)tinyReactionSpark(pos.x,pos.y,pick.type,.55);
+  }
+
+  function startPinballFrenzy(source,reason){
+    const t=now();if(t-state.lastFrenzyAt<4200)return false;const pets=activePets();if(pets.length<2)return false;
+    state.lastFrenzyAt=t;state.frenzyUntil=t+1850;state.frenzyPower=1;state.nextFrenzyKickAt=t+240;
+    const origin=source&&Number.isFinite(source.x)?source:{x:screen().width*.5,y:screen().height*.5},base=Math.random()*Math.PI*2;
+    for(let i=0;i<pets.length;i++){const a=base+Math.PI*2*i/pets.length+(Math.random()-.5)*.55,spd=410+Math.random()*180;pets[i].launch(Math.cos(a)*spd,Math.sin(a)*spd-90,"PANIC");}
+    eventBurst(origin.x,origin.y,source&&source.type||"NEUTRAL","PINBALL",1);screenFlash(0xffffff,.10);cameraKick(0,0,.82);
+    if(window.GameHaptics)window.GameHaptics.perform("IMPACT",.74);return true;
+  }
+
+  function updateFrenzy(t){
+    if(!state.frenzyUntil||t>=state.frenzyUntil){if(state.frenzyPower>0){state.frenzyPower=0;const pets=activePets();if(pets.length){const pick=pets[Math.floor(Math.random()*pets.length)];pick&&pick.celebrate();}}return;}
+    const remain=clamp((state.frenzyUntil-t)/1850,0,1);state.frenzyPower=remain;
+    if(t>=state.nextFrenzyKickAt){state.nextFrenzyKickAt=t+240+Math.random()*100;const pets=activePets();if(pets.length){const pet=pets[Math.floor(Math.random()*pets.length)],v=pet.velocity();if(v.speed<360){const a=Math.random()*Math.PI*2,spd=350+Math.random()*170;pet.launch(Math.cos(a)*spd,Math.sin(a)*spd-70,"PANIC");}}}
+    for(const pet of activePets()){const v=pet.velocity();if(v.speed>250)frenzyTrail(pet,clamp(v.speed/650,.35,1));}
+  }
+
+  function frenzyTrail(pet,intensity){
+    const t=now(),last=state.lastTrails.get(pet.id)||0;if(t-last<72)return;state.lastTrails.set(pet.id,t);const pos=pet.position(),v=pet.velocity();if(!pos)return;
+    const colors=FX_PALETTES[pet.type]||FX_PALETTES.NEUTRAL,len=Math.max(1,Math.hypot(v.vx,v.vy)),ux=-v.vx/len,uy=-v.vy/len;
+    for(let i=0;i<2;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;drawFxShape(g,pet.type,i,colors[(i+1)%colors.length],.55+intensity*.38,intensity);g.x=pos.x+ux*(18+i*10)+(Math.random()-.5)*8;g.y=pos.y+uy*(18+i*10)+(Math.random()-.5)*8;state.particles.push(particle(g,ux*(45+intensity*55),uy*(45+intensity*55),.18,0,4,1.20));}
+  }
+
+  function collisionChainAccent(x,y,a,b,chain){
+    const colors=[...(FX_PALETTES[a]||FX_PALETTES.NEUTRAL),...(FX_PALETTES[b]||FX_PALETTES.NEUTRAL)],n=Math.min(12,3+chain*2);
+    for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const ang=Math.PI*2*i/n,c=colors[i%colors.length],s=8+chain*2;g.moveTo(0,-s).lineTo(s*.45,0).lineTo(0,s).lineTo(-s*.45,0).closePath().fill({color:c,alpha:.88});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(ang)*(120+chain*25),Math.sin(ang)*(120+chain*25),.20+chain*.012,0,6,.72));}
+  }
 
   function eventBurst(x,y,type,kind,power){
-    const style=type==="NEUTRAL"?"PEACH":type,colors=FX_PALETTES[style]||FX_PALETTES.PEACH,n=kind==="SWARM"?52:40;
+    const style=type==="NEUTRAL"?"PEACH":type,colors=FX_PALETTES[style]||FX_PALETTES.PEACH,n=kind==="SWARM"?52:(kind==="PINBALL"?58:40);
     for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/n+(Math.random()-.5)*.65,spd=150+Math.random()*280;drawFxShape(g,style,i,colors[i%colors.length],1.0+Math.random()*.8,power);g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-65,.34+Math.random()*.22,100,8,.58));}
     shockRing(x,y,colors[0],1.2);shockRing(x,y,colors[1],.82);
   }
@@ -276,10 +350,10 @@
   }
 
   function tick(ticker){
-    const dt=Math.min(50,Number(ticker.deltaMS)||16.67),t=now();processPending(t);resolveCollisions();
+    const dt=Math.min(50,Number(ticker.deltaMS)||16.67),t=now();processPending(t);updateFrenzy(t);resolveCollisions();
     if(t-state.lastTapAt>900){state.streak=Math.max(0,state.streak-dt/500);state.toyEnergy=Math.max(0,state.toyEnergy-dt/18000);}
     updateCamera(dt);updateFx(dt);updateFlash(dt);
-    const f=state.frame;f.accMs+=dt;f.frames++;if(f.accMs>=500){f.fps=Math.round(f.frames*1000/f.accMs);f.accMs=0;f.frames=0;}if(DEBUG&&t-f.lastLog>1200){f.lastLog=t;console.log("[ToyBox v13]",diagnostics());}
+    const f=state.frame;f.accMs+=dt;f.frames++;if(f.accMs>=500){f.fps=Math.round(f.frames*1000/f.accMs);f.accMs=0;f.frames=0;}if(DEBUG&&t-f.lastLog>1200){f.lastLog=t;console.log("[ToyBox v14]",diagnostics());}
   }
 
   function updateCamera(dt){
@@ -296,11 +370,11 @@
 
   function updateFlash(dt){if(!state.flash)return;state.flashAlpha=Math.max(0,state.flashAlpha-dt/650);const s=screen();state.flash.clear();if(state.flashAlpha>.002)state.flash.rect(0,0,s.width,s.height).fill({color:state.flashColor,alpha:state.flashAlpha});}
 
-  function diagnostics(){return {version:"TOY_BOX_PHYSICS_V13",fps:state.frame.fps,totalTaps:state.totalTaps,directHits:state.directHits,nearMisses:state.nearMisses,hitCombo:state.hitCombo,toyEnergy:Math.round(state.toyEnergy*100)/100,nextEventEnergy:Math.round(state.nextEventEnergy*100)/100,eventCount:state.eventCount,activePets:activePets().length,pets:state.pets.map(p=>p.context()),particlePool:state.pools&&state.pools.particles.stats(),ripplePool:state.pools&&state.pools.ripples.stats(),aiVoice:false,geminiGameplay:false,immersive:true};}
+  function diagnostics(){return {version:"TOY_BOX_CHAOS_V14",fps:state.frame.fps,totalTaps:state.totalTaps,directHits:state.directHits,nearMisses:state.nearMisses,hitCombo:state.hitCombo,collisionChain:state.collisionChain,frenzy:state.frenzyUntil>now(),toyEnergy:Math.round(state.toyEnergy*100)/100,nextEventEnergy:Math.round(state.nextEventEnergy*100)/100,eventCount:state.eventCount,activePets:activePets().length,pets:state.pets.map(p=>p.context()),particlePool:state.pools&&state.pools.particles.stats(),ripplePool:state.pools&&state.pools.ripples.stats(),aiVoice:false,geminiGameplay:false,immersive:true};}
 
   function resetGame(){
     for(const p of state.particles)state.pools.particles.release(p.g);state.particles.length=0;for(const r of state.ripples)state.pools.ripples.release(r.g);state.ripples.length=0;
-    state.streak=0;state.hitCombo=0;state.totalTaps=0;state.directHits=0;state.nearMisses=0;state.toyEnergy=0;state.nextEventEnergy=.90;state.eventCount=0;state.pending.length=0;state.lastBumps.clear();
+    state.streak=0;state.hitCombo=0;state.totalTaps=0;state.directHits=0;state.nearMisses=0;state.toyEnergy=0;state.nextEventEnergy=.90;state.eventCount=0;state.pending.length=0;state.lastBumps.clear();state.collisionChain=0;state.lastCollisionChainAt=0;state.lastComboBlastAt=0;state.lastFrenzyAt=0;state.frenzyUntil=0;state.frenzyPower=0;state.nextFrenzyKickAt=0;state.lastTauntAt=0;state.lastTrails.clear();
     state.pets.forEach((pet,i)=>{pet.reset(i,state.pets.length);pet.setActive(i===0);});
     const hero=state.pets[0],b=safeBounds();if(hero){hero.setActive(true,{x:(b.left+b.right)/2,y:b.top+(b.bottom-b.top)*.50});hero.setSizeMultiplier(1.08);}
   }

@@ -1,0 +1,12 @@
+const fs=require('fs'),assert=require('assert');
+const view=fs.readFileSync('app/src/main/java/com/magic76/aiclicker/GameView.java','utf8');
+const main=fs.readFileSync('app/src/main/java/com/magic76/aiclicker/MainActivity.java','utf8');
+const gradle=fs.readFileSync('app/build.gradle','utf8');
+assert(view.includes('top.setVisibility(View.GONE)'),'top tool chrome must remain hidden');
+assert(view.includes('captionView.setVisibility(View.GONE)'),'AI caption must remain hidden');
+assert(view.includes('loadAssetData(String path)'),'native sprite asset bridge must remain');
+const onCreate=main.slice(main.indexOf('@Override protected void onCreate'),main.indexOf('private void onLanguageChanged'));
+assert(!onCreate.includes('connectLive('),'v14 must not auto-connect Gemini');
+for(const flag of ['SYSTEM_UI_FLAG_IMMERSIVE_STICKY','SYSTEM_UI_FLAG_FULLSCREEN','SYSTEM_UI_FLAG_HIDE_NAVIGATION'])assert(main.includes(flag),'missing immersive flag '+flag);
+assert(gradle.includes('versionCode 392'));assert(gradle.includes("versionName '0.43.0-chaos-chain-v14'"));
+console.log('immersive-v14.test.js PASS');
