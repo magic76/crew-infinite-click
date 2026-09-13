@@ -15,6 +15,7 @@
       this.onInteractionDirective=typeof o.onInteractionDirective==="function"?o.onInteractionDirective:()=>{};
       this.mutationContext=typeof o.mutationContext==="function"?o.mutationContext:()=>null;
       this.promiseContext=typeof o.promiseContext==="function"?o.promiseContext:()=>null;
+      this.sceneContext=typeof o.sceneContext==="function"?o.sceneContext:()=>null;
       this.primitives=o.primitives||new global.InteractionPrimitives({
         fx:this.fx,getPrimaryTarget:this.getPrimaryTarget,
         onInteraction:o.onPrimitiveInteraction,onSpatial:o.onPrimitiveSpatial,onCamera:o.onPrimitiveCamera,
@@ -86,6 +87,9 @@
     applyAiPlan(rawPlan) {
       const previousWorld=this.currentPlan&&this.currentPlan.world;
       const safeRaw=Object.assign({},rawPlan||{});
+      safeRaw.speech="";
+      const scene=this.sceneContext()||null;
+      if(scene&&scene.scene==="STORM_CONTROL_ROOM")safeRaw.world="SUMMER_STORM";
       // Signature moments are retired. Ignore stale/model-provided values unconditionally.
       safeRaw.signatureMoment="NONE";
       // Persistent local mutation owns world lifespan. AI/fallback may vary situations inside the
@@ -127,7 +131,7 @@
         this.haptics.perform(sensoryState.hapticCue,sensoryState.density===3?.82:(sensoryState.density===2?.52:.24));
       }
       if(!signatureStarted)this.onRuleTwist(plan.ruleTwist,plan);
-      if(!signatureStarted&&plan.speech){this.onSpeech(plan.speech,plan);this.conversation.recordSpeech(plan.speech);}
+      plan.speech=""; // v10: AI voice is fully disabled; model is background director only.
 
       return {
         ok:true,world:plan.world,situation:plan.situation,density:sensoryState.densityName,
@@ -170,11 +174,26 @@
       return this.applyAiPlan(plan);
     }
 
+    /** Scene reveal consequences remain inside the sole ExperienceRuntime owner. */
+    forceLocalSceneConsequence(meta) {
+      const m=meta||{},previous=this.currentPlan&&this.currentPlan.world;
+      const event=Object.assign({type:"SCENE_REVEAL",special:true},m);
+      const plan=this.director.fallbackPlan(event,.88);
+      plan.world=previous||"SUMMER_STORM";plan.audioMood="STORM";plan.speech="";plan.signatureMoment="NONE";
+      const cycle=Math.max(0,Number(m.cycle)||0);
+      if(cycle%3===0)Object.assign(plan,{situation:"REVEAL",targetBehavior:"PULSE",experienceIntent:"SURPRISE",ruleTwist:"NONE"});
+      else if(cycle%3===1)Object.assign(plan,{situation:"PREDICT",targetBehavior:"STILL",experienceIntent:"PREDICT",ruleTwist:"NONE"});
+      else Object.assign(plan,{situation:"FAKE_ENDING",targetBehavior:"STILL",experienceIntent:"MISDIRECT",ruleTwist:"NONE"});
+      plan.intensity=.72;plan.surpriseLevel=.9;plan.sensoryDensity=2;
+      return this.applyAiPlan(plan);
+    }
+
     /**
      * WorldMutationRuntime can request a rare local world rupture without creating a second
      * gameplay owner. ExperienceRuntime still validates/applies the resulting plan.
      */
     forceLocalWorldMutation(meta) {
+      const scene=this.sceneContext()||null;if(scene&&scene.scene==="STORM_CONTROL_ROOM")return this.forceLocalSceneConsequence(meta);
       const ids=(global.GameWorldCatalog&&global.GameWorldCatalog.WORLD_IDS)||[];
       const previous=this.currentPlan&&this.currentPlan.world;
       const candidates=ids.filter(id=>id!==previous);
@@ -205,17 +224,17 @@
       const ctx=this.director.contextForAi(event||{},this._surpriseLevelForEvent(event));
       ctx.game=gameSnapshot||{};ctx.sensory=this.sensory.contextForAi();ctx.composition=this.composer.contextForAi();
       ctx.worldMutation=this.mutationContext()||null;
-      ctx.visualPromise=this.promiseContext()||null;
+      ctx.visualPromise=this.promiseContext()||null;ctx.scene=this.sceneContext()||null;
       ctx.runtimeOwner="ExperienceRuntime";
       ctx.instruction=[
         "ExperienceRuntime is the only gameplay owner. Gemini is asynchronous creative direction, never the touch critical path.",
-        "Keep the current world coherent for several situations.",
+        "The active product experiment is STORM_CONTROL_ROOM. Keep world=SUMMER_STORM and treat the room as physical truth.",
         "Do not repeat either of the last two situations unless surpriseLevel >= 0.9.",
         "QUIET is almost empty, NORMAL is restrained, BUSY is clearly moving, CHAOS is a rare short punch followed by QUIET.",
-        "Speech is personality, not narration. React, tease, predict, question, or fake-reassure.",
+        "AI VOICE IS DISABLED. Never speak, narrate, banter, or return speech. Use tool output only.",
         "Compose from existing interaction/spatial/reveal/camera/surface/timing primitives only.",
-        "WorldMutationRuntime owns persistent local pressure, scars and rupture pacing. Do not reset, narrate, or prematurely switch away from that world.",
-        "PromiseRuntime owns the unresolved visual mystery chain. Use visualPromise only as creative context: complement or contrast its current type/phase with situation, target behavior and composition. Never narrate its progress and never wait for the model to advance it.",
+        "StormControlSceneRuntime owns charge, overload, reroute, breach, door and window progression. Never reset it or request a different world.",
+        "Use ctx.scene only to bias the next anomaly focus or gameplay consequence. Never wait for model latency to advance the scene.",
         "Signature moments are retired. Always choose NONE.",
         "Input includes tap, hold, release, drag, slice, idle and wait behavior. Never require model latency for immediate feedback."
       ].join(" ");

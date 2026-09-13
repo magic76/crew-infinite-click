@@ -1,0 +1,16 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const conv=fs.readFileSync('app/src/main/assets/game/conversation-director.js','utf8');
+const agg=fs.readFileSync('app/src/main/assets/game/gemini-event-aggregator.js','utf8');
+const live=fs.readFileSync('app/src/main/java/com/magic76/aiclicker/GeminiLiveClient.java','utf8');
+const main=fs.readFileSync('app/src/main/java/com/magic76/aiclicker/MainActivity.java','utf8');
+const schema=fs.readFileSync('app/src/main/java/com/magic76/aiclicker/GeminiWorldToolSchema.java','utf8');
+assert(conv.includes('v10_ai_voice_disabled'),'ordinary interaction must resolve to silence');
+assert(conv.includes('voiceWanted:false'),'conversation director must never request speech');
+assert(agg.includes('voiceWanted:false'),'aggregated directives must hard-disable speech');
+assert(live.includes('VOICE_OUTPUT_ENABLED=false'),'native audio output needs a hard kill switch');
+assert(live.includes('suppressCurrentTurnAudio=true'),'every model turn must start muted');
+assert(live.includes('NEVER SPEAK OR BANTER'),'Gemini prompt must prohibit speech');
+assert(main.includes('v10: ignore model speech/transcript'),'native UI must ignore accidental transcript output');
+assert(!schema.includes('p.put("speech"'),'tool schema must not expose speech');
+assert(schema.includes('"SUMMER_STORM"')&&!schema.includes('"SPRING_BLOOM"'),'tool schema must be locked to storm pilot');
+console.log('ai-silent-v10.test.js PASS');

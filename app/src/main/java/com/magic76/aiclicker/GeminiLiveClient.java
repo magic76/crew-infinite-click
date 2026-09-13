@@ -38,6 +38,7 @@ final class GeminiLiveClient extends WebSocketListener {
 
     private static final String TAG="AIInfiniteLive";
     private static final String MODEL="gemini-3.1-flash-live-preview";
+    private static final boolean VOICE_OUTPUT_ENABLED=false;
     private static final String ENDPOINT="wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=";
 
     private final String apiKey;
@@ -77,20 +78,14 @@ final class GeminiLiveClient extends WebSocketListener {
     boolean sendEvent(JSONObject directive){
         WebSocket socket=webSocket;if(!setupReady||socket==null||directive==null)return false;
         try{
-            String mode=directive.optString("mode","BANTER").toUpperCase(java.util.Locale.ROOT);
-            boolean voiceWanted=directive.optBoolean("voiceWanted","BANTER".equals(mode));
-            String extra;
-            if("GAME_TURN".equals(mode)){
-                extra=voiceWanted
-                        ? "This is GAME_TURN. Only if the observation is genuinely sharp, speak ONE short natural line, then call apply_world_experience exactly once. Echo turnId and baseStateVersion. Never wait for another user message."
-                        : "This is GAME_TURN. DO NOT SPEAK. Silently call apply_world_experience exactly once. Echo turnId and baseStateVersion. Never wait for another user message.";
-            }else{
-                extra="This is BANTER. Speak exactly one short, specific, dry observation and DO NOT call any tool. No UI change. If the line would be generic filler, say nothing.";
-            }
+            String mode="GAME_TURN";
+            boolean voiceWanted=false;
+            directive.put("mode",mode);directive.put("voiceWanted",false);
+            String extra="AI VOICE IS DISABLED. NEVER SPEAK OR BANTER. Silently call apply_world_experience exactly once. Echo turnId and baseStateVersion. Use DIRECTIVE.context.scene as physical truth and keep world SUMMER_STORM.";
             String content="DIRECTIVE\n"+directive.toString()+"\n"+extra;
             JSONObject turn=new JSONObject().put("role","user").put("parts",new JSONArray().put(new JSONObject().put("text",content)));
             JSONObject cc=new JSONObject().put("turns",new JSONArray().put(turn)).put("turnComplete",true);
-            currentTurnHadTool=false;suppressCurrentTurnAudio=false;
+            currentTurnHadTool=false;suppressCurrentTurnAudio=true;
             return socket.send(new JSONObject().put("clientContent",cc).toString());
         }catch(Exception e){if(listener!=null)listener.onError("Failed to send directive: "+e.getMessage());return false;}
     }
@@ -182,7 +177,7 @@ final class GeminiLiveClient extends WebSocketListener {
         }
         boolean complete=server.optBoolean("turnComplete",false)||server.optBoolean("turn_complete",false);
         if(complete){
-            boolean hadTool=currentTurnHadTool;currentTurnHadTool=false;suppressCurrentTurnAudio=false;
+            boolean hadTool=currentTurnHadTool;currentTurnHadTool=false;suppressCurrentTurnAudio=true;
             if(listener!=null)listener.onTurnComplete(hadTool);
         }
     }
@@ -223,7 +218,7 @@ final class GeminiLiveClient extends WebSocketListener {
     }
 
     private void enqueueAudio(byte[] pcm){
-        if(pcm==null||pcm.length==0||suppressCurrentTurnAudio)return;
+        if(!VOICE_OUTPUT_ENABLED||pcm==null||pcm.length==0||suppressCurrentTurnAudio)return;
         if(listener!=null)listener.onAudioActivity();
         if(!audioQueue.offer(pcm)){audioQueue.poll();audioQueue.offer(pcm);}
     }
@@ -237,17 +232,12 @@ final class GeminiLiveClient extends WebSocketListener {
     }
 
     private static final String SYSTEM_PROMPT=
-            "You are the restrained live character and asynchronous creative director of an endless reactive game. "+
-            "ExperienceRuntime owns input, physics, rendering, safety and effects. Never make the player wait for you. "+
-            "Your voice is RARE punctuation, not continuous commentary. Silence is better than a weak line. Most GAME_TURN directives should be tool-only with no speech when voiceWanted is false. "+
-            "For BANTER, only react when there is a concrete behavior worth noticing: a real rapid-tap streak, a failed/successful hold, a meaningful wait, or a long idle. Never comment on ordinary taps. "+
-            "Persona: smart, dry, understated, slightly competitive adult friend. Not a mascot, narrator, tutorial host, comedian trying too hard, or children's character. Underreact rather than overreact. "+
-            "Never use generic filler or fake emotion: no wow, haha, hehe, awesome, amazing, good job, let's go, or repetitive 'again?/seriously?/nope?' fragments. Never narrate obvious visuals or metrics. "+
-            "For zh-TW, speak natural Taiwan Mandarin. Avoid literal translations of English meme phrases, game-announcer wording, and the word '玩家'. A good line sounds like something a real person would mutter while watching the behavior. "+
-            "Use recentSpeech to avoid repeating the same joke, structure, or sentiment. If you cannot add a new observation, stay silent. "+
-            "For GAME_TURN, call apply_world_experience exactly once. Choose WHAT comes next, never raw code, frame data, physics values, or particle coordinates. "+
-            "DIRECTIVE.context.worldMutation is persistent physical truth: pressure, stage, ruptures, scars and epoch. Do not reset it, narrate its numbers, or request an early world switch. At high pressure choose a complementary behavior that makes the buildup feel intentional. "+
-            "DIRECTIVE.context.visualPromise is an unresolved local visual mystery. The local PromiseRuntime advances and reveals it without model latency. Use its type, phase and nextTease only to choose a complementary or contrasting situation/target behavior; never explain the mystery, announce progress, or promise a specific visual the runtime cannot render. "+
-            "Do not invent modal mini-games, search overlays, or interaction modes that interrupt rapid-tap flow. Keep the game moving. "+
-            "Language follows DIRECTIVE.language. Keep any spoken line very short, specific, and natural.";
+            "You are a SILENT asynchronous creative director for the Storm Control Room pilot. "+
+            "AI voice is disabled: NEVER speak, narrate, joke, banter, or produce a spoken line. Tool calls only. "+
+            "ExperienceRuntime and StormControlSceneRuntime own rendering, interaction, timing and safety; never put model latency in the touch path. "+
+            "For every GAME_TURN call apply_world_experience exactly once and keep world SUMMER_STORM. "+
+            "DIRECTIVE.context.scene is physical truth: phase, charge, overload, breach, node charge, last zone and reveal cycle. Never reset it. "+
+            "Use the plan only to bias background direction: door, observation window, cables, reroute nodes, false calm, reveal, misdirection or recovery. "+
+            "Do not invent modal mini-games, search overlays, text instructions, frame data, raw code, particle coordinates, or a different world. "+
+            "The player should understand the scene visually; no speech field is available.";
 }

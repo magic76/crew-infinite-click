@@ -5,7 +5,7 @@
   const DEBUG=!!window.__INFINITE_CLICK_DEBUG__;
   const state={
     app:null,gameplay:null,bg:null,world:null,target:null,targetCore:null,targetLabel:null,
-    pools:null,ripples:[],decoys:[],fx:null,mutation:null,promise:null,audio:null,primitiveHost:null,runtime:null,aggregator:null,
+    pools:null,ripples:[],decoys:[],fx:null,mutation:null,promise:null,scene:null,audio:null,primitiveHost:null,runtime:null,aggregator:null,
     safe:{left:0,top:0,right:0,bottom:0},language:"zh-TW",lastInputAt:performance.now(),idleStage:0,
     nextTurnId:1,stateVersion:1,pendingGameTurnId:0,pendingGameEvent:null,geminiPending:false,
     frame:{fps:60,lastMs:performance.now(),accMs:0,frames:0,lastLog:0},
@@ -74,45 +74,30 @@
   }
 
   function buildScene(){
-    const app=state.app,s=screen();
+    const app=state.app;
     state.gameplay=new PIXI.Container();state.gameplay.label="gameplay-root";app.stage.addChild(state.gameplay);
     state.bg=new PIXI.Graphics();state.gameplay.addChild(state.bg);
-    state.pools={
-      particles:new ParticlePool(120),
-      ripples:new RipplePool(12),
-      decoys:new DecoyPool(30)
-    };
-    state.mutation=new WorldMutationRuntime(app,{
-      parent:state.gameplay,onStageChange:handleMutationStage,onRupture:handleWorldRupture,onEpoch:handleWorldEpoch
-    });
+    state.pools={particles:new ParticlePool(120),ripples:new RipplePool(12),decoys:new DecoyPool(30)};
+    state.scene=new StormControlSceneRuntime(app,{parent:state.gameplay,onPhaseChange:handleScenePhase,onReveal:handleSceneReveal});
     state.fx=new WorldFxController(app,{particlePool:state.pools.particles,parent:state.gameplay});
     state.world=new PIXI.Container();state.world.label="world";state.gameplay.addChild(state.world);
     createTarget();
-    // Mystery clues sit above the gameplay target but below short-lived foreground explosions.
-    state.promise=new PromiseRuntime(app,{
-      parent:state.gameplay,getTarget:()=>state.target,
-      onPhaseChange:handlePromisePhase,onReveal:handlePromiseReveal
-    });
     if(state.fx.foreground)state.gameplay.addChild(state.fx.foreground);
-    resizeScene();
-    window.addEventListener("resize",resizeScene);
+    resizeScene();window.addEventListener("resize",resizeScene);
   }
 
   function createTarget(){
     const s=screen(),c=new PIXI.Container(),core=new PIXI.Graphics();
     drawTargetShape(core,"NEON_RIFT",0xe83cf6,0x34f0c3);
-    const label=new PIXI.Text({text:"TOUCH",style:{fill:0xffffff,fontFamily:"sans-serif",fontSize:14,fontWeight:"700",letterSpacing:2}});
-    label.anchor.set(.5);label.y=58;c.addChild(core,label);c.x=s.width*.5;c.y=s.height*.52;
+    const label=new PIXI.Text({text:"",style:{fill:0xffffff,fontFamily:"sans-serif",fontSize:12,fontWeight:"700"}});
+    label.visible=false;label.anchor.set(.5);label.y=58;c.addChild(core,label);c.x=s.width*.5;c.y=s.height*.492;
     state.world.addChild(c);state.target=c;state.targetCore=core;state.targetLabel=label;
   }
 
   function renderTargetPalette(plan){
     if(!state.targetCore)return;
-    const world=plan&&GameWorldCatalog.WORLDS[plan.world];
-    const accent=world&&world.accent!=null?world.accent:0xff416c;
-    const secondary=world&&world.secondary!=null?world.secondary:0xffffff;
-    drawTargetShape(state.targetCore,world&&world.id,accent,secondary);
-    if(state.targetLabel&&world&&world.accent!=null)state.targetLabel.style.fill=0xffffff;
+    const world=GameWorldCatalog.WORLDS.SUMMER_STORM;
+    drawTargetShape(state.targetCore,"SUMMER_STORM",world.accent,world.secondary);
   }
 
   function wireRuntime(){
@@ -122,34 +107,24 @@
       onSurfaceMode:mode=>{if(state.targetCore)state.targetCore.alpha=mode==="NONE"?.96:.82;}
     });
     state.runtime=new ExperienceRuntime({
-      fx:state.fx,audio:state.audio,haptics:window.GameHaptics,
-      getPrimaryTarget:()=>state.target,
-      onPrimitiveInteraction:m=>state.primitiveHost.setInteraction(m),
-      onPrimitiveSpatial:m=>state.primitiveHost.setSpatial(m),
-      onPrimitiveCamera:m=>state.primitiveHost.setCamera(m),
-      onPrimitiveSurface:m=>state.primitiveHost.setSurface(m),
-      onPrimitiveTiming:m=>state.primitiveHost.setTiming(m),
-      onRuleTwist:(rule,plan)=>applyValidatedPlanToTarget(plan,rule),
-      onInteractionDirective:(directive,context)=>routeDirective(directive,context),
-      mutationContext:()=>state.mutation&&state.mutation.context?state.mutation.context():null,
-      promiseContext:()=>state.promise&&state.promise.context?state.promise.context():null
+      fx:state.fx,audio:state.audio,haptics:window.GameHaptics,getPrimaryTarget:()=>state.target,
+      onPrimitiveInteraction:m=>state.primitiveHost.setInteraction(m),onPrimitiveSpatial:m=>state.primitiveHost.setSpatial(m),
+      onPrimitiveCamera:m=>state.primitiveHost.setCamera(m),onPrimitiveSurface:m=>state.primitiveHost.setSurface(m),
+      onPrimitiveTiming:m=>state.primitiveHost.setTiming(m),onRuleTwist:(rule,plan)=>applyValidatedPlanToTarget(plan,rule),
+      onInteractionDirective:(directive,context)=>routeDirective(directive,context),sceneContext:()=>state.scene&&state.scene.context?state.scene.context():null
     });
-    state.aggregator=new GeminiEventAggregator({windowMs:500,onFlush:sendDirectiveToNative});
-    state.runtime.startSession();
-    state.runtime.fallback({type:"SESSION_START"});
-    renderBackground();
-    const event={type:"SESSION_START",special:true};
-    const context=state.runtime.aiContext(event,diagnostics());
-    const directive={mode:"GAME_TURN",reason:"session_start",delivery:"DRY",voiceWanted:false,instruction:"Quietly choose the first high-level experience. Do not speak unless there is a specific observation worth saying."};
-    state.aggregator.push(event,directive,context,{immediate:true});
+    state.aggregator=new GeminiEventAggregator({windowMs:650,onFlush:sendDirectiveToNative});
+    state.runtime.startSession("SUMMER_STORM");state.runtime.fallback({type:"SESSION_START"});renderTargetPalette();renderBackground();
+    const event={type:"SESSION_START",special:true},context=state.runtime.aiContext(event,diagnostics());
+    state.aggregator.push(event,{mode:"GAME_TURN",reason:"session_start",delivery:"DRY",voiceWanted:false,instruction:"Silently choose a background-director plan for the Storm Control Room. Never speak."},context,{immediate:true});
   }
 
   function wireInput(){
     const stage=state.app.stage;stage.eventMode="static";stage.hitArea=screen();
     stage.on("pointerdown",e=>{
-      state.lastInputAt=performance.now();state.idleStage=0;
-      const p=e.global,n=norm(p.x,p.y);localTouchFeedback(n.x,n.y);
-      state.primitiveHost.pointerDown(p.x,p.y);
+      state.lastInputAt=performance.now();state.idleStage=0;const p=e.global,n=norm(p.x,p.y);
+      const sceneState=state.scene&&state.scene.tap?state.scene.tap(p.x,p.y,{streak:state.tapJuice.streak,heat:state.tapJuice.heat}):null;
+      localTouchFeedback(n.x,n.y,sceneState);state.primitiveHost.pointerDown(p.x,p.y);
     });
     stage.on("pointermove",e=>{const p=e.global;state.primitiveHost.pointerMove(p.x,p.y);});
     stage.on("pointerup",e=>{const p=e.global;localReleaseFeedback();state.primitiveHost.pointerUp(p.x,p.y);});
@@ -182,58 +157,20 @@
     try{A&&A.onRuntimeSignal(JSON.stringify({type:"PROMISE_REVEAL",promiseType:e.type||"",chain:e.chain||0,reveals:e.reveals||0,stateVersion:state.stateVersion}));}catch(_){}
   }
 
-  function localTouchFeedback(x,y){
+  function localTouchFeedback(x,y,sceneState){
     const t=performance.now(),gap=state.tapJuice.lastAt?t-state.tapJuice.lastAt:9999;
-    if(gap<340){
-      state.tapJuice.streak=Math.min(24,state.tapJuice.streak+1);
-      state.tapJuice.heat=clamp(state.tapJuice.heat+.12,0,1);
-    }else{
-      state.tapJuice.streak=1;
-      state.tapJuice.heat=Math.max(.08,state.tapJuice.heat*.48);
-    }
-    state.tapJuice.lastAt=t;
-    const s=screen(),px=x*s.width,py=y*s.height;
-    const beforeMutation=state.mutation&&state.mutation.context?state.mutation.context():null;
-    const promiseState=state.promise&&typeof state.promise.tap==="function"?state.promise.tap(px,py,{
-      streak:state.tapJuice.streak,heat:state.tapJuice.heat,mutationPressure:beforeMutation?beforeMutation.pressure:0
-    }):null;
-    const promiseProgress=promiseState?Number(promiseState.progress)||0:0;
-    const mutationState=state.mutation&&typeof state.mutation.tap==="function"?state.mutation.tap(px,py,{
-      streak:state.tapJuice.streak,heat:state.tapJuice.heat,fomoProgress:promiseProgress
-    }):null;
-    const mutationPressure=mutationState?Number(mutationState.pressure)||0:0;
-    const streak=state.tapJuice.streak,power=clamp(Math.max((streak-1)/12,promiseProgress*.86,mutationPressure*.68),0,1),heat=state.tapJuice.heat;
-    const world=state.runtime&&state.runtime.currentPlan&&GameWorldCatalog.WORLDS[state.runtime.currentPlan.world];
-    const accent=world&&world.accent!=null?world.accent:0xffffff;
-    const secondary=world&&world.secondary!=null?world.secondary:0xffffff;
-
-    const pool=state.pools.ripples,g=pool.acquire(state.gameplay);if(g){
-      g.circle(0,0,10+power*5).stroke({color:accent,width:2.5+power*1.5,alpha:.90});
-      g.x=px;g.y=py;state.ripples.push({g,life:.30,max:.30,growth:3.0+power*1.0,alpha:.90});
-    }
-    if(streak>=3){
-      const g2=pool.acquire(state.gameplay);if(g2){
-        g2.circle(0,0,5+power*4).stroke({color:secondary,width:1.5+power*.7,alpha:.54});
-        g2.x=px;g2.y=py;state.ripples.push({g:g2,life:.24,max:.24,growth:4.0+power*.8,alpha:.54});
-      }
-    }
-
-    if(state.target){
-      const squash=.84-power*.10;state.target.scale.set(squash);
-      state.target.rotation=(Math.random()-.5)*(.06+power*.10);
-      if(state.targetCore)state.targetCore.alpha=1;
-    }
-    if(window.GameHaptics)window.GameHaptics.perform(streak>=8?"DIGITAL_TRIPLE":"SOFT_TAP",.20+power*.22);
-    if(state.audio&&state.runtime&&state.runtime.currentPlan){
-      const mood=state.runtime.currentPlan.audioMood||"GLITCH";
-      if(typeof state.audio.playClick==="function")state.audio.playClick(mood,.28+power*.30,Math.max(streak,Math.round(promiseProgress*20)));
-      else state.audio.play(mood,"click",.28+power*.30);
-    }
+    if(gap<340){state.tapJuice.streak=Math.min(24,state.tapJuice.streak+1);state.tapJuice.heat=clamp(state.tapJuice.heat+.10,0,1);}
+    else{state.tapJuice.streak=1;state.tapJuice.heat=Math.max(.06,state.tapJuice.heat*.52);}state.tapJuice.lastAt=t;
+    const s=screen(),px=x*s.width,py=y*s.height,ctx=sceneState||state.scene&&state.scene.context&&state.scene.context()||{};
+    const scenePower=clamp((Number(ctx.charge)||0)*.34+(Number(ctx.overload)||0)*.42+(Number(ctx.breach)||0)*.34,0,1);
+    const streak=state.tapJuice.streak,power=clamp(Math.max((streak-1)/14,scenePower),0,1),heat=state.tapJuice.heat;
+    const accent=0xf7db61,secondary=0x69b9e8,pool=state.pools.ripples,g=pool.acquire(state.gameplay);
+    if(g){g.circle(0,0,8+power*4).stroke({color:accent,width:2+power*1.2,alpha:.76});g.x=px;g.y=py;state.ripples.push({g,life:.22,max:.22,growth:2.4+power*.8,alpha:.76});}
+    if(state.target&&state.target.visible&&ctx.lastZone==="CORE"){const squash=.86-power*.08;state.target.scale.set(squash);state.target.rotation=(Math.random()-.5)*(.04+power*.06);}
+    if(window.GameHaptics)window.GameHaptics.perform(streak>=10?"DIGITAL_TRIPLE":"SOFT_TAP",.18+power*.18);
+    if(state.audio){if(typeof state.audio.playClick==="function")state.audio.playClick("STORM",.24+power*.26,Math.max(streak,Math.round(scenePower*18)));else state.audio.play("STORM","click",.25+power*.2);}
     if(state.fx&&typeof state.fx.tapAccent==="function")state.fx.tapAccent(px,py,streak);
-
-    if((streak>=4||promiseProgress>=.68)&&state.fx&&typeof state.fx.tapFrenzyAccent==="function"&&t-state.tapJuice.lastFrenzyAt>=210){
-      state.tapJuice.lastFrenzyAt=t;state.fx.tapFrenzyAccent(px,py,streak,heat);
-    }
+    if((streak>=5||scenePower>.58)&&state.fx&&typeof state.fx.tapFrenzyAccent==="function"&&t-state.tapJuice.lastFrenzyAt>=240){state.tapJuice.lastFrenzyAt=t;state.fx.tapFrenzyAccent(px,py,streak,heat);}
   }
 
   function localReleaseFeedback(){
@@ -247,6 +184,21 @@
     const e=normalizeEvent(raw);
     state.lastInputAt=performance.now();state.idleStage=0;
     state.runtime.onPlayerEvent(e);
+  }
+
+  function handleScenePhase(event){
+    const e=event||{},phase=String(e.phase||"");
+    if(window.GameHaptics){const cue=phase==="FALSE_CALM"?"WARNING":(phase==="PARTIAL_REVEAL"?"IMPACT":"SOFT_TAP");window.GameHaptics.perform(cue,phase==="PARTIAL_REVEAL"?.68:(phase==="FALSE_CALM"?.28:.16));}
+    if(state.audio){if(phase==="FALSE_CALM")state.audio.play("STORM","trap",.32);else if(phase==="PARTIAL_REVEAL"&&state.audio.playJackpot)state.audio.playJackpot("STORM",3);else state.audio.play("STORM","reveal",.22);}
+    if(phase==="REROUTE"||phase==="BREACH_HINT"||phase==="PARTIAL_REVEAL")invalidatePendingTurn("scene_phase");
+    state.stateVersion++;
+    try{A&&A.onRuntimeSignal(JSON.stringify({type:"SCENE_PHASE",scene:"STORM_CONTROL_ROOM",phase,previous:e.previous||"",stateVersion:state.stateVersion}));}catch(_){}
+  }
+
+  function handleSceneReveal(event){
+    const e=event||{};state.tapJuice.jackpots++;state.stateVersion++;
+    if(state.runtime&&typeof state.runtime.forceLocalSceneConsequence==="function")state.runtime.forceLocalSceneConsequence(e);
+    try{A&&A.onRuntimeSignal(JSON.stringify({type:"SCENE_REVEAL",scene:"STORM_CONTROL_ROOM",reveals:e.reveals||0,cycle:e.cycle||0,stateVersion:state.stateVersion}));}catch(_){}
   }
 
   function handleMutationStage(event){
@@ -289,15 +241,15 @@
   }
 
   function routeDirective(directive,context){
-    if(!directive||directive.mode==="SILENT")return;
+    if(!directive||directive.mode!=="GAME_TURN")return;
     const event=directive.event||(context&&context.event)||{};
-    state.aggregator.push(event,directive,context);
+    state.aggregator.push(event,Object.assign({},directive,{mode:"GAME_TURN",voiceWanted:false}),context);
   }
 
   function sendDirectiveToNative(payload){
     if(!payload||payload.mode==="SILENT")return;
     const turnId=state.nextTurnId++;
-    payload.turnId=turnId;payload.baseStateVersion=state.stateVersion;payload.context=payload.context||{};
+    payload.mode="GAME_TURN";payload.voiceWanted=false;payload.turnId=turnId;payload.baseStateVersion=state.stateVersion;payload.context=payload.context||{};
     payload.context.turnId=turnId;payload.context.baseStateVersion=state.stateVersion;payload.context.behavior=payload.behavior;
     if(payload.mode==="GAME_TURN"){state.pendingGameTurnId=turnId;state.pendingGameEvent=(payload.context&&payload.context.event)||null;}
     state.geminiPending=true;
@@ -319,21 +271,9 @@
   }
 
   function applyValidatedPlanToTarget(plan,rule){
-    if(!plan)return;
-    if(state.mutation&&plan.world)state.mutation.setWorld(plan.world);
-    if(state.promise){if(plan.world&&typeof state.promise.setWorld==="function")state.promise.setWorld(plan.world);if(typeof state.promise.steer==="function")state.promise.steer(plan);}
-    clearDecoys();renderTargetPalette(plan);
-    const behavior=String(plan.targetBehavior||"STILL").toUpperCase(),s=screen(),safe=safeBounds();
-    state.target.visible=true;state.target.alpha=behavior==="HIDE"?.18:1;
-    state.targetLabel.text=behavior==="HIDE"?"?":"TOUCH";
-    if(behavior==="ESCAPE"){
-      state.target.x=safe.left+Math.random()*(safe.right-safe.left);state.target.y=safe.top+Math.random()*(safe.bottom-safe.top);
-    }else if(behavior==="SPLIT"||plan.situation==="DECOY"){
-      spawnDecoys(state.runtime.currentSensoryState.density>=2?8:4);
-    }else if(behavior==="PULSE"){
-      state.target.scale.set(1.12);
-    }
-    renderBackground();
+    if(!plan)return;clearDecoys();renderTargetPalette(plan);if(state.scene&&state.scene.steer)state.scene.steer(plan);
+    // Scene composition owns spatial layout. AI may bias anomalies but cannot move the room's hardware.
+    state.target.alpha=1;state.targetLabel.visible=false;renderBackground();
   }
 
   function spawnDecoys(count){
@@ -365,50 +305,12 @@
   }
 
   function renderBackground(){
-    if(!state.bg)return;
-    const s=screen(),plan=state.runtime&&state.runtime.currentPlan,world=plan&&GameWorldCatalog.WORLDS[plan.world];
-    const color=world&&world.bg!=null?world.bg:0x05070d,g=state.bg;g.clear().rect(0,0,s.width,s.height).fill({color,alpha:1});
-    if(!world)return;
-    // Static composition only. Large circles are intentionally avoided; each world owns a silhouette language.
-    const a=world.accent,secondary=world.secondary,id=world.id;
-    if(id==="SPRING_BLOOM"){
-      for(let i=0;i<5;i++){
-        const x=s.width*(.08+i*.21),y=s.height*(.15+(i%2)*.52),h=s.height*(.16+(i%3)*.04);
-        g.moveTo(x,y+h).bezierCurveTo(x-28,y+h*.62,x+24,y+h*.34,x,y).stroke({color:i%2?a:secondary,width:1.3,alpha:.05});
-        polygonPath(g,[[x,y+h*.45],[x+14,y+h*.35],[x+7,y+h*.57]],i%2?secondary:a,.035,null,0,0);
-      }
-    }else if(id==="SUMMER_STORM"){
-      for(let i=0;i<5;i++){
-        const y=s.height*(.10+i*.19),offset=(i%2?1:-1)*s.width*.09;
-        polygonPath(g,[[-s.width*.08,y],[s.width*.34+offset,y-18],[s.width*.72-offset,y+8],[s.width*1.08,y-10],[s.width*1.08,y+28],[-s.width*.08,y+24]],i%2?a:secondary,.018+i*.006,null,0,0);
-      }
-    }else if(id==="AUTUMN_DECAY"){
-      for(let i=0;i<4;i++){
-        const fromLeft=i%2===0,x=fromLeft?0:s.width,y=s.height*(.16+i*.20),dx=(fromLeft?1:-1)*s.width*(.28+i*.03);
-        g.moveTo(x,y).lineTo(x+dx,y-18).lineTo(x+dx*.7,y-52).moveTo(x+dx*.55,y-10).lineTo(x+dx*.9,y+28).stroke({color:i%2?a:secondary,width:1.2,alpha:.07});
-      }
-    }else if(id==="WINTER_FROST"){
-      for(let i=0;i<6;i++){
-        const x=s.width*(.08+i*.18),y=s.height*(.16+(i%2)*.58),w=18+i*3,h=34+i*5;
-        polygonPath(g,[[x,y-h],[x+w,y],[x,y+h],[x-w,y]],null,0,i%2?a:secondary,1,.07);
-      }
-    }else if(id==="VOID_CHAMBER"){
-      const cx=s.width*.5,cy=s.height*.5,w=s.width*.34,h=s.height*.20;
-      polygonPath(g,[[cx-w,cy],[cx-w*.3,cy-h],[cx+w*.55,cy-h*.5],[cx+w,cy],[cx+w*.2,cy+h],[cx-w*.55,cy+h*.45]],null,0,a,2,.055);
-      polygonPath(g,[[cx-w*.45,cy],[cx,cy-h*.55],[cx+w*.45,cy],[cx,cy+h*.55]],0x000000,.10,secondary,1,.035);
-    }else{
-      for(let i=0;i<7;i++){
-        const x=s.width*(.05+i*.15),w=5+(i%3)*7;
-        g.rect(x,0,w,s.height).fill({color:i%2?a:secondary,alpha:.018+(i%3)*.006});
-        if(i%2===0)g.rect(x-18,s.height*(.18+i*.09),62,3+i%3).fill({color:secondary,alpha:.035});
-      }
-    }
+    if(!state.bg)return;const s=screen(),g=state.bg;g.clear().rect(0,0,s.width,s.height).fill({color:0x06101b,alpha:1});
   }
 
   function resizeScene(){
-    if(!state.app)return;state.app.stage.hitArea=screen();renderBackground();
-    const s=screen(),b=safeBounds();
-    if(state.target){state.target.x=clamp(state.target.x||s.width*.5,b.left,b.right);state.target.y=clamp(state.target.y||s.height*.52,b.top,b.bottom);}
+    if(!state.app)return;state.app.stage.hitArea=screen();renderBackground();if(state.scene&&state.scene.resize)state.scene.resize();
+    const p=state.scene&&state.scene.targetPresentation?state.scene.targetPresentation():null;if(state.target&&p){state.target.x=p.x;state.target.y=p.y;state.target.visible=p.visible;state.target.alpha=p.alpha;}
   }
 
   function tick(t){
@@ -418,14 +320,10 @@
       if(r.life<=0){state.pools.ripples.release(r.g);state.ripples.splice(i,1);}
     }
     if(state.target&&state.primitiveHost&&state.primitiveHost.interaction!=="HOLD"){
-      const nowT=performance.now(),sinceTap=nowT-state.tapJuice.lastAt;
-      const mutationMod=state.mutation&&state.mutation.targetModulation?state.mutation.targetModulation(nowT):{scale:1,rotation:0,glow:.18};
-      const promiseMod=state.promise&&state.promise.targetModulation?state.promise.targetModulation(nowT):{scale:1,rotation:0,alpha:1,urgency:0};
-      const desired=mutationMod.scale*promiseMod.scale+Math.sin(nowT/450)*.025;
-      if(sinceTap>420)state.tapJuice.heat=Math.max(0,state.tapJuice.heat-dt/2100);
-      state.target.scale.x+=(desired-state.target.scale.x)*.16;state.target.scale.y=state.target.scale.x;
-      state.target.rotation+=(((mutationMod.rotation||0)+(promiseMod.rotation||0))-state.target.rotation)*.18;
-      if(state.targetCore){const desiredAlpha=clamp((.88+(mutationMod.glow||.18)*.12)*(promiseMod.alpha||1),.72,1);state.targetCore.alpha+=(desiredAlpha-state.targetCore.alpha)*.14;}
+      const nowT=performance.now(),sinceTap=nowT-state.tapJuice.lastAt,pres=state.scene&&state.scene.targetPresentation?state.scene.targetPresentation():null;
+      if(sinceTap>420)state.tapJuice.heat=Math.max(0,state.tapJuice.heat-dt/2200);
+      if(pres){state.target.visible=!!pres.visible;state.target.alpha=pres.alpha==null?1:pres.alpha;state.target.x=pres.x;state.target.y=pres.y;
+        const desired=(pres.scale||1)+Math.sin(nowT/520)*.018;state.target.scale.x+=(desired-state.target.scale.x)*.14;state.target.scale.y=state.target.scale.x;state.target.rotation+=(0-state.target.rotation)*.16;}
     }
     const idle=performance.now()-state.lastInputAt;
     if(idle>2800&&state.idleStage===0){state.idleStage=1;state.runtime.onPlayerEvent({type:"IDLE_START",idleMs:Math.round(idle),special:true});}
@@ -447,9 +345,8 @@
       particlePool:fx.pool||null,ripplePool:state.pools&&state.pools.ripples.stats(),decoyPool:state.pools&&state.pools.decoys.stats(),
       activeSignature:"NONE",
       geminiRequestPending:state.geminiPending,eventAggregationCount:state.aggregator?state.aggregator.pendingCount():0,
-      fomo:Object.assign({jackpots:state.tapJuice.jackpots,heat:Math.round(state.tapJuice.heat*100)/100},state.promise&&state.promise.context?state.promise.context():{}),
-      promise:state.promise&&state.promise.context?state.promise.context():null,
-      mutation:state.mutation&&state.mutation.context?state.mutation.context():null,
+      fomo:{jackpots:state.tapJuice.jackpots,heat:Math.round(state.tapJuice.heat*100)/100},
+      scene:state.scene&&state.scene.context?state.scene.context():null,
       stateVersion:state.stateVersion
     };
   }
@@ -472,15 +369,14 @@
       else if(msg.op==="geminiLiveReady"&&state.runtime){
         const event={type:"LIVE_READY",special:true};
         const context=state.runtime.aiContext(event,diagnostics());
-        const directive={mode:"GAME_TURN",reason:"live_ready",delivery:"DRY",voiceWanted:false,instruction:"You are live now. Quietly choose the next high-level experience; do not speak unless explicitly requested."};
+        const directive={mode:"GAME_TURN",reason:"live_ready",delivery:"DRY",voiceWanted:false,instruction:"Silently choose the next Storm Control Room direction. Never speak."};
         state.aggregator.push(event,directive,context,{immediate:true});
       }
       else if(msg.op==="reset"){
         state.aggregator&&state.aggregator.cancel();
         clearDecoys();for(const r of state.ripples)state.pools.ripples.release(r.g);state.ripples.length=0;
         state.pendingGameTurnId=0;state.pendingGameEvent=null;state.geminiPending=false;state.stateVersion++;
-        if(state.mutation&&state.mutation.reset)state.mutation.reset({clearScars:true});
-        if(state.promise&&state.promise.reset)state.promise.reset();
+        if(state.scene&&state.scene.reset)state.scene.reset();
         Object.assign(state.tapJuice,{lastAt:0,streak:0,lastFrenzyAt:0,heat:0,jackpots:0});
       }
     }catch(e){reportError(e);}

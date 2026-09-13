@@ -1,0 +1,16 @@
+const fs=require('fs'),assert=require('assert');
+const read=p=>fs.readFileSync(p,'utf8');
+const index=read('app/src/main/assets/game/index.html'),game=read('app/src/main/assets/game/game.js'),runtime=read('app/src/main/assets/game/experience-runtime.js');
+assert(index.includes('storm-control-scene-runtime.js'),'scene runtime must load');
+assert.strictEqual((game.match(/new StormControlSceneRuntime\(/g)||[]).length,1,'exactly one scene runtime');
+assert(!game.includes('new PromiseRuntime('),'v10 should not overlay the old abstract promise renderer');
+assert(!game.includes('new WorldMutationRuntime('),'v10 should not overlay abstract mutation visuals');
+assert(game.includes('state.scene.tap(p.x,p.y'),'every physical tap must affect the room');
+assert(game.includes('state.runtime.startSession("SUMMER_STORM")'),'pilot must start in storm world');
+assert(game.includes('state.scene.targetPresentation'),'scene phase must change primary interaction focus');
+assert(game.includes('state.runtime.forceLocalSceneConsequence'),'scene reveal must have gameplay consequence through ExperienceRuntime');
+assert(runtime.includes('this.sceneContext'),'ExperienceRuntime must expose physical scene context');
+assert(runtime.includes('ctx.scene=this.sceneContext()||null'),'AI must receive scene truth');
+assert(runtime.includes('safeRaw.world="SUMMER_STORM"'),'AI cannot switch away from the pilot scene');
+assert(runtime.includes('forceLocalSceneConsequence(meta)'),'scene consequence remains under sole ExperienceRuntime owner');
+console.log('storm-v10-integration.test.js PASS');

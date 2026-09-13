@@ -22,55 +22,20 @@
     routePlayerEvent(event,options){
       const e=event||{},o=options||{},t=typeOf(e),now=this.now();
       if(t!=="HOLD_PROGRESS"&&t!=="DRAG_MOVE")this.lastActivityAt=now;
-      this.idleStage=0;
       if(t==="TAP")this._rememberTap(now);
-
-      const burst=this._tapsInWindow(now,1500),notable=this._notableEvent(e);
       const due=!!o.forceGameTurn||(!!o.shouldRequestNewSituation&&now-this.lastGameTurnAt>=this.minGameTurnGapMs);
-      if(due){
-        this.lastGameTurnAt=now;
-        // Ordinary world evolution should usually happen silently. Voice is punctuation, not narration.
-        const voiceWanted=!!o.forceVoice||notable||burst>=8;
-        return this._rememberMode(this._directive(MODE.GAME_TURN,"situation_due",e,Object.assign({},o,{voiceWanted})));
-      }
-
-      // High-frequency progress/move events are intentionally local-only.
-      if(t==="HOLD_PROGRESS"||t==="DRAG_MOVE")return this._rememberMode(this._directive(MODE.SILENT,"high_frequency_local",e,o));
-      if(now-this.lastSpeechAt<this.minSpeechGapMs)return this._rememberMode(this._directive(MODE.SILENT,"speech_cooldown",e,o));
-
-      // Normal taps are not conversation prompts. Wait until behavior becomes worth commenting on.
-      if(t==="TAP"&&!notable&&burst<6)return this._rememberMode(this._directive(MODE.SILENT,"tap_is_gameplay",e,o));
-      if(t==="RELEASE"||t==="DRAG_START"||t==="DRAG_END")return this._rememberMode(this._directive(MODE.SILENT,"low_value_event",e,o));
-
-      let chance=notable?.62:(burst>=10?.55:(burst>=6?.32:.10));
-      if(this.recentModes.slice(-2).every(x=>x===MODE.BANTER))chance*=.35;
-      if(this.rng()<chance){
-        this.lastSpeechAt=now;
-        return this._rememberMode(this._directive(MODE.BANTER,notable?"react_to_behavior":"rapid_tap_punchline",e,Object.assign({},o,{voiceWanted:true})));
-      }
-      return this._rememberMode(this._directive(MODE.SILENT,"intentional_silence",e,o));
+      if(due){this.lastGameTurnAt=now;return this._rememberMode(this._directive(MODE.GAME_TURN,"situation_due",e,Object.assign({},o,{voiceWanted:false})));}
+      return this._rememberMode(this._directive(MODE.SILENT,"v10_ai_voice_disabled",e,o));
     }
 
-    pollIdle(options){
-      const o=options||{},now=this.now(),idleFor=now-this.lastActivityAt;
-      if(now-this.lastSpeechAt<this.minSpeechGapMs)return null;
-      if(this.idleStage===0&&idleFor>=this.firstIdleMs){
-        this.idleStage=1;this.lastSpeechAt=now;
-        return this._rememberMode(this._directive(MODE.BANTER,"idle_first",{type:"IDLE_START",idleMs:Math.round(idleFor)},o));
-      }
-      if(this.idleStage===1&&idleFor>=this.secondIdleMs){
-        this.idleStage=2;this.lastSpeechAt=now;
-        return this._rememberMode(this._directive(MODE.BANTER,"idle_second",{type:"IDLE_STAGE",stage:2,idleMs:Math.round(idleFor)},o));
-      }
-      return null;
-    }
+    pollIdle(options){return null;}
 
     recordSpeech(text){const v=String(text||"").trim();if(!v)return;this.lastSpeechAt=this.now();this.recentSpeech.push(v.slice(0,120));if(this.recentSpeech.length>5)this.recentSpeech.shift();}
 
     contextForAi(directive,event){
       const d=directive||this._directive(MODE.BANTER,"manual",event||{},{}),p=this._profile();
       return {interactionMode:d.mode,reason:d.reason,event:event||d.event||{},playerTraits:p,recentSpeech:this.recentSpeech.slice(-3),delivery:d.delivery,
-        speechStyle:{short:true,performed:true,teasing:true,nonHostile:true,highContrastDelivery:true,mayStaySilent:true},instruction:d.instruction};
+        speechStyle:{enabled:false,mayStaySilent:true},instruction:d.instruction};
     }
 
     _directive(mode,reason,event,options){
@@ -98,14 +63,14 @@
         ].filter(Boolean).join(" ");
       } else if(mode===MODE.GAME_TURN){
         instruction=[
-          (options&&options.voiceWanted)?"GAME TURN. If you have a genuinely sharp observation, speak one short line, then call apply_world_experience exactly once.":"GAME TURN. Do not speak. Silently call apply_world_experience exactly once.",
+          "GAME TURN. AI voice is disabled. NEVER SPEAK. Silently call apply_world_experience exactly once.",
           "Choose intent/composition only. Never generate code, frame data or particle coordinates.",
           "Do not narrate obvious visuals. No generic praise or fake excitement. DELIVERY="+delivery+".",
           observations.length?"PLAYER READ: "+observations.join("; ")+".":""
         ].filter(Boolean).join(" ");
       } else instruction="SILENT TURN. Local runtime only; do not send to Gemini.";
       this._rememberDelivery(delivery);
-      return {mode,reason,event:event||{},instruction,observations,delivery,voiceWanted:mode===MODE.BANTER?true:!!(options&&options.voiceWanted)};
+      return {mode,reason,event:event||{},instruction,observations,delivery,voiceWanted:false};
     }
 
     _deliveryFor(event,reason,burst){

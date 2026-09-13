@@ -128,8 +128,6 @@ public final class MainActivity extends Activity {
         activeTurn=null;activeToolApplied=false;
         if(turnWatchdog!=null)mainHandler.removeCallbacks(turnWatchdog);turnWatchdog=null;
         gameView.setGeminiPending(false);gameView.setVoiceActive(false);
-        String spoken=transcriptBuffer.toString().trim();
-        if(!spoken.isEmpty())gameView.recordSpokenLine(spoken);
         transcriptBuffer.setLength(0);
         if(destroyed)return;
         DirectiveTurn next=queuedTurn;queuedTurn=null;
@@ -187,8 +185,8 @@ public final class MainActivity extends Activity {
                     finishActiveTurn();
                 });
             }
-            @Override public void onAudioActivity(){mainHandler.post(()->gameView.setVoiceActive(true));}
-            @Override public void onTranscript(String text){mainHandler.post(()->appendTranscriptChunk(text));}
+            @Override public void onAudioActivity(){/* v10: AI voice output disabled */}
+            @Override public void onTranscript(String text){/* v10: ignore model speech/transcript */}
             @Override public void onError(String message){mainHandler.post(()->handleLiveError(key.trim(),message));}
         });
         liveClient.connect();

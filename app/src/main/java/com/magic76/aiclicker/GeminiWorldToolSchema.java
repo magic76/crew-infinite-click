@@ -13,7 +13,7 @@ public final class GeminiWorldToolSchema {
         try{
             p.put("turnId",new JSONObject().put("type","INTEGER").put("description","Echo exact turnId from DIRECTIVE."));
             p.put("baseStateVersion",new JSONObject().put("type","INTEGER").put("description","Echo exact baseStateVersion from DIRECTIVE."));
-            p.put("world",enumString("Visual/gameplay world.","SPRING_BLOOM","SUMMER_STORM","AUTUMN_DECAY","WINTER_FROST","VOID_CHAMBER","NEON_RIFT"));
+            p.put("world",enumString("v10 pilot is locked to the physical Storm Control Room.","SUMMER_STORM"));
             p.put("mood",enumString("Emotional tone.","PLAYFUL","EERIE","CALM","CHAOTIC"));
             p.put("situation",enumString("Situation for the next several seconds.","CHASE","DECOY","WAIT","PREDICT","MIRROR","HIDE","REVEAL","FAKE_ENDING"));
             p.put("audioMood",enumString("Local SFX palette.","ORGANIC","STORM","DRY","GLASS","COSMIC","GLITCH"));
@@ -31,7 +31,6 @@ public final class GeminiWorldToolSchema {
                     .put("timing",enumString("Sequencing style.","SNAP","TENSION","DELAYED","REVERSAL"));
             p.put("composition",new JSONObject().put("type","OBJECT").put("properties",cp)
                     .put("description","Compose existing safe primitives only. Do not invent a primitive."));
-            p.put("speech",new JSONObject().put("type","STRING").put("description","Optional very short in-character line. Never narrate the obvious visual."));
             p.put("intensity",new JSONObject().put("type","NUMBER").put("minimum",0).put("maximum",1));
             p.put("surpriseLevel",new JSONObject().put("type","NUMBER").put("minimum",0).put("maximum",1));
             p.put("sensoryDensity",new JSONObject().put("type","INTEGER").put("minimum",0).put("maximum",3)
