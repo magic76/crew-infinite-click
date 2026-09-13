@@ -4,8 +4,14 @@
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const now=()=>global.performance&&performance.now?performance.now():Date.now();
   const GRID_COLUMNS=4,GRID_ROWS=2,CELL=512;
+  const ATLAS_DEFAULT={columns:5,rows:2};
   const SOURCE_CACHE=new Map();
-  const PET_GLOW={PEACH:0xe99592,SPARK:0xe7bf63,MINT:0x7fc9b5};
+  const PET_GLOW={
+    PEACH:0xf7a0a7,BUNNY:0xeec4d8,FLAME:0xffd768,CLOUD:0xcbe3ff,STAR:0xffe27a,
+    JELLY:0x70d8ff,RADISH:0x9be16b,BUBBLE:0x92cbff,PLUM:0xae7df0,CANDY:0xffa6d2,
+    SPARK:0xe7bf63,MINT:0x7fc9b5
+  };
+  const ATLAS_FRAME_COUNT=8;
 
   const ANIMATIONS={
     IDLE:{frames:[0,1,2,1],speed:.075,loop:true},
@@ -35,7 +41,7 @@
     constructor(app,options){
       const o=options||{};
       this.app=app;this.parent=o.parent||app.stage;
-      this.id=String(o.id||"pet");this.type=String(o.type||"PEACH").toUpperCase();this.temperament=String(o.temperament||"SHY").toUpperCase();
+      this.id=String(o.id||"pet");this.type=String(o.type||"PEACH").toUpperCase();this.temperament=String(o.temperament||"SHY").toUpperCase();this.atlas=o.atlas||null;this.glowColor=Number.isFinite(o.glowColor)?o.glowColor:null;
       this.personality=TEMPERAMENTS[this.temperament]||TEMPERAMENTS.SHY;
       this.scaleFactor=clamp(Number(o.scaleFactor)||1,.55,1.42);this.sizeMultiplier=1;this.sizeTarget=1;this.sizeReturnAt=0;
       this.initial=o.initial||null;
@@ -73,11 +79,23 @@
         source=base.source;SOURCE_CACHE.set(requested,source);
       }
       this.frames=[];
-      for(let row=0;row<GRID_ROWS;row++)for(let col=0;col<GRID_COLUMNS;col++){
-        this.frames.push(new global.PIXI.Texture({source,frame:new global.PIXI.Rectangle(col*CELL,row*CELL,CELL,CELL)}));
+      if(this.atlas&&Number.isFinite(this.atlas.index)){
+        const cols=Math.max(1,Math.floor(Number(this.atlas.columns)||ATLAS_DEFAULT.columns));
+        const rows=Math.max(1,Math.floor(Number(this.atlas.rows)||ATLAS_DEFAULT.rows));
+        const index=clamp(Math.floor(Number(this.atlas.index)||0),0,cols*rows-1);
+        const col=index%cols,row=Math.floor(index/cols);
+        const baseW=(source.resource&&source.resource.width)||source.width||0,baseH=(source.resource&&source.resource.height)||source.height||0;
+        const cellW=baseW/cols,cellH=baseH/rows;
+        const x0=Math.round(col*cellW),x1=Math.round((col+1)*cellW),y0=Math.round(row*cellH),y1=Math.round((row+1)*cellH);
+        const texture=new global.PIXI.Texture({source,frame:new global.PIXI.Rectangle(x0,y0,Math.max(1,x1-x0),Math.max(1,y1-y0))});
+        for(let i=0;i<ATLAS_FRAME_COUNT;i++)this.frames.push(texture);
+      }else{
+        for(let row=0;row<GRID_ROWS;row++)for(let col=0;col<GRID_COLUMNS;col++){
+          this.frames.push(new global.PIXI.Texture({source,frame:new global.PIXI.Rectangle(col*CELL,row*CELL,CELL,CELL)}));
+        }
       }
       this.sprite=new global.PIXI.AnimatedSprite(this._texturesFor("IDLE"));
-      this.sprite.anchor.set(.5);this.sprite.animationSpeed=ANIMATIONS.IDLE.speed;this.sprite.loop=true;this.sprite.play();this.root.addChild(this.sprite);
+      this.sprite.anchor.set(.5);this.sprite.animationSpeed=(this.atlas&&this.atlas.index!=null)?.04:ANIMATIONS.IDLE.speed;this.sprite.loop=true;this.sprite.play();this.root.addChild(this.sprite);
       const s=this.app.renderer.screen,b=this.safeBounds(),ix=this.initial&&Number.isFinite(this.initial.x)?this.initial.x:.5,iy=this.initial&&Number.isFinite(this.initial.y)?this.initial.y:.56;
       this.sprite.x=clamp(s.width*ix,b.left,b.right);this.sprite.y=clamp(s.height*iy,b.top,b.bottom);
       this.targetX=this.sprite.x;this.targetY=this.sprite.y;this._updateScale();this._drawShadow();
@@ -181,6 +199,20 @@
       if(f>.42){this._play("HOP",true,"RUN");this._setMode("FLEE",now()+320);}
     }
 
+    applyWorldForce(vx,vy,power){
+      if(!this.sprite||!this.active)return;const p=clamp(Number(power)||1,.05,2.5);
+      this.vx+=(Number(vx)||0)*p;this.vy+=(Number(vy)||0)*p;
+      this.targetX=clamp(this.targetX+(Number(vx)||0)*.12,this.safeBounds().left,this.safeBounds().right);
+      this.targetY=clamp(this.targetY+(Number(vy)||0)*.12,this.safeBounds().top,this.safeBounds().bottom);
+    }
+
+    warpTo(x,y,options){
+      if(!this.sprite||!this.active)return;const o=options||{},b=this.safeBounds();
+      this.sprite.x=clamp(Number(x)||this.sprite.x,b.left,b.right);this.sprite.y=clamp(Number(y)||this.sprite.y,b.top,b.bottom);
+      this.targetX=this.sprite.x;this.targetY=this.sprite.y;this.vx=Number(o.vx)||0;this.vy=Number(o.vy)||0;
+      this.deformUntil=now()+180;this.deformPower=.42;this._play(o.animation||"STARTLED",true,"RUN");this._setMode(o.mode||"CURIOUS",now()+420);
+    }
+
     synchronize(kind,center){
       if(!this.sprite||!this.active)return;const k=String(kind||"HOP").toUpperCase(),t=now(),b=this.safeBounds();
       if(k==="SCATTER"){
@@ -254,14 +286,14 @@
     }
     _scheduleDecision(t,delay){this.nextDecisionAt=t+Math.max(120,Number(delay)||1200);}
     _setMode(mode,until){if(this.mode===mode&&(!until||this.reactionUntil===until))return;const prev=this.mode;this.mode=mode;this.reactionUntil=until||0;try{this.onModeChange({id:this.id,type:this.type,mode,previous:prev,context:this.context()});}catch(_){}}
-    _texturesFor(name){const def=ANIMATIONS[name]||ANIMATIONS.IDLE;return def.frames.map(i=>this.frames[i]);}
+    _texturesFor(name){if(this.atlas&&this.frames.length)return this.frames.slice();const def=ANIMATIONS[name]||ANIMATIONS.IDLE;return def.frames.map(i=>this.frames[i]);}
     _play(name,force,returnTo){
-      if(!this.sprite)return;const def=ANIMATIONS[name]||ANIMATIONS.IDLE;if(!force&&this.anim===name)return;this.anim=name;this.sprite.stop();this.sprite.textures=this._texturesFor(name);this.sprite.animationSpeed=def.speed;this.sprite.loop=def.loop;this.sprite.gotoAndPlay(0);this.sprite.onComplete=null;
+      if(!this.sprite)return;const def=ANIMATIONS[name]||ANIMATIONS.IDLE;if(!force&&this.anim===name)return;this.anim=name;this.sprite.stop();this.sprite.textures=this._texturesFor(name);this.sprite.animationSpeed=(this.atlas&&this.atlas.index!=null)?.04:def.speed;this.sprite.loop=(this.atlas&&this.atlas.index!=null)?true:def.loop;this.sprite.gotoAndPlay(0);this.sprite.onComplete=null;
       if(!def.loop&&returnTo){this.oneShotReturn=returnTo;this.sprite.onComplete=()=>{if(this.sprite&&this.anim===name)this._play(returnTo,true);};}
     }
     _updateScale(){if(!this.sprite)return;const s=this.app.renderer.screen;this.baseScale=clamp(Math.min(s.width/390,s.height/760)*.27*this.scaleFactor,.17,.43);this.sprite.scale.set(this.facing*this.baseScale*this.sizeMultiplier,this.baseScale*this.sizeMultiplier);}
     _drawShadow(speed){
-      if(!this.sprite||!this.shadow||!this.active)return;const s=Number(speed)||0,scale=this.baseScale*this.sizeMultiplier/.31,c=PET_GLOW[this.type]||0x9d90bd;
+      if(!this.sprite||!this.shadow||!this.active)return;const s=Number(speed)||0,scale=this.baseScale*this.sizeMultiplier/.31,c=this.glowColor!=null?this.glowColor:(PET_GLOW[this.type]||0x9d90bd);
       const airborne=clamp(Math.abs(this.vy)/700,0,.22),w=66*scale*(1+clamp(s/560,0,.24)-airborne*.35),y=80*scale+airborne*8;
       if(this.aura){this.aura.clear();this.aura.ellipse(this.sprite.x,this.sprite.y+y-8,w*1.04,15*scale).fill({color:c,alpha:.024+clamp(s/820,0,.020)});this.aura.ellipse(this.sprite.x,this.sprite.y+y-6,w*.68,8*scale).fill({color:0xffffff,alpha:.015});}
       this.shadow.clear();this.shadow.ellipse(this.sprite.x,this.sprite.y+y,w,11*scale).fill({color:0x05040a,alpha:.17});this.shadow.ellipse(this.sprite.x,this.sprite.y+y-1,w*.60,6*scale).fill({color:0x000000,alpha:.14});
@@ -271,6 +303,7 @@
   global.SpritePetRuntime=SpritePetRuntime;
   global.SpritePetAnimations=ANIMATIONS;
   global.SpritePetGrid={columns:GRID_COLUMNS,rows:GRID_ROWS,cell:CELL};
+  global.SpritePetAtlasGrid={columns:ATLAS_DEFAULT.columns,rows:ATLAS_DEFAULT.rows};
   global.SpritePetTemperaments=TEMPERAMENTS;
   global.SpritePetImpactForDistance=impactForDistance;
 })(window);

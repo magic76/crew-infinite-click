@@ -1,0 +1,15 @@
+const fs=require('fs'),assert=require('assert');
+const game=fs.readFileSync('app/src/main/assets/game/game.js','utf8');
+const pets=fs.readFileSync('app/src/main/assets/game/sprite-pet-runtime.js','utf8');
+const gradle=fs.readFileSync('app/build.gradle','utf8');
+assert(game.includes('WORLD_RULES_CAST_V20'),'v20 renderer id missing');
+for(const fn of ['triggerCharacterSpecial','applyWorldRules','spawnWorldAmbient','worldTransitionBurst'])assert(game.includes('function '+fn),fn+' missing');
+for(const type of ['PEACH','BUNNY','FLAME','CLOUD','STAR','JELLY','RADISH','BUBBLE','PLUM','CANDY'])assert(game.includes(type+':{cooldown:'),'missing character special config '+type);
+for(const world of ['CANDY_TOY_ROOM','CRYSTAL_SKY_GARDEN','UNDERWATER_BUBBLE_PALACE','STARLIGHT_CARNIVAL'])assert(game.includes('id==="'+world+'"')||game.includes('id==='+JSON.stringify(world)),'world rule missing '+world);
+assert(pets.includes('applyWorldForce(vx,vy,power)'),'world-force hook missing');
+assert(pets.includes('warpTo(x,y,options)'),'warp hook missing');
+assert(game.includes('ambientLayer'), 'ambient layer missing');
+assert(game.includes('triggerCharacterSpecial(primary)'), 'direct-hit special integration missing');
+assert(game.includes('applyWorldRules(dt,t);spawnWorldAmbient(t);'), 'tick world integration missing');
+assert(gradle.includes('versionCode 398')&&gradle.includes("versionName '0.49.0-world-rules-v20'"),'v20 gradle version missing');
+console.log('world-rules-v20.test.js PASS');

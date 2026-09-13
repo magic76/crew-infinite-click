@@ -10,9 +10,9 @@ android {
         applicationId 'com.magic76.aiclicker'
         minSdk 26
         targetSdk 35
-        versionCode 396
+        versionCode 398
         // legacy marker versionCode 395
-        versionName '0.47.0-production-asset-v18'
+        versionName '0.49.0-world-rules-v20'
         // legacy marker versionName '0.46.0-asset-art-v17'
     }
 
@@ -32,3 +32,5 @@ android {
 dependencies {
     implementation 'com.squareup.okhttp3:okhttp:4.12.0'
 }
+
+// v19 marker: 10-cast atlas + rotating world gallery

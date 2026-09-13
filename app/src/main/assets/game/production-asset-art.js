@@ -3,6 +3,12 @@
 
   const PATHS={
     bg:{backdrop:"art/backgrounds/backdrop.svg",playfield:"art/backgrounds/playfield.svg",foreground:"art/backgrounds/foreground.svg"},
+    worlds:{
+      CANDY_TOY_ROOM:"art/backgrounds/world-candy-toy-room.svg",
+      CRYSTAL_SKY_GARDEN:"art/backgrounds/world-crystal-sky-garden.svg",
+      UNDERWATER_BUBBLE_PALACE:"art/backgrounds/world-underwater-bubble-palace.svg",
+      STARLIGHT_CARNIVAL:"art/backgrounds/world-starlight-carnival.svg"
+    },
     objects:{
       BUMPER:{idle:"art/objects/bumper-idle.svg",active:"art/objects/bumper-hit.svg"},
       GIFT:{idle:"art/objects/gift-closed.svg",active:"art/objects/gift-open.svg"},
@@ -16,6 +22,7 @@
   const flatten=()=>{
     const out=[];
     for(const [k,v] of Object.entries(PATHS.bg))out.push([`bg.${k}`,v]);
+    for(const [k,v] of Object.entries(PATHS.worlds))out.push([`world.${k}`,v]);
     for(const [type,pair] of Object.entries(PATHS.objects))for(const [state,path] of Object.entries(pair))out.push([`object.${type}.${state}`,path]);
     for(const [k,v] of Object.entries(PATHS.fx))out.push([`fx.${k}`,v]);
     return out;
