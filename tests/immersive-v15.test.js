@@ -8,5 +8,5 @@ assert(view.includes('loadAssetData(String path)'),'native sprite bridge must re
 const onCreate=main.slice(main.indexOf('@Override protected void onCreate'),main.indexOf('private void onLanguageChanged'));
 assert(!onCreate.includes('connectLive('),'v15 must not auto-connect Gemini');
 for(const flag of ['SYSTEM_UI_FLAG_IMMERSIVE_STICKY','SYSTEM_UI_FLAG_FULLSCREEN','SYSTEM_UI_FLAG_HIDE_NAVIGATION'])assert(main.includes(flag),'missing immersive flag '+flag);
-assert(gradle.includes('versionCode 393'));assert(gradle.includes("versionName '0.44.0-object-playground-v15'"));
+assert(gradle.includes('versionCode 394'));assert(gradle.includes("versionName '0.45.0-premium-toy-art-v16'"));
 console.log('immersive-v15.test.js PASS');

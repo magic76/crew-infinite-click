@@ -5,6 +5,7 @@
   const now=()=>global.performance&&performance.now?performance.now():Date.now();
   const GRID_COLUMNS=4,GRID_ROWS=2,CELL=512;
   const SOURCE_CACHE=new Map();
+  const PET_GLOW={PEACH:0xe99592,SPARK:0xe7bf63,MINT:0x7fc9b5};
 
   const ANIMATIONS={
     IDLE:{frames:[0,1,2,1],speed:.075,loop:true},
@@ -43,6 +44,7 @@
       this.onModeChange=typeof o.onModeChange==="function"?o.onModeChange:()=>{};
       this.onWallBounce=typeof o.onWallBounce==="function"?o.onWallBounce:()=>{};
       this.root=new global.PIXI.Container();this.root.label="sprite-pet-"+this.id;this.parent.addChild(this.root);
+      this.aura=new global.PIXI.Graphics();this.root.addChild(this.aura);
       this.shadow=new global.PIXI.Graphics();this.root.addChild(this.shadow);
       this.sprite=null;this.frames=[];this.anim="IDLE";this.mode="IDLE";this.active=o.active!==false;this.root.visible=this.active;
       this.vx=0;this.vy=0;this.targetX=0;this.targetY=0;this.facing=Math.random()<.5?-1:1;this.baseScale=.31;
@@ -259,7 +261,9 @@
     }
     _updateScale(){if(!this.sprite)return;const s=this.app.renderer.screen;this.baseScale=clamp(Math.min(s.width/390,s.height/760)*.27*this.scaleFactor,.17,.43);this.sprite.scale.set(this.facing*this.baseScale*this.sizeMultiplier,this.baseScale*this.sizeMultiplier);}
     _drawShadow(speed){
-      if(!this.sprite||!this.shadow||!this.active)return;const s=Number(speed)||0,scale=this.baseScale*this.sizeMultiplier/.31,w=70*scale*(1+clamp(s/520,0,.38));this.shadow.clear();this.shadow.ellipse(this.sprite.x,this.sprite.y+76*scale,w,13*scale).fill({color:0x000000,alpha:.20});
+      if(!this.sprite||!this.shadow||!this.active)return;const s=Number(speed)||0,scale=this.baseScale*this.sizeMultiplier/.31,w=70*scale*(1+clamp(s/520,0,.38)),c=PET_GLOW[this.type]||0x9d90bd;
+      if(this.aura){this.aura.clear();this.aura.ellipse(this.sprite.x,this.sprite.y+70*scale,w*1.10,20*scale).fill({color:c,alpha:.045+clamp(s/720,0,.035)});this.aura.ellipse(this.sprite.x,this.sprite.y+72*scale,w*.72,11*scale).fill({color:0xffffff,alpha:.025});}
+      this.shadow.clear();this.shadow.ellipse(this.sprite.x,this.sprite.y+78*scale,w,14*scale).fill({color:0x05040a,alpha:.25});this.shadow.ellipse(this.sprite.x,this.sprite.y+76*scale,w*.64,7*scale).fill({color:0x000000,alpha:.24});
     }
   }
 

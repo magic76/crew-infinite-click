@@ -4,10 +4,10 @@
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const now=()=>global.performance&&performance.now?performance.now():Date.now();
   const TYPE_COLORS={
-    BUMPER:[0xff6fae,0xffd36f,0xffffff],
-    GIFT:[0x9c7cff,0xff8faf,0xffe28a],
-    BALLOON:[0x77d8ff,0xff9fcb,0xffffff],
-    SPRING:[0x76e6bf,0x8ce7ff,0xffffff]
+    BUMPER:[0xd98791,0xe7bf63,0xf4e8dd],
+    GIFT:[0x9d90bd,0xe99592,0xe7bf63],
+    BALLOON:[0x79a8be,0xd8a0b4,0xf4e8dd],
+    SPRING:[0x7fc9b5,0x79a8be,0xf4e8dd]
   };
 
   const SPECS=[
@@ -96,6 +96,8 @@
         o.phase+=dt*(o.type==="BALLOON"?1.55:.95);o.pulse=Math.max(0,o.pulse-dt*2.8);o.compress=Math.max(0,o.compress-dt*3.5);o.open=Math.max(0,o.open-dt*1.8);
         if(o.type==="BALLOON"){o.bob=Math.sin(o.phase)*8;o.container.y=o.y+o.bob;}else o.container.y=o.y;
         o.container.x=o.x;
+        const pulseScale=1+o.pulse*.055-o.compress*.055;o.container.scale.set(pulseScale,o.type==="SPRING"?1-o.compress*.06:pulseScale);
+        o.container.rotation=o.type==="BALLOON"?Math.sin(o.phase*.72)*.018:0;
         this._draw(o,t);
       }
       this._collidePets(Array.isArray(pets)?pets:[],t);
@@ -162,32 +164,51 @@
     _emit(payload){try{this.onEvent(payload);}catch(_){} }
 
     _draw(o,t){
-      const b=o.body,a=o.accent,s=o.shadow;b.clear();a.clear();s.clear();const p=o.pulse,colors=TYPE_COLORS[o.type]||TYPE_COLORS.BUMPER;
-      s.ellipse(0,o.radius*.72,o.radius*.9,o.radius*.26).fill({color:0x080711,alpha:.22});
+      const b=o.body,a=o.accent,s=o.shadow,p=o.pulse;const colors=TYPE_COLORS[o.type]||TYPE_COLORS.BUMPER,art=global.PremiumToyArt;
+      b.clear();a.clear();s.clear();
+      if(art&&art.softShadow)art.softShadow(s,0,o.radius*.76,o.radius*.92,o.radius*.23,.26);else s.ellipse(0,o.radius*.76,o.radius*.9,o.radius*.26).fill({color:0x05040a,alpha:.24});
+
       if(o.type==="BUMPER"){
-        const r=o.radius*(1+p*.08),pts=[];for(let i=0;i<8;i++){const q=-Math.PI/2+i*Math.PI/4,rr=i%2?r:r*.80;pts.push(Math.cos(q)*rr,Math.sin(q)*rr);}
-        b.poly(pts).fill({color:0x5c3f7d,alpha:1}).stroke({color:colors[0],width:4+p*3,alpha:.88});
-        b.circle(0,0,r*.58).fill({color:colors[1],alpha:.18+p*.18}).stroke({color:0xffffff,width:2,alpha:.42});
-        a.moveTo(0,-r*.37).lineTo(r*.16,-r*.05).lineTo(r*.04,-r*.05).lineTo(r*.18,r*.34).lineTo(-r*.20,r*.04).lineTo(-r*.05,r*.04).closePath().fill({color:0xffffff,alpha:.78+p*.20});
+        const r=o.radius*(1+p*.07);
+        // Premium arcade puck: dark rubber base, brushed-metal ring, translucent gel dome.
+        b.circle(0,3,r*1.02).fill({color:0x171522,alpha:.96});
+        b.circle(0,0,r*.94).fill({color:0x5a4554,alpha:1}).stroke({color:0xf4e8dd,width:2.2,alpha:.20});
+        b.circle(0,-1,r*.78).fill({color:colors[0],alpha:.92}).stroke({color:colors[1],width:3.2+p*1.8,alpha:.72});
+        b.circle(0,-3,r*.56).fill({color:0x3b2c3a,alpha:.78});
+        b.circle(0,-5,r*.42).fill({color:colors[1],alpha:.24});
+        a.ellipse(-r*.18,-r*.34,r*.32,r*.13).fill({color:0xffffff,alpha:.34});
+        a.roundRect(-r*.34,-r*.09,r*.68,r*.18,r*.09).fill({color:0xf4e8dd,alpha:.74});
       }else if(o.type==="GIFT"){
-        const r=o.radius,open=o.open;
-        b.roundRect(-r*.72,-r*.46+open*7,r*1.44,r*.96,10).fill({color:colors[0],alpha:.94}).stroke({color:0xffffff,width:2,alpha:.34});
-        b.rect(-r*.12,-r*.46+open*7,r*.24,r*.96).fill({color:colors[2],alpha:.92});
-        const lidY=-r*.55-open*14;b.roundRect(-r*.82,lidY,r*1.64,r*.28,8).fill({color:colors[1],alpha:.98});
-        a.moveTo(0,lidY).bezierCurveTo(-r*.34,lidY-r*.38,-r*.52,lidY+r*.02,-r*.10,lidY+r*.08).bezierCurveTo(r*.52,lidY-r*.24,r*.47,lidY+r*.14,0,lidY+r*.08).stroke({color:colors[2],width:4,alpha:.88});
+        const r=o.radius,open=o.open,lift=open*9;
+        // Collector capsule crate: cream vinyl shell + muted coral band + metal clasp.
+        b.roundRect(-r*.72,-r*.45+lift,r*1.44,r*.94,12).fill({color:0xe9ddd2,alpha:.98}).stroke({color:0xffffff,width:1.8,alpha:.20});
+        b.roundRect(-r*.60,-r*.34+lift,r*1.20,r*.70,9).fill({color:0xf4e8dd,alpha:.76});
+        b.roundRect(-r*.13,-r*.45+lift,r*.26,r*.94,5).fill({color:colors[1],alpha:.92});
+        b.roundRect(-r*.82,-r*.58-open*13,r*1.64,r*.30,9).fill({color:colors[0],alpha:.98}).stroke({color:0xf4e8dd,width:1.5,alpha:.16});
+        a.roundRect(-r*.18,-r*.08+lift,r*.36,r*.24,5).fill({color:colors[2],alpha:.95}).stroke({color:0xffffff,width:1,alpha:.24});
+        a.ellipse(-r*.28,-r*.50-open*13,r*.23,r*.12).stroke({color:colors[1],width:5,alpha:.86});
+        a.ellipse(r*.28,-r*.50-open*13,r*.23,r*.12).stroke({color:colors[1],width:5,alpha:.86});
+        a.ellipse(-r*.24,-r*.28+lift,r*.25,r*.10).fill({color:0xffffff,alpha:.20});
       }else if(o.type==="BALLOON"){
-        const r=o.radius*(1+p*.10),yy=Math.sin(t/240+o.phase)*2;
-        b.moveTo(0,r*.92+yy).bezierCurveTo(-r*.76,r*.35,-r*.72,-r*.60,0,-r).bezierCurveTo(r*.72,-r*.60,r*.76,r*.35,0,r*.92+yy).fill({color:colors[0],alpha:.88}).stroke({color:0xffffff,width:2.2,alpha:.52});
-        a.circle(-r*.23,-r*.35,r*.12).fill({color:0xffffff,alpha:.58});
-        a.moveTo(-4,r*.92+3).lineTo(4,r*.92+3).lineTo(0,r*1.08+8).closePath().fill({color:colors[1],alpha:.88});
-        a.moveTo(0,r*1.08+8).bezierCurveTo(-12,r*1.45,14,r*1.72,-5,r*2.0).stroke({color:colors[2],width:1.5,alpha:.42});
+        const r=o.radius*(1+p*.09),yy=Math.sin(t/240+o.phase)*2;
+        // Translucent resin bubble, intentionally not a party balloon.
+        b.circle(0,-r*.04+yy,r*.92).fill({color:0x254553,alpha:.28}).stroke({color:colors[0],width:2.4,alpha:.68});
+        b.circle(0,-r*.06+yy,r*.78).fill({color:colors[0],alpha:.16});
+        b.circle(r*.08,r*.02+yy,r*.46).fill({color:colors[1],alpha:.10});
+        a.ellipse(-r*.25,-r*.34+yy,r*.24,r*.12).fill({color:0xffffff,alpha:.52});
+        a.circle(-r*.36,-r*.17+yy,r*.07).fill({color:0xffffff,alpha:.34});
+        a.roundRect(-r*.10,r*.80+yy,r*.20,r*.16,r*.05).fill({color:0xe9ddd2,alpha:.88});
+        a.moveTo(0,r*.95+yy).bezierCurveTo(-8,r*1.25,9,r*1.55,-4,r*1.82).stroke({color:0xbda9b0,width:1.4,alpha:.38});
       }else if(o.type==="SPRING"){
         const r=o.radius,c=o.compress;
-        b.roundRect(-r*.86,r*.10+c*7,r*1.72,r*.36,10).fill({color:0x264b54,alpha:.98}).stroke({color:colors[0],width:3,alpha:.82});
-        b.roundRect(-r*.72,-r*.54+c*20,r*1.44,r*.26,9).fill({color:colors[1],alpha:.92}).stroke({color:0xffffff,width:2,alpha:.35});
-        const top=-r*.27+c*16,bottom=r*.10+c*6,steps=5;let px=-r*.48,py=bottom; a.moveTo(px,py);for(let i=1;i<=steps;i++){px=-r*.48+(r*.96)*(i/steps);py=i%2?top:bottom;a.lineTo(px,py);}a.stroke({color:colors[2],width:4,alpha:.78});
+        // Polished launch pad: smoked metal base, teal coil, warm metallic cap.
+        b.roundRect(-r*.88,r*.12+c*7,r*1.76,r*.38,11).fill({color:0x182229,alpha:.98}).stroke({color:0xf4e8dd,width:1.6,alpha:.16});
+        b.roundRect(-r*.76,-r*.58+c*20,r*1.52,r*.29,10).fill({color:0xd4b55d,alpha:.94}).stroke({color:0xffffff,width:1.6,alpha:.23});
+        b.roundRect(-r*.60,-r*.50+c*20,r*1.20,r*.12,6).fill({color:0xf2d783,alpha:.36});
+        const top=-r*.28+c*16,bottom=r*.12+c*6,steps=6;let px=-r*.48,py=bottom;a.moveTo(px,py);for(let i=1;i<=steps;i++){px=-r*.48+(r*.96)*(i/steps);py=i%2?top:bottom;a.lineTo(px,py);}a.stroke({color:colors[0],width:5,alpha:.88});
+        a.moveTo(-r*.48,bottom+2);for(let i=1;i<=steps;i++){px=-r*.48+(r*.96)*(i/steps);py=i%2?top+4:bottom+2;a.lineTo(px,py);}a.stroke({color:colors[1],width:1.6,alpha:.48});
       }
-      if(p>.02){a.circle(0,0,o.radius*(.78+p*.46)).stroke({color:colors[1],width:2+p*2,alpha:.12+p*.34});}
+      if(p>.02){a.circle(0,0,o.radius*(.76+p*.42)).stroke({color:colors[1],width:1.7+p*1.6,alpha:.08+p*.22});}
     }
   }
 

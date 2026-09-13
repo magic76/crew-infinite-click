@@ -10,8 +10,8 @@ android {
         applicationId 'com.magic76.aiclicker'
         minSdk 26
         targetSdk 35
-        versionCode 393
-        versionName '0.44.0-object-playground-v15'
+        versionCode 394
+        versionName '0.45.0-premium-toy-art-v16'
     }
 
     buildTypes {

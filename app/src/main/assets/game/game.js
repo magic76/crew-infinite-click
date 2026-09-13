@@ -14,13 +14,13 @@
     {id:"mint-two",type:"MINT",temperament:"CURIOUS",sheet:"sprites/mint-sheet.png",scaleFactor:.78,initial:{x:.72,y:.42}}
   ];
   const FX_PALETTES={
-    PEACH:[0xff8faf,0xffc8d8,0xffe28a,0xffffff],
-    SPARK:[0xffe34f,0xffa800,0xffffff,0x8ce7ff],
-    MINT:[0x76e6bf,0xb8f4dc,0x8ce7ff,0xffffff],
-    NEUTRAL:[0xffffff,0xb8b7ff,0xffc8e3,0x8ce7ff]
+    PEACH:[0xe99592,0xf6b7ae,0xe7bf63,0xffffff],
+    SPARK:[0xe7bf63,0xd99a4c,0xffffff,0x79a8be],
+    MINT:[0x7fc9b5,0xb9e1d6,0x79a8be,0xffffff],
+    NEUTRAL:[0xffffff,0x9d90bd,0xd8b5bd,0x79a8be]
   };
   const state={
-    app:null,stageRoot:null,world:null,bg:null,toys:null,objectLayer:null,objectRuntime:null,petLayer:null,fxLayer:null,flash:null,audio:null,pets:[],
+    app:null,stageRoot:null,world:null,bgSprite:null,bgTexture:null,bg:null,toys:null,objectLayer:null,objectRuntime:null,petLayer:null,fxLayer:null,flash:null,audio:null,pets:[],
     pools:null,particles:[],ripples:[],safe:{left:0,top:0,right:0,bottom:0},
     lastTapAt:0,lastDirectHitAt:0,lastNearAt:0,lastCollisionAt:0,streak:0,hitCombo:0,totalTaps:0,directHits:0,nearMisses:0,
     collisionChain:0,lastCollisionChainAt:0,lastComboBlastAt:0,lastFrenzyAt:0,frenzyUntil:0,frenzyPower:0,nextFrenzyKickAt:0,lastTauntAt:0,lastTrails:new Map(),
@@ -33,7 +33,7 @@
 
   async function boot(){
     const app=new PIXI.Application();
-    await app.init({resizeTo:window,background:0x100e1b,antialias:true,resolution:Math.min(window.devicePixelRatio||1,1.5),autoDensity:true,powerPreference:"high-performance"});
+    await app.init({resizeTo:window,background:0x171522,antialias:true,resolution:Math.min(window.devicePixelRatio||1,1.5),autoDensity:true,powerPreference:"high-performance"});
     state.app=app;document.body.appendChild(app.canvas);buildScene();wireInput();state.audio=new AudioMoodPlayer();
     state.objectRuntime=new ToyObjectRuntime(app,{parent:state.objectLayer,safeBounds,onEvent:handleObjectEvent});
 
@@ -48,13 +48,14 @@
     const hero=state.pets[0];if(hero){const s=screen(),b=safeBounds();hero.setActive(true,{x:(b.left+b.right)/2,y:b.top+(b.bottom-b.top)*.50});hero.setSizeMultiplier(1.08);}
     resizeScene();app.ticker.add(tick);
     if(DEBUG)window.PixiGameDebug={app,canvas:app.canvas,pets:()=>state.pets,diagnostics,triggerToyEvent};
-    try{A&&A.onRendererReady("OBJECT_PLAYGROUND_V15");}catch(_){}
+    try{A&&A.onRendererReady("PREMIUM_TOY_ART_V16");}catch(_){}
   }
 
   function buildScene(){
     const app=state.app;
     state.stageRoot=new PIXI.Container();state.stageRoot.label="toy-box-root";app.stage.addChild(state.stageRoot);
-    state.world=new PIXI.Container();state.world.label="toy-box-world";state.stageRoot.addChild(state.world);
+    state.world=new PIXI.Container();state.world.label="premium-toy-world";state.stageRoot.addChild(state.world);
+    state.bgSprite=new PIXI.Sprite();state.bgSprite.label="premium-scene-texture";state.world.addChild(state.bgSprite);
     state.bg=new PIXI.Graphics();state.world.addChild(state.bg);
     state.toys=new PIXI.Graphics();state.world.addChild(state.toys);
     state.objectLayer=new PIXI.Container();state.objectLayer.label="object-layer";state.world.addChild(state.objectLayer);
@@ -86,14 +87,14 @@
     if(primary&&primary.reaction==="HIT"){
       state.directHits++;state.hitCombo=Math.min(9,state.hitCombo+1);state.lastDirectHitAt=t;if(state.objectRuntime)state.objectRuntime.unlockForHits(state.directHits);
       state.toyEnergy+=.29+.09*Math.min(3,state.hitCombo)+Math.min(.12,state.streak*.006);
-      hitFx(primary,x,y);comboHalo(primary);spreadPanic(primary,.76);cameraKick(primary.x-x,primary.y-y,.72+state.hitCombo*.07);screenFlash(FX_PALETTES[primary.type][0],.10+.025*state.hitCombo);
+      softBloom(primary.x,primary.y,FX_PALETTES[primary.type][0],1.0+.08*state.hitCombo);hitFx(primary,x,y);comboHalo(primary);spreadPanic(primary,.76);cameraKick(primary.x-x,primary.y-y,.72+state.hitCombo*.07);screenFlash(FX_PALETTES[primary.type][0],.10+.025*state.hitCombo);
       if(state.hitCombo>=3&&state.hitCombo%3===0&&t-state.lastComboBlastAt>260){state.lastComboBlastAt=t;comboBlast(primary);}
       if(state.hitCombo>=5&&activePets().length>=2&&t-state.lastFrenzyAt>5200)startPinballFrenzy(primary,"HIT_CHAIN");
       if(window.GameHaptics)window.GameHaptics.perform("IMPACT",clamp(.52+state.hitCombo*.055,.52,.88));
       if(state.audio)state.audio.playJackpot(primary.type==="SPARK"?"GLITCH":"ORGANIC",Math.min(4,1+Math.floor(state.hitCombo/2)));
     }else if(primary&&impact>=.55){
       state.nearMisses++;state.lastNearAt=t;state.toyEnergy+=.07+impact*.07;
-      nearMissFx(x,y,primary);if(impact>=.76)grazeWhipFx(x,y,primary);spreadPanic(primary,.28+impact*.25);cameraKick(primary.x-x,primary.y-y,.16+impact*.12);
+      softBloom(x,y,FX_PALETTES[primary.type][1],.30+impact*.32);nearMissFx(x,y,primary);if(impact>=.76)grazeWhipFx(x,y,primary);spreadPanic(primary,.28+impact*.25);cameraKick(primary.x-x,primary.y-y,.16+impact*.12);
       if(impact>=.84)state.toyEnergy+=.035;
       if(window.GameHaptics)window.GameHaptics.perform("SOFT_TAP",.18+impact*.18);
       if(state.audio)state.audio.playClick(primary.type==="SPARK"?"GLITCH":"ORGANIC",.20+impact*.20,Math.max(state.streak,Math.round(impact*16)));
@@ -351,26 +352,26 @@
   }
 
   function bumperObjectFx(x,y,power){
-    const colors=[0xff6fae,0xffd36f,0xffffff],n=12+Math.floor(power*10);shockRing(x,y,colors[0],.75+power*.75);
+    const colors=[0xd98791,0xe7bf63,0xffffff],n=12+Math.floor(power*10);shockRing(x,y,colors[0],.75+power*.75);
     for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/n,s=5+power*5;g.moveTo(0,-s).lineTo(s*.55,-s*.25).lineTo(s,0).lineTo(s*.55,s*.25).lineTo(0,s).lineTo(-s*.55,s*.25).lineTo(-s,0).lineTo(-s*.55,-s*.25).closePath().fill({color:colors[i%3],alpha:.90});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*(115+power*180),Math.sin(a)*(115+power*180),.24+power*.12,0,7,.72));}
   }
 
   function giftObjectFx(x,y,power){
-    const colors=[0x9c7cff,0xff8faf,0xffe28a,0xffffff],n=26+Math.floor(power*16);shockRing(x,y,colors[1],1.0+power*.45);
+    const colors=[0x9d90bd,0xe99592,0xe7bf63,0xffffff],n=26+Math.floor(power*16);shockRing(x,y,colors[1],1.0+power*.45);
     for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*Math.random(),spd=90+Math.random()*250+power*80,c=colors[i%colors.length],w=3+Math.random()*5,h=7+Math.random()*10;g.roundRect(-w*.5,-h*.5,w,h,1.5).fill({color:c,alpha:.92});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-120-Math.random()*100,.42+Math.random()*.24,180,10,.35));}
   }
 
   function balloonObjectFx(x,y,power){
-    const colors=[0x77d8ff,0xff9fcb,0xffffff,0xffe28a],n=18+Math.floor(power*14);shockRing(x,y,colors[0],.85+power*.55);
+    const colors=[0x79a8be,0xd8a0b4,0xffffff,0xe7bf63],n=18+Math.floor(power*14);shockRing(x,y,colors[0],.85+power*.55);
     for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/n+(Math.random()-.5)*.35,spd=85+Math.random()*170,c=colors[i%colors.length],r=2.5+Math.random()*5+power*2;g.circle(0,0,r).fill({color:c,alpha:.72}).stroke({color:0xffffff,width:1,alpha:.35});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-45,.34+Math.random()*.18,-25,4,.60));}
   }
 
   function springObjectFx(x,y,power){
-    const colors=[0x76e6bf,0x8ce7ff,0xffffff],n=10+Math.floor(power*8);for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const spread=(i-(n-1)/2)*7,c=colors[i%3],h=18+Math.random()*24+power*18;g.roundRect(-2,-h,4,h,2).fill({color:c,alpha:.78});g.x=x+spread;g.y=y;state.particles.push(particle(g,spread*.9,-(150+Math.random()*160+power*90),.26+Math.random()*.12,150,0,.72));}shockRing(x,y,colors[0],.55+power*.42);
+    const colors=[0x7fc9b5,0x79a8be,0xffffff],n=10+Math.floor(power*8);for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const spread=(i-(n-1)/2)*7,c=colors[i%3],h=18+Math.random()*24+power*18;g.roundRect(-2,-h,4,h,2).fill({color:c,alpha:.78});g.x=x+spread;g.y=y;state.particles.push(particle(g,spread*.9,-(150+Math.random()*160+power*90),.26+Math.random()*.12,150,0,.72));}shockRing(x,y,colors[0],.55+power*.42);
   }
 
   function objectUnlockFx(x,y,type,power){
-    const map={BUMPER:0xff6fae,GIFT:0x9c7cff,BALLOON:0x77d8ff,SPRING:0x76e6bf},c=map[type]||0xffffff;shockRing(x,y,c,.72+power*.35);
+    const map={BUMPER:0xd98791,GIFT:0x9d90bd,BALLOON:0x79a8be,SPRING:0x7fc9b5},c=map[type]||0xffffff;shockRing(x,y,c,.72+power*.35);
     for(let i=0;i<8;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/8,s=7+power*4;g.moveTo(0,-s).lineTo(s*.36,-s*.36).lineTo(s,0).lineTo(s*.36,s*.36).lineTo(0,s).lineTo(-s*.36,s*.36).lineTo(-s,0).lineTo(-s*.36,-s*.36).closePath().fill({color:c,alpha:.82});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*110,Math.sin(a)*110-35,.28,60,5,.76));}
   }
 
@@ -379,34 +380,58 @@
   function particle(g,vx,vy,life,gravity,spin,scaleDecay){return {g,vx,vy,life,max:life,gravity:gravity||0,spin:spin||0,scaleDecay:scaleDecay||0};}
 
   function drawFxShape(g,style,index,color,size,power){
+    const alpha=.72+Math.min(.22,(Number(power)||0)*.18);
     if(style==="PEACH"){
-      if(index%3===0){const s=4.5*size;g.moveTo(0,s*.92).bezierCurveTo(-s*1.45,-s*.08,-s*.96,-s*1.18,0,-s*.52).bezierCurveTo(s*.96,-s*1.18,s*1.45,-s*.08,0,s*.92).fill({color,alpha:.86+.10*power});}
-      else if(index%3===1){const s=5*size;g.moveTo(0,-s).lineTo(s*.72,0).lineTo(0,s).lineTo(-s*.72,0).closePath().fill({color,alpha:.90});}
-      else g.roundRect(-3*size,-2*size,6*size,4*size,2*size).fill({color,alpha:.76});
+      const s=5.1*size;
+      if(index%3===0){g.roundRect(-s*.72,-s*.34,s*1.44,s*.68,s*.32).fill({color,alpha});g.ellipse(-s*.20,-s*.16,s*.30,s*.10).fill({color:0xffffff,alpha:.28});}
+      else if(index%3===1){g.moveTo(0,-s).lineTo(s*.58,0).lineTo(0,s).lineTo(-s*.58,0).closePath().fill({color,alpha:.90});g.moveTo(0,-s*.62).lineTo(s*.25,0).lineTo(0,s*.18).lineTo(-s*.25,0).closePath().fill({color:0xffffff,alpha:.18});}
+      else{g.ellipse(0,0,s*.78,s*.44).fill({color,alpha:.74});g.ellipse(-s*.18,-s*.12,s*.30,s*.10).fill({color:0xffffff,alpha:.24});}
     }else if(style==="SPARK"){
-      if(index%2===0){const s=5.7*size;g.moveTo(-s*.25,-s).lineTo(s*.56,-s*.12).lineTo(s*.10,-s*.08).lineTo(s*.35,s).lineTo(-s*.64,s*.08).lineTo(-s*.14,s*.04).closePath().fill({color,alpha:.95});}
-      else{const s=5*size;g.moveTo(0,-s).lineTo(s*.30,-s*.30).lineTo(s,0).lineTo(s*.30,s*.30).lineTo(0,s).lineTo(-s*.30,s*.30).lineTo(-s,0).lineTo(-s*.30,-s*.30).closePath().fill({color,alpha:.90});}
+      const s=5.8*size;
+      if(index%2===0){g.moveTo(-s*.22,-s).lineTo(s*.50,-s*.16).lineTo(s*.08,-s*.10).lineTo(s*.34,s).lineTo(-s*.58,s*.10).lineTo(-s*.12,s*.03).closePath().fill({color,alpha:.92});}
+      else{g.moveTo(0,-s).lineTo(s*.26,-s*.26).lineTo(s,0).lineTo(s*.26,s*.26).lineTo(0,s).lineTo(-s*.26,s*.26).lineTo(-s,0).lineTo(-s*.26,-s*.26).closePath().fill({color,alpha:.88});g.circle(-s*.10,-s*.16,s*.12).fill({color:0xffffff,alpha:.30});}
     }else if(style==="MINT"){
-      const s=5.5*size;if(index%2===0)g.moveTo(0,-s).bezierCurveTo(s*.9,-s*.6,s*.85,s*.4,0,s).bezierCurveTo(-s*.85,s*.4,-s*.9,-s*.6,0,-s).fill({color,alpha:.88});
-      else g.moveTo(0,-s).lineTo(s*.65,0).lineTo(0,s).lineTo(-s*.65,0).closePath().fill({color,alpha:.84});
-    }else{const s=4.3*size;g.moveTo(0,-s).lineTo(s,0).lineTo(0,s).lineTo(-s,0).closePath().fill({color,alpha:.78});}
+      const s=5.3*size;
+      if(index%2===0){g.moveTo(0,-s).bezierCurveTo(s*.72,-s*.44,s*.72,s*.35,0,s).bezierCurveTo(-s*.72,s*.35,-s*.72,-s*.44,0,-s).fill({color,alpha:.82});g.ellipse(-s*.13,-s*.25,s*.20,s*.08).fill({color:0xffffff,alpha:.24});}
+      else{g.roundRect(-s*.55,-s*.30,s*1.10,s*.60,s*.28).fill({color,alpha:.80});}
+    }else{
+      const s=4.8*size;g.moveTo(0,-s).lineTo(s*.62,0).lineTo(0,s).lineTo(-s*.62,0).closePath().fill({color,alpha:.76});
+    }
+  }
+
+  function softBloom(x,y,color,power){
+    const g=state.pools.particles.acquire(state.fxLayer);if(!g)return;const p=clamp(Number(power)||.5,.15,1.6),r=26+p*22;
+    try{g.blendMode="add";}catch(_){}
+    g.circle(0,0,r).fill({color,alpha:.045+.035*p});g.circle(0,0,r*.56).fill({color:0xffffff,alpha:.035+.020*p});g.x=x;g.y=y;
+    state.particles.push(particle(g,0,0,.18+Math.min(.08,p*.03),0,0,-1.10));
   }
 
   function cameraKick(dx,dy,power){const p=clamp(Number(power)||.2,0,1);const len=Math.max(1,Math.hypot(dx,dy)),ux=dx/len||((Math.random()<.5)?-1:1),uy=dy/len||0;state.cameraVx+=ux*(5+14*p)+(Math.random()-.5)*8*p;state.cameraVy+=uy*(4+11*p)+(Math.random()-.5)*7*p;state.cameraVr+=(Math.random()-.5)*.018*p;}
   function screenFlash(color,alpha){state.flashColor=color||0xffffff;state.flashAlpha=Math.max(state.flashAlpha,clamp(Number(alpha)||.08,0,.28));}
 
   function renderBackground(){
-    if(!state.bg||!state.toys)return;const s=screen(),g=state.bg,t=state.toys,b=safeBounds();g.clear();t.clear();
-    // Overscan prevents tiny camera kicks from exposing the canvas edge.
-    g.rect(-30,-30,s.width+60,s.height+60).fill({color:0x100e1b,alpha:1});
-    g.roundRect(b.left-28,b.top-28,(b.right-b.left)+56,(b.bottom-b.top)+56,48).fill({color:0x1b1730,alpha:1});
-    g.roundRect(b.left-12,b.top-12,(b.right-b.left)+24,(b.bottom-b.top)+24,42).fill({color:0x261d40,alpha:.92});
-    // Large soft toy-box bumpers. No grid, arrows or debug-looking decoration.
-    t.roundRect(b.left-18,b.bottom-70,(b.right-b.left)+36,84,38).fill({color:0x3d2e62,alpha:.84});
-    t.roundRect(b.left-28,b.top+80,48,190,24).fill({color:0x4a3468,alpha:.50});
-    t.roundRect(b.right-20,b.top+150,48,210,24).fill({color:0x314968,alpha:.46});
-    t.roundRect(b.left+42,b.top+28,120,18,9).fill({color:0xffa5bf,alpha:.10});
-    t.roundRect(b.right-162,b.bottom-150,120,18,9).fill({color:0x8ce7ff,alpha:.09});
+    if(!state.bg||!state.toys||!state.bgSprite)return;const s=screen(),g=state.bg,t=state.toys,b=safeBounds(),art=window.PremiumToyArt;
+    if(state.bgTexture){try{state.bgTexture.destroy(true);}catch(_){}}
+    state.bgTexture=art&&art.makeSceneTexture?art.makeSceneTexture(s.width,s.height):PIXI.Texture.WHITE;
+    state.bgSprite.texture=state.bgTexture;state.bgSprite.position.set(0,0);state.bgSprite.width=s.width;state.bgSprite.height=s.height;
+    g.clear();t.clear();
+
+    // Collector-toy display frame: muted materials, soft bevels, no classroom-grid decoration.
+    g.roundRect(b.left-30,b.top-30,(b.right-b.left)+60,(b.bottom-b.top)+60,52).fill({color:0x0d0b15,alpha:.34});
+    g.roundRect(b.left-25,b.top-25,(b.right-b.left)+50,(b.bottom-b.top)+50,50).fill({color:0x2a2338,alpha:.54}).stroke({color:0xf4e8dd,width:1.2,alpha:.10});
+    g.roundRect(b.left-12,b.top-12,(b.right-b.left)+24,(b.bottom-b.top)+24,42).fill({color:0x30283f,alpha:.34}).stroke({color:0xffffff,width:1,alpha:.055});
+
+    const w=b.right-b.left,h=b.bottom-b.top;
+    // Floor plinth and side cushions use desaturated collector-toy colors.
+    t.roundRect(b.left-22,b.bottom-72,w+44,90,34).fill({color:0x211a2d,alpha:.94}).stroke({color:0xf4e8dd,width:1.1,alpha:.08});
+    t.roundRect(b.left+14,b.bottom-62,w-28,58,24).fill({color:0x3a3048,alpha:.58});
+    t.roundRect(b.left-26,b.top+h*.26,48,h*.34,24).fill({color:0x4a3544,alpha:.30}).stroke({color:0xe99592,width:1.1,alpha:.12});
+    t.roundRect(b.right-22,b.top+h*.18,46,h*.36,23).fill({color:0x29413f,alpha:.26}).stroke({color:0x7fc9b5,width:1.1,alpha:.12});
+
+    // Soft display ledges hint at space without becoming gameplay obstacles.
+    t.roundRect(b.left+w*.12,b.top+h*.17,w*.28,12,6).fill({color:0xf4e8dd,alpha:.055});
+    t.roundRect(b.left+w*.62,b.top+h*.72,w*.25,12,6).fill({color:0x79a8be,alpha:.055});
+    t.ellipse(b.left+w*.50,b.top+h*.48,w*.32,h*.13).fill({color:0x9d90bd,alpha:.025});
   }
 
   function safeBounds(){const s=screen(),padX=Math.max(72,s.width*.11),padTop=Math.max(72,state.safe.top+54),padBottom=Math.max(92,state.safe.bottom+76);return {left:padX,top:padTop,right:Math.max(padX+1,s.width-padX),bottom:Math.max(padTop+1,s.height-padBottom)};}
@@ -421,7 +446,7 @@
     const dt=Math.min(50,Number(ticker.deltaMS)||16.67),t=now();processPending(t);updateFrenzy(t);if(state.objectRuntime)state.objectRuntime.tick(dt,activePets());resolveCollisions();
     if(t-state.lastTapAt>900){state.streak=Math.max(0,state.streak-dt/500);state.toyEnergy=Math.max(0,state.toyEnergy-dt/18000);}
     updateCamera(dt);updateFx(dt);updateFlash(dt);
-    const f=state.frame;f.accMs+=dt;f.frames++;if(f.accMs>=500){f.fps=Math.round(f.frames*1000/f.accMs);f.accMs=0;f.frames=0;}if(DEBUG&&t-f.lastLog>1200){f.lastLog=t;console.log("[ObjectPlayground v15]",diagnostics());}
+    const f=state.frame;f.accMs+=dt;f.frames++;if(f.accMs>=500){f.fps=Math.round(f.frames*1000/f.accMs);f.accMs=0;f.frames=0;}if(DEBUG&&t-f.lastLog>1200){f.lastLog=t;console.log("[PremiumToyArt v16]",diagnostics());}
   }
 
   function updateCamera(dt){
@@ -438,7 +463,7 @@
 
   function updateFlash(dt){if(!state.flash)return;state.flashAlpha=Math.max(0,state.flashAlpha-dt/650);const s=screen();state.flash.clear();if(state.flashAlpha>.002)state.flash.rect(0,0,s.width,s.height).fill({color:state.flashColor,alpha:state.flashAlpha});}
 
-  function diagnostics(){return {version:"OBJECT_PLAYGROUND_V15",fps:state.frame.fps,totalTaps:state.totalTaps,directHits:state.directHits,nearMisses:state.nearMisses,hitCombo:state.hitCombo,collisionChain:state.collisionChain,frenzy:state.frenzyUntil>now(),toyEnergy:Math.round(state.toyEnergy*100)/100,nextEventEnergy:Math.round(state.nextEventEnergy*100)/100,eventCount:state.eventCount,objectEvents:state.objectEvents,objectHits:state.objectHits,objects:state.objectRuntime?state.objectRuntime.context():[],activePets:activePets().length,pets:state.pets.map(p=>p.context()),particlePool:state.pools&&state.pools.particles.stats(),ripplePool:state.pools&&state.pools.ripples.stats(),aiVoice:false,geminiGameplay:false,immersive:true};}
+  function diagnostics(){return {version:"PREMIUM_TOY_ART_V16",fps:state.frame.fps,totalTaps:state.totalTaps,directHits:state.directHits,nearMisses:state.nearMisses,hitCombo:state.hitCombo,collisionChain:state.collisionChain,frenzy:state.frenzyUntil>now(),toyEnergy:Math.round(state.toyEnergy*100)/100,nextEventEnergy:Math.round(state.nextEventEnergy*100)/100,eventCount:state.eventCount,objectEvents:state.objectEvents,objectHits:state.objectHits,objects:state.objectRuntime?state.objectRuntime.context():[],activePets:activePets().length,pets:state.pets.map(p=>p.context()),particlePool:state.pools&&state.pools.particles.stats(),ripplePool:state.pools&&state.pools.ripples.stats(),aiVoice:false,geminiGameplay:false,immersive:true};}
 
   function resetGame(){
     for(const p of state.particles)state.pools.particles.release(p.g);state.particles.length=0;for(const r of state.ripples)state.pools.ripples.release(r.g);state.ripples.length=0;

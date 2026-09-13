@@ -3,7 +3,7 @@ const game=fs.readFileSync('app/src/main/assets/game/game.js','utf8');
 const runtime=fs.readFileSync('app/src/main/assets/game/toy-object-runtime.js','utf8');
 const index=fs.readFileSync('app/src/main/assets/game/index.html','utf8');
 assert(index.includes('toy-object-runtime.js'),'object runtime must load before game.js');
-assert(game.includes('OBJECT_PLAYGROUND_V15'),'v15 renderer id missing');
+assert(game.includes('PREMIUM_TOY_ART_V16'),'v16 renderer id missing');
 for(const fn of ['handleObjectEvent','giftReward','radialObjectPush','springTapAssist','bumperObjectFx','giftObjectFx','balloonObjectFx','springObjectFx','objectUnlockFx'])assert(game.includes('function '+fn),fn+' missing');
 for(const token of ['state.objectRuntime.tick(dt,activePets())','state.objectRuntime.unlockForHits(state.directHits)','state.objectRuntime.handleTap(x,y','objectEvents:0','objectHits:0'])assert(game.includes(token),'missing object integration '+token);
 for(const type of ['BUMPER','GIFT','BALLOON','SPRING'])assert(runtime.includes('type:"'+type+'"'),'missing object type '+type);
