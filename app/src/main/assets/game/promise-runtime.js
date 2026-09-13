@@ -18,10 +18,28 @@
   };
 
   function def(id){return catalog.WORLDS[id]||catalog.WORLDS.NEON_RIFT;}
-  function ring(g,x,y,r,color,width,alpha){g.circle(x,y,r).stroke({color,width,alpha});}
-  function dot(g,x,y,r,color,alpha){g.circle(x,y,r).fill({color,alpha});}
   function line(g,x1,y1,x2,y2,color,width,alpha){g.moveTo(x1,y1).lineTo(x2,y2).stroke({color,width,alpha});}
   function rect(g,x,y,w,h,color,alpha){g.rect(x,y,w,h).fill({color,alpha});}
+  function poly(g,pts,color,alpha,strokeColor,strokeWidth,strokeAlpha){
+    if(!pts||pts.length<3)return;
+    g.moveTo(pts[0][0],pts[0][1]);
+    for(let i=1;i<pts.length;i++)g.lineTo(pts[i][0],pts[i][1]);
+    if(typeof g.closePath==="function")g.closePath();
+    if(color!=null)g.fill({color,alpha:alpha==null?1:alpha});
+    if(strokeColor!=null&&strokeWidth>0)g.stroke({color:strokeColor,width:strokeWidth,alpha:strokeAlpha==null?1:strokeAlpha});
+  }
+  function diamond(g,x,y,w,h,color,alpha,strokeColor,strokeWidth,strokeAlpha){
+    poly(g,[[x,y-h],[x+w,y],[x,y+h],[x-w,y]],color,alpha,strokeColor,strokeWidth,strokeAlpha);
+  }
+  function shard(g,x,y,size,angle,color,alpha){
+    const ca=Math.cos(angle),sa=Math.sin(angle),p=[[0,-size],[size*.48,-size*.18],[size*.18,size],[-size*.38,size*.35]];
+    const pts=p.map(([px,py])=>[x+px*ca-py*sa,y+px*sa+py*ca]);poly(g,pts,color,alpha);
+  }
+  function zigzag(g,x,y,len,amp,angle,segments,color,width,alpha){
+    const ca=Math.cos(angle),sa=Math.sin(angle);let px=x-ca*len*.5,py=y-sa*len*.5;g.moveTo(px,py);
+    for(let i=1;i<=segments;i++){const q=i/segments,side=i%2?1:-1,along=(q-.5)*len,off=side*amp*(.45+.55*Math.sin(q*Math.PI));const nx=x+ca*along-sa*off,ny=y+sa*along+ca*off;g.lineTo(nx,ny);}
+    g.stroke({color,width,alpha});
+  }
 
   class PromiseRuntime{
     constructor(app,options){
@@ -241,92 +259,148 @@
     }
 
     _drawRift(under,g,reveal,c,d,p,t,a,isReveal){
-      const len=18+p*112,w=1.2+p*3.2,wiggle=6+p*15,x=c.x,y=c.y,ang=c.angle;
-      ring(under,x,y,12+p*58,d.accent,5+p*8,.018+p*.045*a);
-      let px=x-Math.cos(ang)*len*.5,py=y-Math.sin(ang)*len*.5;
-      for(let i=1;i<=7;i++){
-        const q=i/7,nx=x+Math.cos(ang)*(q-.5)*len+Math.cos(ang+Math.PI/2)*Math.sin(i*2.1+c.seed*5)*wiggle,
-          ny=y+Math.sin(ang)*(q-.5)*len+Math.sin(ang+Math.PI/2)*Math.sin(i*2.1+c.seed*5)*wiggle;
-        line(g,px,py,nx,ny,i%2?d.accent:d.secondary,w,.10+p*.55*a);px=nx;py=ny;
+      const x=c.x,y=c.y,ang=c.angle,len=26+p*132,amp=5+p*17,w=1.1+p*3.4;
+      // Tear in the surface: layered jagged seams and wedge-shaped depth, no halo.
+      zigzag(g,x,y,len,amp,ang,9,d.accent,w,.16+p*.62*a);
+      zigzag(g,x+Math.cos(ang+Math.PI/2)*5,y+Math.sin(ang+Math.PI/2)*5,len*.86,amp*.65,ang,8,d.secondary,1+p*1.8,.08+p*.38*a);
+      const ca=Math.cos(ang),sa=Math.sin(ang),na=-sa,nb=ca,half=len*.42,open=3+p*14;
+      poly(under,[
+        [x-ca*half+na*open,y-sa*half+nb*open],
+        [x+ca*half+na*open*.55,y+sa*half+nb*open*.55],
+        [x+ca*half-na*open*.55,y+sa*half-nb*open*.55],
+        [x-ca*half-na*open,y-sa*half-nb*open]
+      ],0x000000,.08+p*.34*a);
+      if(p>.48){
+        for(let i=0;i<3+Math.floor(p*4);i++){
+          const q=(i+1)/(4+Math.floor(p*4)),sx=x+ca*(q-.5)*len*.9+na*(i%2?open:-open);
+          const sy=y+sa*(q-.5)*len*.9+nb*(i%2?open:-open);
+          shard(g,sx,sy,4+p*7,ang+(i%2?1.2:-1.0),i%2?d.secondary:d.accent,.10+p*.34*a);
+        }
       }
-      if(p>.48){ring(g,x,y,7+(p-.48)*24,d.secondary,1.5,.10+(p-.48)*.8*a);dot(g,x,y,2+p*4,d.accent,.16+p*.55*a);}
-      if(isReveal){ring(reveal,x,y,26+Math.sin(t/85)*5,d.secondary,3,.72);dot(reveal,x,y,9,d.accent,.85);this._rays(reveal,x,y,8,42,d.accent,.34);}
+      if(isReveal){
+        poly(reveal,[[x-36,y-8],[x-8,y-28],[x+4,y-12],[x+38,y-34],[x+14,y],[x+42,y+27],[x+5,y+13],[x-20,y+34],[x-10,y+8]],d.accent,.18,d.secondary,2.2,.72);
+        for(let i=0;i<7;i++){const aa=ang+(i-3)*.34,l=38+(i%3)*12;line(reveal,x,y,x+Math.cos(aa)*l,y+Math.sin(aa)*l,i%2?d.secondary:d.accent,1.5,.38);}
+      }
     }
-
     _drawAssembly(under,g,reveal,c,d,p,t,a,isReveal){
-      const x=c.x,y=c.y,r=25+p*34,count=3+Math.floor(p*9),rot=t*.00045+c.angle;
-      ring(under,x,y,r+15,d.accent,7,.018+p*.035*a);
+      const x=c.x,y=c.y,count=4+Math.floor(p*7),reach=54-p*22,rot=t*.0005+c.angle;
+      // Mechanical fragments physically closing toward an unfinished symbol.
       for(let i=0;i<count;i++){
-        const a0=rot+i/12*Math.PI*2,span=.22+.10*p;
-        line(g,x+Math.cos(a0-span)*r,y+Math.sin(a0-span)*r,x+Math.cos(a0+span)*r,y+Math.sin(a0+span)*r,i%2?d.accent:d.secondary,1.4+p*1.8,.12+p*.50*a);
-        dot(g,x+Math.cos(a0)*r,y+Math.sin(a0)*r,1.8+p*1.8,i%2?d.secondary:d.accent,.18+p*.52*a);
+        const aa=rot+i/count*Math.PI*2,dist=reach+(i%3)*11,px=x+Math.cos(aa)*dist,py=y+Math.sin(aa)*dist;
+        const w=7+p*9,h=3+(i%3)*2;
+        const ca=Math.cos(aa),sa=Math.sin(aa);
+        poly(g,[[px-ca*w-sa*h,py-sa*w+ca*h],[px+ca*w-sa*h,py+sa*w+ca*h],[px+ca*w+sa*h,py+sa*w-ca*h],[px-ca*w+sa*h,py-sa*w-ca*h]],i%2?d.accent:d.secondary,.10+p*.42*a);
       }
-      if(p>.68)ring(g,x,y,8+(p-.68)*35,d.secondary,1.4,.14+p*.34*a);
-      if(isReveal){ring(reveal,x,y,r,0xffffff,2,.62);ring(reveal,x,y,r*.48,d.accent,4,.56);dot(reveal,x,y,6,d.secondary,.88);}
+      const size=14+p*28;
+      g.moveTo(x-size,y-size*.45).lineTo(x-size,y-size).lineTo(x-size*.45,y-size)
+       .moveTo(x+size*.45,y-size).lineTo(x+size,y-size).lineTo(x+size,y-size*.45)
+       .moveTo(x+size,y+size*.45).lineTo(x+size,y+size).lineTo(x+size*.45,y+size)
+       .moveTo(x-size*.45,y+size).lineTo(x-size,y+size).lineTo(x-size,y+size*.45)
+       .stroke({color:d.accent,width:1.4+p*1.5,alpha:.12+p*.5*a});
+      if(p>.68)diamond(g,x,y,5+(p-.68)*22,8+(p-.68)*27,d.secondary,.10+p*.4*a,d.accent,1,.3);
+      if(isReveal){
+        poly(reveal,[[x-34,y-20],[x-8,y-20],[x,y-35],[x+9,y-20],[x+34,y-20],[x+18,y],[x+34,y+20],[x+8,y+20],[x,y+34],[x-9,y+20],[x-34,y+20],[x-18,y]],d.secondary,.22,d.accent,2,.68);
+        diamond(reveal,x,y,8,12,d.accent,.88,null,0,0);
+      }
     }
-
     _drawShadow(under,g,reveal,c,d,p,t,a,isReveal){
-      const x=c.x,y=c.y,drift=14+28*p,ox=Math.sin(t/340+c.seed*5)*drift,oy=Math.cos(t/410+c.seed*3)*drift*.7;
-      dot(under,x+ox,y+oy,18+p*25,d.secondary,.018+p*.040*a);
-      ring(g,x+ox,y+oy,13+p*18,d.accent,1.6+p*2,.08+p*.46*a);
-      if(p>.42){dot(g,x+ox-7-p*3,y+oy-2,2+p*2,d.secondary,.18+p*.52*a);dot(g,x+ox+7+p*3,y+oy-2,2+p*2,d.secondary,.18+p*.52*a);}
-      if(p>.72)ring(g,x-ox*.35,y-oy*.35,8+p*12,d.secondary,1,.08+p*.24*a);
-      if(isReveal){ring(reveal,x+ox,y+oy,34,d.secondary,3,.65);dot(reveal,x+ox,y+oy,10,d.accent,.76);}
+      const x=c.x,y=c.y,drift=12+30*p,ox=Math.sin(t/340+c.seed*5)*drift,oy=Math.cos(t/410+c.seed*3)*drift*.65;
+      const sx=x+ox,sy=y+oy,scale=.55+p*.75;
+      // An asymmetric creature-like silhouette, not a soft blob.
+      poly(under,[
+        [sx,sy-34*scale],[sx+16*scale,sy-20*scale],[sx+11*scale,sy-5*scale],[sx+27*scale,sy+18*scale],
+        [sx+8*scale,sy+13*scale],[sx,sy+34*scale],[sx-9*scale,sy+13*scale],[sx-25*scale,sy+20*scale],[sx-12*scale,sy-4*scale],[sx-17*scale,sy-21*scale]
+      ],0x000000,.08+p*.26*a,d.accent,1.2,.10+p*.34*a);
+      if(p>.38){
+        rect(g,sx-11*scale,sy-9*scale,7*scale,2.2*scale,d.secondary,.18+p*.48*a);
+        rect(g,sx+5*scale,sy-8*scale,7*scale,2.2*scale,d.secondary,.18+p*.48*a);
+      }
+      if(p>.70){
+        const tx=x-ox*.4,ty=y-oy*.35;
+        poly(g,[[tx,ty-11],[tx+8,ty],[tx,ty+13],[tx-7,ty]],null,0,d.secondary,1,.10+p*.24*a);
+      }
+      if(isReveal){
+        poly(reveal,[[sx,sy-42],[sx+28,sy-18],[sx+18,sy+10],[sx+36,sy+32],[sx,sy+24],[sx-35,sy+33],[sx-17,sy+8],[sx-27,sy-18]],d.accent,.20,d.secondary,2.4,.7);
+        rect(reveal,sx-16,sy-8,11,3,d.secondary,.75);rect(reveal,sx+5,sy-8,11,3,d.secondary,.75);
+      }
     }
-
     _drawTransform(under,g,reveal,c,d,p,t,a,isReveal){
       const target=this.getTarget&&this.getTarget(),x=target&&Number.isFinite(target.x)?target.x:c.x,y=target&&Number.isFinite(target.y)?target.y:c.y;
-      const r=32+p*28,pulse=1+Math.sin(t/100)*(.02+p*.08);
-      ring(under,x,y,r+14,d.secondary,8,.016+p*.038*a);ring(g,x,y,r*pulse,d.accent,1.4+p*2.6,.10+p*.50*a);
-      const spikes=3+Math.floor(p*8);for(let i=0;i<spikes;i++){const ang=i/spikes*Math.PI*2+c.angle,l=8+p*25;line(g,x+Math.cos(ang)*r,y+Math.sin(ang)*r,x+Math.cos(ang)*(r+l),y+Math.sin(ang)*(r+l),i%2?d.secondary:d.accent,1+p*1.4,.08+p*.44*a);}
-      if(isReveal){ring(reveal,x,y,r+24,d.secondary,3,.58);this._rays(reveal,x,y,spikes,68,d.accent,.30);}
-    }
-
-    _drawEcho(under,g,reveal,c,d,p,t,a,isReveal){
-      const x=c.x,y=c.y,count=2+Math.floor(p*5),span=18+p*36;
-      for(let i=0;i<count;i++){
-        const q=i/Math.max(1,count-1),ang=c.angle+Math.sin(t/520+i)*.35,ex=x+Math.cos(ang)*(q-.5)*span*2,ey=y+Math.sin(ang)*(q-.5)*span*1.2;
-        ring(g,ex,ey,10+p*15,i%2?d.accent:d.secondary,1.2+p*1.2,(.05+p*.34*a)*(1-q*.35));
+      const spikes=4+Math.floor(p*7),inner=22+p*8,outer=34+p*42,rot=c.angle+Math.sin(t/180)*.08*p,pts=[];
+      for(let i=0;i<spikes*2;i++){const rr=i%2?inner:outer,aa=rot+i/(spikes*2)*Math.PI*2;pts.push([x+Math.cos(aa)*rr,y+Math.sin(aa)*rr]);}
+      poly(under,pts,d.secondary,.014+p*.05*a);
+      const outline=pts.slice();poly(g,outline,null,0,d.accent,1.2+p*2.2,.12+p*.48*a);
+      if(p>.52){
+        for(let i=0;i<Math.min(5,spikes);i++){const aa=rot+i/spikes*Math.PI*2;const sx=x+Math.cos(aa)*outer*.72,sy=y+Math.sin(aa)*outer*.72;shard(g,sx,sy,4+p*5,aa,d.secondary,.12+p*.32*a);}
       }
-      rect(under,x-span,y-2,span*2,4,d.accent,.012+p*.025*a);
-      if(p>.74){for(let i=0;i<3;i++){const jitter=((Math.sin(c.seed*17+i*3.1)+1)*.5)*68;rect(g,x-34+jitter,y-22+i*14,18+p*30,2+i,d.secondary,.08+p*.24*a);}}
-      if(isReveal){ring(reveal,x,y,40,d.accent,3,.58);ring(reveal,x,y,20,d.secondary,2,.68);}
+      if(isReveal){
+        const pts2=[];for(let i=0;i<12;i++){const rr=i%2?24:72,aa=rot+i/12*Math.PI*2;pts2.push([x+Math.cos(aa)*rr,y+Math.sin(aa)*rr]);}
+        poly(reveal,pts2,d.accent,.12,d.secondary,2,.58);
+      }
     }
-
+    _drawEcho(under,g,reveal,c,d,p,t,a,isReveal){
+      const x=c.x,y=c.y,count=2+Math.floor(p*5),span=18+p*42;
+      for(let i=0;i<count;i++){
+        const q=i/Math.max(1,count-1),offset=(q-.5)*span*2,jitter=Math.sin(t/230+i*2.4)*5*p;
+        const ex=x+offset,ey=y+jitter+(i%2?8:-7);
+        const w=11+p*15,h=7+p*9;
+        poly(g,[[ex-w,ey-h],[ex+w*.7,ey-h],[ex+w,ey+h*.25],[ex+w*.2,ey+h],[ex-w,ey+h*.55]],i%2?d.accent:d.secondary,.05+p*.28*a,d.accent,1,.08+p*.26*a);
+        if(p>.55)rect(g,ex-w*.55,ey-1,w*.75,2,d.secondary,.12+p*.3*a);
+      }
+      rect(under,x-span*1.2,y-2,span*2.4,4,d.accent,.012+p*.025*a);
+      if(p>.74){
+        for(let i=0;i<4;i++){const dx=((i*31+c.seed*43)%68)-34;rect(g,x+dx,y-27+i*15,16+p*34,2+(i%2)*2,i%2?d.accent:d.secondary,.08+p*.24*a);}
+      }
+      if(isReveal){
+        const blocks=[[-44,-22,26,8],[-9,-31,34,11],[19,-8,38,9],[-31,17,31,10],[8,22,27,8]];
+        for(let i=0;i<blocks.length;i++){const b=blocks[i];rect(reveal,x+b[0],y+b[1],b[2],b[3],i%2?d.accent:d.secondary,.25+i*.06);}
+      }
+    }
     _drawFalseCalm(under,g,reveal,c,d,p,t,a,isReveal){
-      const x=c.x,y=c.y,blink=.55+.45*Math.sin(t/(110-p*35));
-      ring(under,x,y,18+p*35,d.accent,7,.012+p*.026*a);ring(g,x,y,7+p*19,d.secondary,1+p*1.6,(.06+p*.35*a)*blink);
-      if(p>.56)dot(g,x,y,2+p*4,d.accent,.12+p*.44*a);
-      if(isReveal){ring(reveal,x,y,54,d.secondary,4,.62);dot(reveal,x,y,13,d.accent,.78);this._rays(reveal,x,y,6,70,d.secondary,.24);}
+      const x=c.x,y=c.y,blink=.55+.45*Math.sin(t/(120-p*35)),len=22+p*72,gap=2+p*10;
+      // A calm seam that looks almost like a rendering defect, then opens.
+      line(under,x-len*.62,y+6,x+len*.62,y+6,d.accent,6,.012+p*.025*a);
+      line(g,x-len,y,x-gap,y,d.secondary,1+p*1.3,(.06+p*.34*a)*blink);
+      line(g,x+gap,y,x+len,y,d.secondary,1+p*1.3,(.06+p*.34*a)*blink);
+      if(p>.56){rect(g,x-gap,y-4,gap*2,8,d.accent,.10+p*.38*a);}
+      if(p>.78){
+        poly(g,[[x-gap*1.4,y-4],[x,y-15-p*9],[x+gap*1.4,y-4],[x+gap*.8,y+8],[x-gap*.8,y+8]],0x000000,.2+p*.35*a,d.accent,1,.24);
+      }
+      if(isReveal){
+        poly(reveal,[[x-58,y-5],[x-18,y-5],[x-4,y-28],[x+7,y-8],[x+58,y-8],[x+22,y+5],[x+5,y+31],[x-9,y+8]],d.secondary,.18,d.accent,2.4,.7);
+        rect(reveal,x-7,y-22,14,44,d.accent,.36);
+      }
     }
-
     _drawWorldFlavor(g,c,d,p,t,a,isReveal){
       const x=c.x,y=c.y,world=this.world;
       if(world==="SPRING_BLOOM"){
-        const n=2+Math.floor(p*5);for(let i=0;i<n;i++){const ang=i/n*Math.PI*2+t*.0003,r=24+p*38;dot(g,x+Math.cos(ang)*r,y+Math.sin(ang)*r,2+p*2,i%2?d.secondary:d.accent,.08+p*.28*a);}
+        const n=2+Math.floor(p*5);
+        for(let i=0;i<n;i++){const ang=i/n*Math.PI*2+t*.00025,r=24+p*42,px=x+Math.cos(ang)*r,py=y+Math.sin(ang)*r;diamond(g,px,py,2+p*2,5+p*4,i%2?d.secondary:d.accent,.08+p*.26*a,null,0,0);}
+        if(p>.55)g.moveTo(x-35,y+22).bezierCurveTo(x-10,y-8,x+18,y+38,x+42,y-20).stroke({color:d.accent,width:1,alpha:.08+p*.2*a});
       }else if(world==="SUMMER_STORM"){
-        if(p>.35){const z=22+p*55;line(g,x-z,y-24,x+z*.2,y+6,0xffffff,1+p*1.2,.05+p*.25*a);line(g,x+z*.2,y+6,x-z*.1,y+34,d.accent,1+p*1.4,.06+p*.30*a);}
+        if(p>.28){const z=20+p*58;zigzag(g,x,y,z*1.5,8+p*7,-1.0,5,0xffffff,1+p*1.4,.06+p*.28*a);}
       }else if(world==="AUTUMN_DECAY"){
-        const n=2+Math.floor(p*4);for(let i=0;i<n;i++){const ang=c.angle+i*.8;line(g,x,y,x+Math.cos(ang)*(16+p*40),y+Math.sin(ang)*(12+p*32),i%2?d.accent:d.secondary,1,.05+p*.26*a);}
+        const n=2+Math.floor(p*4);for(let i=0;i<n;i++){const ang=c.angle+i*.8,l=18+p*44;line(g,x,y,x+Math.cos(ang)*l,y+Math.sin(ang)*l,i%2?d.accent:d.secondary,1,.05+p*.26*a);if(p>.5)shard(g,x+Math.cos(ang)*l,y+Math.sin(ang)*l,4+p*3,ang,i%2?d.secondary:d.accent,.08+p*.2*a);}
       }else if(world==="WINTER_FROST"){
-        const n=3+Math.floor(p*5);for(let i=0;i<n;i++){const ang=i/n*Math.PI*2,l=14+p*35;line(g,x+Math.cos(ang)*8,y+Math.sin(ang)*8,x+Math.cos(ang)*l,y+Math.sin(ang)*l,d.secondary,1,.08+p*.28*a);}
+        const n=3+Math.floor(p*4);for(let i=0;i<n;i++){const ang=i/n*Math.PI*2,l=16+p*38;line(g,x+Math.cos(ang)*7,y+Math.sin(ang)*7,x+Math.cos(ang)*l,y+Math.sin(ang)*l,d.secondary,1,.08+p*.28*a);const px=x+Math.cos(ang)*l,py=y+Math.sin(ang)*l;diamond(g,px,py,3+p*2,7+p*3,d.accent,.06+p*.18*a,null,0,0);}
       }else if(world==="VOID_CHAMBER"){
-        ring(g,x,y,38+p*32,d.secondary,1,.05+p*.20*a);if(p>.58)ring(g,x,y,58+p*22,d.accent,1,.04+p*.16*a);
+        const w=30+p*46,h=18+p*28;
+        poly(g,[[x-w,y],[x-w*.25,y-h],[x+w*.55,y-h*.5],[x+w,y],[x+w*.25,y+h],[x-w*.55,y+h*.5]],null,0,d.secondary,1,.05+p*.22*a);
+        if(p>.58)poly(g,[[x-w*.6,y],[x,y-h*.75],[x+w*.6,y],[x,y+h*.75]],0x000000,.08+p*.22*a,d.accent,1,.12);
       }else{
         const n=2+Math.floor(p*5);for(let i=0;i<n;i++){const dx=(i%2?1:-1)*(18+i*7),dy=-28+i*11;rect(g,x+dx,y+dy,8+p*12,2+(i%3),i%2?d.accent:d.secondary,.07+p*.24*a);}
       }
-      if(isReveal)dot(g,x,y,2,d.secondary,.8);
+      if(isReveal)rect(g,x-2,y-2,4,4,d.secondary,.8);
     }
-
     _drawSeedTease(g,seed,d,amount,t){
-      const x=seed.x,y=seed.y,a=clamp(amount,0,1),pulse=.65+.35*Math.sin(t/180+seed.seed*4),r=5+a*13;
-      ring(g,x,y,r,d.secondary,1,.05+a*.24*pulse);dot(g,x,y,1.5+a*1.5,d.accent,.08+a*.30);
-      if(seed.type==="RIFT")line(g,x-r*.6,y-r*.35,x+r*.55,y+r*.4,d.accent,1,.05+a*.22);
-      else if(seed.type==="ECHO")ring(g,x+r*.9,y-r*.4,r*.55,d.accent,1,.04+a*.16);
-      else if(seed.type==="ASSEMBLY"){dot(g,x+r,y,2,d.secondary,.05+a*.20);dot(g,x-r*.6,y+r*.7,2,d.accent,.05+a*.20);}
-      else if(seed.type==="SHADOW")dot(g,x+Math.sin(t/260)*r*.6,y,3,d.secondary,.04+a*.18);
+      const x=seed.x,y=seed.y,a=clamp(amount,0,1),pulse=.65+.35*Math.sin(t/180+seed.seed*4),r=5+a*16;
+      if(seed.type==="RIFT")zigzag(g,x,y,r*2.2,3+a*5,seed.angle,5,d.accent,1,.06+a*.28*pulse);
+      else if(seed.type==="ECHO"){rect(g,x-r,y-r*.35,r*1.15,r*.7,d.secondary,.06+a*.20);rect(g,x+r*.15,y-r*.2,r*.9,r*.7,d.accent,.05+a*.18);}
+      else if(seed.type==="ASSEMBLY"){diamond(g,x-r*.8,y,2+a*2,4+a*3,d.secondary,.05+a*.22,null,0,0);diamond(g,x+r*.7,y+r*.5,2+a*2,4+a*3,d.accent,.05+a*.22,null,0,0);}
+      else if(seed.type==="SHADOW"){const dx=Math.sin(t/260)*r*.6;poly(g,[[x+dx,y-r],[x+dx+r*.55,y],[x+dx,y+r],[x+dx-r*.55,y]],0x000000,.04+a*.18,d.secondary,1,.08+a*.18);}
+      else if(seed.type==="TRANSFORM"){const pts=[];for(let i=0;i<8;i++){const rr=i%2?r:r*.42,aa=seed.angle+i/8*Math.PI*2;pts.push([x+Math.cos(aa)*rr,y+Math.sin(aa)*rr]);}poly(g,pts,null,0,d.accent,1,.06+a*.22);}
+      else{line(g,x-r,y,x-r*.2,y,d.secondary,1,.05+a*.18);line(g,x+r*.2,y,x+r,y,d.secondary,1,.05+a*.18);}
     }
-
     _rays(g,x,y,count,length,color,alpha){for(let i=0;i<count;i++){const a=i/count*Math.PI*2,l=length*(.65+(i%3)*.12);line(g,x+Math.cos(a)*14,y+Math.sin(a)*14,x+Math.cos(a)*l,y+Math.sin(a)*l,color,1.3,alpha);}}
     _size(){return this.app&&this.app.renderer&&this.app.renderer.screen?this.app.renderer.screen:{width:360,height:640};}
   }

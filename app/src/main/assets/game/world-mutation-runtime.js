@@ -12,7 +12,20 @@
   function ring(g,x,y,r,color,width,alpha){g.circle(x,y,r).stroke({color,width,alpha});}
   function line(g,x1,y1,x2,y2,color,width,alpha){g.moveTo(x1,y1).lineTo(x2,y2).stroke({color,width,alpha});}
   function rect(g,x,y,w,h,color,alpha){g.rect(x,y,w,h).fill({color,alpha});}
-  function circle(g,x,y,r,color,alpha){g.circle(x,y,r).fill({color,alpha});}
+  function poly(g,pts,color,alpha,strokeColor,strokeWidth,strokeAlpha){
+    if(!pts||pts.length<3)return;
+    g.moveTo(pts[0][0],pts[0][1]);
+    for(let i=1;i<pts.length;i++)g.lineTo(pts[i][0],pts[i][1]);
+    if(typeof g.closePath==="function")g.closePath();
+    if(color!=null)g.fill({color,alpha:alpha==null?1:alpha});
+    if(strokeColor!=null&&strokeWidth>0)g.stroke({color:strokeColor,width:strokeWidth,alpha:strokeAlpha==null?1:strokeAlpha});
+  }
+  function diamond(g,x,y,w,h,color,alpha,strokeColor,strokeWidth,strokeAlpha){
+    poly(g,[[x,y-h],[x+w,y],[x,y+h],[x-w,y]],color,alpha,strokeColor,strokeWidth,strokeAlpha);
+  }
+  function leaf(g,x,y,w,h,angle,color,alpha){
+    const ca=Math.cos(angle),sa=Math.sin(angle),base=[[-w,0],[0,-h],[w,0],[0,h]],pts=base.map(([px,py])=>[x+px*ca-py*sa,y+px*sa+py*ca]);poly(g,pts,color,alpha);
+  }
 
   class WorldMutationRuntime{
     constructor(app,options){
@@ -198,20 +211,29 @@
     }
 
     _drawSpring(g,k,s,a,b,p,stage,t,pulse){
-      rect(g,0,0,s.width,s.height,a,.018+p*.045);
-      const growth=3+stage*2;
-      for(let i=0;i<growth;i++){
-        const x=s.width*((.11+i*.137+Math.sin(t/1700+i)*.015)%1),y=s.height*(.16+((i*29)%68)/100);
-        const r=20+p*36+(i%3)*11;
-        circle(k,x,y,r,i%2?a:b,.018+p*.030);
-        if(stage>=2){line(k,x,y,x+Math.cos(i*1.7)*r*1.4,y+Math.sin(i*1.2)*r*1.2,a,1+p*1.4,.06+p*.13);}
+      rect(g,0,0,s.width,s.height,a,.014+p*.036);
+      const vines=2+stage*2;
+      for(let i=0;i<vines;i++){
+        const fromBottom=i%2===0,baseX=s.width*(.08+i/(Math.max(1,vines-1))*.84),baseY=fromBottom?s.height:0;
+        const dir=fromBottom?-1:1,len=s.height*(.16+p*.28),sway=Math.sin(t/800+i*1.9)*18;
+        k.moveTo(baseX,baseY).bezierCurveTo(baseX+sway,baseY+dir*len*.35,baseX-sway*.6,baseY+dir*len*.68,baseX+sway*.2,baseY+dir*len)
+         .stroke({color:i%2?a:b,width:1+p*1.3,alpha:.05+p*.15});
+        if(stage>=1){
+          for(let j=1;j<=2+Math.floor(p*3);j++){
+            const q=j/(3+Math.floor(p*3)),x=baseX+sway*Math.sin(q*Math.PI)*.45,y=baseY+dir*len*q;
+            leaf(k,x+(j%2?10:-10),y,4+p*4,9+p*7,(j%2?1:-1)*.55,i%2?b:a,.06+p*.18);
+          }
+        }
       }
       if(stage>=3){
-        const y=s.height*(.80-p*.10);for(let i=0;i<7;i++)circle(k,s.width*(.08+i*.145),y+Math.sin(t/420+i)*10,8+p*12,i%2?b:a,.10+p*.12);
+        const y=s.height*(.80-p*.08);
+        for(let i=0;i<7;i++)leaf(k,s.width*(.08+i*.145),y+Math.sin(t/420+i)*10,5+p*5,11+p*9,(i%2?-.4:.5),i%2?b:a,.10+p*.15);
       }
-      if(stage>=4)circle(g,s.width*.5,s.height*.5,Math.max(s.width,s.height)*(.18+p*.18),b,.018+pulse*.028);
+      if(stage>=4){
+        const w=s.width*(.12+p*.10),h=s.height*(.10+p*.08),cx=s.width*.5,cy=s.height*.52;
+        poly(g,[[cx-w,cy],[cx-w*.32,cy-h],[cx+w*.45,cy-h*.55],[cx+w,cy],[cx+w*.28,cy+h],[cx-w*.5,cy+h*.5]],b,.012+pulse*.026);
+      }
     }
-
     _drawStorm(g,k,s,a,b,p,stage,t,fast){
       rect(g,0,0,s.width,s.height,0x06111f,.08+p*.34);
       const bands=2+stage*2;for(let i=0;i<bands;i++){
@@ -235,15 +257,20 @@
         const fromLeft=i%2===0,x=fromLeft?0:s.width,y=s.height*(.14+i*.11);
         const len=s.width*(.15+p*.18),dx=fromLeft?len:-len;
         line(k,x,y,x+dx,y-22-Math.sin(i+t/900)*16,a,1.2+p*1.8,.08+p*.18);
-        if(stage>=2)line(k,x+dx*.55,y-12,x+dx*.78,y-48,b,1,.06+p*.12);
+        if(stage>=2){
+          line(k,x+dx*.55,y-12,x+dx*.78,y-48,b,1,.06+p*.12);
+          leaf(k,x+dx*.72,y-33,4+p*3,8+p*5,fromLeft?.7:-.7,i%2?a:b,.07+p*.14);
+        }
       }
       if(stage>=2){for(let i=0;i<5+stage*2;i++){
         const x=(i*89+t*.012)%Math.max(1,s.width),y=(i*127+t*.025)%Math.max(1,s.height);
-        rect(k,x,y,5+stage,3+stage*.4,i%2?a:b,.07+p*.18);
+        leaf(k,x,y,3+stage,6+stage*1.2,(i*.8+t*.001)%Math.PI,i%2?a:b,.07+p*.18);
       }}
-      if(stage>=4)circle(g,s.width*.5,s.height*.92,s.width*(.20+p*.12),a,.025+pulse*.035);
+      if(stage>=4){
+        const cx=s.width*.5,base=s.height*.96,w=s.width*(.18+p*.10),h=36+p*44;
+        poly(g,[[cx-w,base],[cx-w*.55,base-h*.6],[cx-w*.12,base-h],[cx+w*.2,base-h*.62],[cx+w,base]],a,.018+pulse*.03);
+      }
     }
-
     _drawWinter(g,k,s,a,b,p,stage,t,pulse){
       rect(g,0,0,s.width,s.height,0xdff2fb,.025+p*.20);
       const depth=12+p*42;
@@ -253,24 +280,39 @@
         line(k,x,s.height,x+Math.cos(i*1.7)*depth,s.height-depth-(i%2)*12,b,1,.06+p*.18);
       }
       if(stage>=2){
-        const cx=s.width*.5,cy=s.height*.48,r=28+p*56;ring(k,cx,cy,r,a,1,.05+p*.18);
-        for(let i=0;i<6;i++){const ang=i/6*Math.PI*2;line(k,cx,cy,cx+Math.cos(ang)*r,cy+Math.sin(ang)*r,b,1,.04+p*.16);}
+        const cx=s.width*.5,cy=s.height*.48,r=28+p*56,points=[];
+        for(let i=0;i<6;i++){const ang=i/6*Math.PI*2-Math.PI/2;points.push([cx+Math.cos(ang)*r,cy+Math.sin(ang)*r]);}
+        poly(k,points,null,0,a,1,.05+p*.18);
+        for(let i=0;i<6;i++){
+          const ang=i/6*Math.PI*2-Math.PI/2,ex=cx+Math.cos(ang)*r,ey=cy+Math.sin(ang)*r;
+          line(k,cx,cy,ex,ey,b,1,.04+p*.16);diamond(k,ex,ey,3+p*2,8+p*6,a,.04+p*.12,null,0,0);
+        }
       }
-      if(stage>=4)rect(g,0,0,s.width,s.height,0xffffff,.012+pulse*.022);
+      if(stage>=4){
+        for(let i=0;i<5;i++)diamond(g,s.width*(.12+i*.2),s.height*(.24+(i%2)*.48),6+p*4,14+p*10,0xffffff,.012+pulse*.02,null,0,0);
+      }
     }
-
     _drawVoid(g,k,s,a,b,p,stage,t,pulse){
       rect(g,0,0,s.width,s.height,0x000000,.12+p*.34);
       const cx=s.width*.5+(this.lastImpact.x-s.width*.5)*p*.12,cy=s.height*.5+(this.lastImpact.y-s.height*.5)*p*.10;
-      for(let i=0;i<3+stage;i++)ring(k,cx,cy,32+i*(24+p*16),i%2?a:b,1+i*.15,.04+p*.12);
+      // Perspective shards form a broken tunnel rather than concentric circles.
+      const layers=3+stage;
+      for(let i=0;i<layers;i++){
+        const w=34+i*(24+p*14),h=22+i*(17+p*10),skew=Math.sin(t/1100+i)*8;
+        poly(k,[[cx-w+skew,cy-h],[cx+w,cy-h*.55],[cx+w-skew,cy+h],[cx-w,cy+h*.55]],null,0,i%2?a:b,1+i*.12,.04+p*.12);
+      }
       const nodes=4+stage*2;for(let i=0;i<nodes;i++){
         const ang=t/1400*(.4+p*.8)+i/nodes*Math.PI*2,r=48+(i%3)*32+p*30;
-        circle(k,cx+Math.cos(ang)*r,cy+Math.sin(ang)*r,2+(i%2)*1.5,i%2?a:b,.12+p*.28);
+        const px=cx+Math.cos(ang)*r,py=cy+Math.sin(ang)*r;
+        diamond(k,px,py,2+(i%2)*2,4+(i%2)*3,i%2?a:b,.12+p*.28,null,0,0);
       }
-      if(stage>=3)circle(g,cx,cy,18+p*34,0x000000,.35+p*.38);
-      if(stage>=4)ring(g,cx,cy,24+pulse*18,0xffffff,1,.04+p*.12);
+      if(stage>=3){
+        poly(g,[[cx-18-p*22,cy],[cx,cy-11-p*18],[cx+18+p*22,cy],[cx,cy+11+p*18]],0x000000,.35+p*.38,b,1,.08+p*.10);
+      }
+      if(stage>=4){
+        const w=24+pulse*18,h=12+pulse*10;poly(g,[[cx-w,cy],[cx,cy-h],[cx+w,cy],[cx,cy+h]],null,0,0xffffff,1,.04+p*.12);
+      }
     }
-
     _drawNeon(g,k,s,a,b,p,stage,t,fast){
       rect(g,0,0,s.width,s.height,0x050008,.035+p*.22);
       const spacing=Math.max(28,62-stage*7);for(let x=((t*.018)%spacing)-spacing;x<s.width;x+=spacing)line(k,x,0,x,s.height,a,1,.025+p*.08);
@@ -298,8 +340,8 @@
     }
 
     _scarBloom(g,s){
-      for(let i=0;i<6;i++){const a=i/6*Math.PI*2+s.angle,r=s.size*.26;circle(g,s.x+Math.cos(a)*r,s.y+Math.sin(a)*r,s.size*.13,i%2?s.accent:s.secondary,.11);}
-      circle(g,s.x,s.y,s.size*.10,s.accent,.14);
+      for(let i=0;i<6;i++){const a=i/6*Math.PI*2+s.angle,r=s.size*.26;leaf(g,s.x+Math.cos(a)*r,s.y+Math.sin(a)*r,s.size*.07,s.size*.15,a,i%2?s.accent:s.secondary,.11);}
+      diamond(g,s.x,s.y,s.size*.07,s.size*.11,s.accent,.14,null,0,0);
     }
     _scarLightning(g,s){
       let x=s.x,y=s.y;for(let i=0;i<5;i++){const nx=x+Math.cos(s.angle+i*.72)*s.size*.22,ny=y+Math.sin(s.angle+i*.94)*s.size*.22;line(g,x,y,nx,ny,i%2?s.secondary:s.accent,1.4,.22);x=nx;y=ny;}
@@ -309,10 +351,13 @@
       for(let i=0;i<4;i++){const x=s.x-s.size*.25+i*s.size*.18;line(g,x,s.y,x+(i%2?18:-14),s.y-s.size*.28,s.secondary,1,.13);}
     }
     _scarIce(g,s){
-      ring(g,s.x,s.y,s.size*.30,s.accent,1.2,.16);for(let i=0;i<6;i++){const a=i/6*Math.PI*2+s.angle;line(g,s.x,s.y,s.x+Math.cos(a)*s.size*.45,s.y+Math.sin(a)*s.size*.45,s.secondary,1,.14);}
+      const pts=[];for(let i=0;i<6;i++){const a=i/6*Math.PI*2+s.angle;pts.push([s.x+Math.cos(a)*s.size*.30,s.y+Math.sin(a)*s.size*.30]);}
+      poly(g,pts,null,0,s.accent,1.2,.16);
+      for(let i=0;i<6;i++){const a=i/6*Math.PI*2+s.angle;line(g,s.x,s.y,s.x+Math.cos(a)*s.size*.45,s.y+Math.sin(a)*s.size*.45,s.secondary,1,.14);}
     }
     _scarVoid(g,s){
-      circle(g,s.x,s.y,s.size*.22,0x000000,.42);ring(g,s.x,s.y,s.size*.34,s.accent,1.4,.16);ring(g,s.x,s.y,s.size*.48,s.secondary,1,.08);
+      poly(g,[[s.x-s.size*.28,s.y],[s.x,s.y-s.size*.16],[s.x+s.size*.28,s.y],[s.x,s.y+s.size*.16]],0x000000,.42,s.accent,1.4,.16);
+      poly(g,[[s.x-s.size*.44,s.y],[s.x,s.y-s.size*.26],[s.x+s.size*.44,s.y],[s.x,s.y+s.size*.26]],null,0,s.secondary,1,.08);
     }
     _scarGlitch(g,s){
       for(let i=0;i<5;i++){const w=s.size*(.20+.12*(i%3)),h=2+(i%2)*3;rect(g,s.x-s.size*.35+(i%2)*s.size*.22,s.y-s.size*.25+i*s.size*.12,w,h,i%2?s.accent:s.secondary,.16);}

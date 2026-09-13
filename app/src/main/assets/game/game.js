@@ -16,6 +16,51 @@
   const screen=()=>state.app.renderer.screen;
   const norm=(x,y)=>{const s=screen();return{x:clamp(x/Math.max(1,s.width),0,1),y:clamp(y/Math.max(1,s.height),0,1)};};
 
+  function polygonPath(g,points,fillColor,fillAlpha,strokeColor,strokeWidth,strokeAlpha){
+    if(!g||!points||points.length<3)return;
+    g.moveTo(points[0][0],points[0][1]);
+    for(let i=1;i<points.length;i++)g.lineTo(points[i][0],points[i][1]);
+    if(typeof g.closePath==="function")g.closePath();
+    if(fillColor!=null)g.fill({color:fillColor,alpha:fillAlpha==null?1:fillAlpha});
+    if(strokeColor!=null&&strokeWidth>0)g.stroke({color:strokeColor,width:strokeWidth,alpha:strokeAlpha==null?1:strokeAlpha});
+  }
+
+  function drawTargetShape(core,worldId,accent,secondary){
+    core.clear();
+    const id=String(worldId||"NEON_RIFT");
+    if(id==="SPRING_BLOOM"){
+      const petals=[
+        [[0,-34],[10,-10],[0,-2],[-10,-10]],
+        [[34,0],[10,10],[2,0],[10,-10]],
+        [[0,34],[-10,10],[0,2],[10,10]],
+        [[-34,0],[-10,-10],[-2,0],[-10,10]]
+      ];
+      for(let i=0;i<petals.length;i++)polygonPath(core,petals[i],i%2?secondary:accent,.92,secondary,1,.28);
+      polygonPath(core,[[0,-11],[10,0],[0,13],[-10,0]],accent,1,secondary,1.5,.5);
+      core.moveTo(-42,18).lineTo(-18,-5).lineTo(-34,-24).stroke({color:secondary,width:1.5,alpha:.22});
+    }else if(id==="SUMMER_STORM"){
+      polygonPath(core,[[-9,-36],[13,-36],[1,-8],[19,-8],[-14,38],[-4,8],[-20,8]],accent,.98,secondary,2,.42);
+      core.moveTo(-31,-24).lineTo(-8,-24).stroke({color:secondary,width:3,alpha:.18});
+      core.moveTo(10,24).lineTo(31,24).stroke({color:secondary,width:3,alpha:.18});
+    }else if(id==="AUTUMN_DECAY"){
+      polygonPath(core,[[0,-36],[18,-20],[29,-3],[18,13],[4,35],[-6,20],[-27,12],[-19,-8],[-30,-22],[-9,-19]],accent,.94,secondary,1.5,.32);
+      core.moveTo(-16,18).lineTo(16,-22).stroke({color:secondary,width:2,alpha:.5});
+      core.moveTo(-5,5).lineTo(-19,-1).moveTo(5,-8).lineTo(20,-4).stroke({color:secondary,width:1,alpha:.34});
+    }else if(id==="WINTER_FROST"){
+      polygonPath(core,[[0,-38],[15,-18],[34,-9],[19,8],[25,33],[0,21],[-25,33],[-19,8],[-34,-9],[-15,-18]],secondary,.9,accent,2,.55);
+      core.moveTo(0,-30).lineTo(0,23).moveTo(-26,-7).lineTo(24,11).moveTo(24,-7).lineTo(-22,13).stroke({color:accent,width:1.4,alpha:.52});
+    }else if(id==="VOID_CHAMBER"){
+      polygonPath(core,[[-28,-32],[3,-18],[28,-32],[14,0],[28,31],[2,18],[-28,31],[-13,0]],accent,.38,secondary,1.5,.5);
+      polygonPath(core,[[-7,-30],[6,-16],[3,15],[-8,31],[-3,8]],0x000000,.94,secondary,1,.38);
+      core.moveTo(-37,-6).lineTo(-18,0).lineTo(-37,8).stroke({color:secondary,width:2,alpha:.28});
+      core.moveTo(37,-6).lineTo(18,0).lineTo(37,8).stroke({color:accent,width:2,alpha:.28});
+    }else{
+      polygonPath(core,[[-30,-28],[7,-28],[7,-10],[29,-10],[29,19],[9,19],[9,33],[-23,33],[-23,12],[-34,12]],accent,.95,secondary,1.5,.42);
+      polygonPath(core,[[-13,-13],[18,-13],[18,5],[-13,5]],secondary,.52,null,0,0);
+      core.moveTo(-38,-18).lineTo(-24,-18).moveTo(24,27).lineTo(38,27).stroke({color:secondary,width:3,alpha:.32});
+    }
+  }
+
   async function boot(){
     const app=new PIXI.Application();
     await app.init({
@@ -55,9 +100,8 @@
 
   function createTarget(){
     const s=screen(),c=new PIXI.Container(),core=new PIXI.Graphics();
-    core.circle(0,0,31).fill({color:0xff416c,alpha:.96});
-    core.circle(0,0,42).stroke({color:0xffffff,width:2,alpha:.16});
-    const label=new PIXI.Text({text:"TOUCH",style:{fill:0xffffff,fontFamily:"sans-serif",fontSize:15,fontWeight:"700",letterSpacing:2}});
+    drawTargetShape(core,"NEON_RIFT",0xe83cf6,0x34f0c3);
+    const label=new PIXI.Text({text:"TOUCH",style:{fill:0xffffff,fontFamily:"sans-serif",fontSize:14,fontWeight:"700",letterSpacing:2}});
     label.anchor.set(.5);label.y=58;c.addChild(core,label);c.x=s.width*.5;c.y=s.height*.52;
     state.world.addChild(c);state.target=c;state.targetCore=core;state.targetLabel=label;
   }
@@ -67,10 +111,7 @@
     const world=plan&&GameWorldCatalog.WORLDS[plan.world];
     const accent=world&&world.accent!=null?world.accent:0xff416c;
     const secondary=world&&world.secondary!=null?world.secondary:0xffffff;
-    state.targetCore.clear();
-    state.targetCore.circle(0,0,31).fill({color:accent,alpha:.96});
-    state.targetCore.circle(-8,-9,7).fill({color:secondary,alpha:.22});
-    state.targetCore.circle(0,0,42).stroke({color:secondary,width:2,alpha:.34});
+    drawTargetShape(state.targetCore,world&&world.id,accent,secondary);
     if(state.targetLabel&&world&&world.accent!=null)state.targetLabel.style.fill=0xffffff;
   }
 
@@ -297,9 +338,17 @@
 
   function spawnDecoys(count){
     const s=screen(),safe=safeBounds(),n=Math.min(30,Math.max(0,count|0));
+    const plan=state.runtime&&state.runtime.currentPlan,world=plan&&GameWorldCatalog.WORLDS[plan.world],id=world&&world.id||"NEON_RIFT";
+    const accent=world&&world.accent!=null?world.accent:0xffffff,secondary=world&&world.secondary!=null?world.secondary:0xffffff;
     for(let i=0;i<n;i++){
       const g=state.pools.decoys.acquire(state.world);if(!g)break;
-      g.circle(0,0,14+Math.random()*10).fill({color:0xffffff,alpha:.15+Math.random()*.25});
+      const sz=12+Math.random()*10;
+      if(id==="SUMMER_STORM")polygonPath(g,[[-3,-sz],[5,-sz*.2],[-1,1],[7,1],[-6,sz],[-2,4],[-8,4]],accent,.28,secondary,1,.18);
+      else if(id==="AUTUMN_DECAY")polygonPath(g,[[0,-sz],[sz*.7,-sz*.25],[sz*.45,sz*.55],[0,sz],[-sz*.7,sz*.25],[-sz*.4,-sz*.6]],accent,.22,secondary,1,.16);
+      else if(id==="WINTER_FROST")polygonPath(g,[[0,-sz],[sz*.55,-sz*.25],[sz*.8,sz*.55],[0,sz*.72],[-sz*.8,sz*.55],[-sz*.55,-sz*.25]],secondary,.22,accent,1,.2);
+      else if(id==="VOID_CHAMBER")polygonPath(g,[[-sz,0],[0,-sz*.5],[sz,0],[0,sz*.5]],0x000000,.34,accent,1,.24);
+      else if(id==="SPRING_BLOOM")polygonPath(g,[[0,-sz],[sz*.6,0],[0,sz],[-sz*.6,0]],i%2?secondary:accent,.22,null,0,0);
+      else polygonPath(g,[[-sz,-sz*.6],[sz*.35,-sz*.6],[sz*.35,0],[sz,0],[sz,sz*.55],[-sz*.2,sz*.55],[-sz*.2,sz],[-sz,sz]],accent,.22,secondary,1,.18);
       g.x=safe.left+Math.random()*(safe.right-safe.left);g.y=safe.top+Math.random()*(safe.bottom-safe.top);
       state.decoys.push(g);
     }
@@ -320,23 +369,39 @@
     const s=screen(),plan=state.runtime&&state.runtime.currentPlan,world=plan&&GameWorldCatalog.WORLDS[plan.world];
     const color=world&&world.bg!=null?world.bg:0x05070d,g=state.bg;g.clear().rect(0,0,s.width,s.height).fill({color,alpha:1});
     if(!world)return;
-    // Static, zero-allocation world identity. These shapes are redrawn only on resize/plan change.
+    // Static composition only. Large circles are intentionally avoided; each world owns a silhouette language.
     const a=world.accent,secondary=world.secondary,id=world.id;
     if(id==="SPRING_BLOOM"){
-      g.circle(s.width*.18,s.height*.22,Math.max(s.width,s.height)*.24).fill({color:a,alpha:.035});
-      g.circle(s.width*.78,s.height*.72,Math.max(s.width,s.height)*.2).fill({color:secondary,alpha:.035});
+      for(let i=0;i<5;i++){
+        const x=s.width*(.08+i*.21),y=s.height*(.15+(i%2)*.52),h=s.height*(.16+(i%3)*.04);
+        g.moveTo(x,y+h).bezierCurveTo(x-28,y+h*.62,x+24,y+h*.34,x,y).stroke({color:i%2?a:secondary,width:1.3,alpha:.05});
+        polygonPath(g,[[x,y+h*.45],[x+14,y+h*.35],[x+7,y+h*.57]],i%2?secondary:a,.035,null,0,0);
+      }
     }else if(id==="SUMMER_STORM"){
-      for(let i=0;i<4;i++)g.rect(-s.width*.1,s.height*(.12+i*.23),s.width*1.2,24+i*8).fill({color:i%2?a:secondary,alpha:.025+i*.008});
+      for(let i=0;i<5;i++){
+        const y=s.height*(.10+i*.19),offset=(i%2?1:-1)*s.width*.09;
+        polygonPath(g,[[-s.width*.08,y],[s.width*.34+offset,y-18],[s.width*.72-offset,y+8],[s.width*1.08,y-10],[s.width*1.08,y+28],[-s.width*.08,y+24]],i%2?a:secondary,.018+i*.006,null,0,0);
+      }
     }else if(id==="AUTUMN_DECAY"){
-      g.circle(s.width*.15,s.height*.78,s.width*.34).fill({color:a,alpha:.04});
-      g.circle(s.width*.9,s.height*.18,s.width*.28).fill({color:secondary,alpha:.028});
+      for(let i=0;i<4;i++){
+        const fromLeft=i%2===0,x=fromLeft?0:s.width,y=s.height*(.16+i*.20),dx=(fromLeft?1:-1)*s.width*(.28+i*.03);
+        g.moveTo(x,y).lineTo(x+dx,y-18).lineTo(x+dx*.7,y-52).moveTo(x+dx*.55,y-10).lineTo(x+dx*.9,y+28).stroke({color:i%2?a:secondary,width:1.2,alpha:.07});
+      }
     }else if(id==="WINTER_FROST"){
-      for(let i=0;i<5;i++)g.circle(s.width*(.14+i*.2),s.height*(.18+(i%2)*.5),26+i*8).stroke({color:i%2?a:secondary,width:1,alpha:.08});
+      for(let i=0;i<6;i++){
+        const x=s.width*(.08+i*.18),y=s.height*(.16+(i%2)*.58),w=18+i*3,h=34+i*5;
+        polygonPath(g,[[x,y-h],[x+w,y],[x,y+h],[x-w,y]],null,0,i%2?a:secondary,1,.07);
+      }
     }else if(id==="VOID_CHAMBER"){
-      g.circle(s.width*.5,s.height*.5,Math.min(s.width,s.height)*.34).stroke({color:a,width:2,alpha:.05});
-      g.circle(s.width*.5,s.height*.5,Math.min(s.width,s.height)*.18).fill({color:secondary,alpha:.025});
+      const cx=s.width*.5,cy=s.height*.5,w=s.width*.34,h=s.height*.20;
+      polygonPath(g,[[cx-w,cy],[cx-w*.3,cy-h],[cx+w*.55,cy-h*.5],[cx+w,cy],[cx+w*.2,cy+h],[cx-w*.55,cy+h*.45]],null,0,a,2,.055);
+      polygonPath(g,[[cx-w*.45,cy],[cx,cy-h*.55],[cx+w*.45,cy],[cx,cy+h*.55]],0x000000,.10,secondary,1,.035);
     }else{
-      for(let i=0;i<5;i++)g.rect(s.width*(.08+i*.19),0,1+(i%2),s.height).fill({color:i%2?a:secondary,alpha:.025});
+      for(let i=0;i<7;i++){
+        const x=s.width*(.05+i*.15),w=5+(i%3)*7;
+        g.rect(x,0,w,s.height).fill({color:i%2?a:secondary,alpha:.018+(i%3)*.006});
+        if(i%2===0)g.rect(x-18,s.height*(.18+i*.09),62,3+i%3).fill({color:secondary,alpha:.035});
+      }
     }
   }
 
