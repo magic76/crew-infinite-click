@@ -71,9 +71,9 @@
   async function loadTexture(key,path){
     STATUS.set(key,{state:"loading",path});
     try{
-      // Pixi v8's asset parser keeps SVG texture sources renderable on Android
-      // WebView/WebGL.  Keep the v21 manual Image path for raster assets, but
-      // avoid binding SVG ImageElements directly (which can become black quads).
+      // Keep SVG sources renderable on Android WebView/WebGL. Pixi v8's
+      // asset parser handles the SVG data URL correctly, while binding an
+      // SVG ImageElement directly can produce opaque black quads.
       const isSvg=/\.svg$/i.test(path);
       const url=resolveUrl(path);
       const texture=isSvg&&global.PIXI&&global.PIXI.Assets&&global.PIXI.Assets.load

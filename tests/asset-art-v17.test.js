@@ -5,10 +5,10 @@ const objects=fs.readFileSync('app/src/main/assets/game/toy-object-runtime.js','
 const pets=fs.readFileSync('app/src/main/assets/game/sprite-pet-runtime.js','utf8');
 const gradle=fs.readFileSync('app/build.gradle','utf8');
 assert(art.includes('roundedRect(ctx')&&art.includes('makeSceneTexture'),'v17 should build a cleaner stage texture');
-assert(game.includes('ASSET_ART_V17')||game.includes('WORLD_MAP_VISIBILITY_V21')||game.includes('WORLD_RULES_CAST_V20'),'v17+ renderer lineage missing');
+assert(game.includes('ASSET_ART_V17')||game.includes('WORLD_MAP_VISIBILITY_V21')||game.includes('OBJECT_POLISH_WORLD_V22')||game.includes('WORLD_RULES_CAST_V20'),'v17+ renderer lineage missing');
 assert(game.includes('RipplePool(18)'),'ripple pool should be reduced to avoid giant overlay clutter');
 assert(!game.includes('state.world.rotation=clamp(state.cameraRot,-.016,.016)'),'camera tilt should be softened');
 assert(objects.includes('Premium arcade puck')&&objects.includes('Designer capsule gift')&&objects.includes('Glassy resin bubble'),'v17 object art comments missing');
 assert(pets.includes('const airborne=clamp(Math.abs(this.vy)/700'),'pet shadow grounding should react to motion');
-assert(/versionCode\s+(395|396|397|398|399|400)/.test(gradle),'v17+ gradle version missing');
+assert(/versionCode\s+(395|396|397|398|399|400|401|401|401|401)/.test(gradle),'v17+ gradle version missing');
 console.log('asset-art-v17.test.js PASS');

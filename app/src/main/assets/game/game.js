@@ -3,8 +3,8 @@
 
   const A=window.AndroidGame;
   const DEBUG=!!window.__INFINITE_CLICK_DEBUG__;
-  const VERSION="OBJECT_POLISH_WORLD_V22";
-  const PREVIOUS_WORLD_RENDERER="WORLD_RULES_CAST_V20";
+  const VERSION="TAP_VARIETY_V23";
+  const PREVIOUS_WORLD_RENDERER="OBJECT_POLISH_WORLD_V22";
   const LEGACY_RENDERER_MARKER="PRODUCTION_ART_WORLD_V19";
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const now=()=>performance.now();
@@ -47,6 +47,17 @@
     PEACH:{cooldown:2600,power:.76},BUNNY:{cooldown:2100,power:.72},FLAME:{cooldown:1900,power:.88},CLOUD:{cooldown:2500,power:.74},STAR:{cooldown:2300,power:.82},
     JELLY:{cooldown:2100,power:.78},RADISH:{cooldown:2600,power:.72},BUBBLE:{cooldown:2200,power:.70},PLUM:{cooldown:2800,power:.92},CANDY:{cooldown:2400,power:.80}
   };
+  const TAP_VARIANT_SETS={
+    HIT:["NOVA","SPIRAL","PETALS","COMET","CROWN","PRISM"],
+    NEAR:["SWEEP","SPARKLE","ORBIT","BUBBLE"],
+    AIR:["POOF","TWINKLE","PINWHEEL","DRIFT"]
+  };
+  const WORLD_MOTIFS={
+    CANDY_TOY_ROOM:"CANDY",
+    CRYSTAL_SKY_GARDEN:"CRYSTAL",
+    UNDERWATER_BUBBLE_PALACE:"BUBBLE",
+    STARLIGHT_CARNIVAL:"STAR"
+  };
   const state={
     app:null,stageRoot:null,world:null,bgWorldCurrent:null,bgWorldNext:null,bgBackdrop:null,bgPlayfield:null,bgForeground:null,bgSprite:null,bgTexture:null,bg:null,toys:null,ambientLayer:null,objectLayer:null,objectRuntime:null,petLayer:null,fxLayer:null,flash:null,audio:null,pets:[],
     pools:null,particles:[],ripples:[],assetFx:[],safe:{left:0,top:0,right:0,bottom:0},
@@ -56,7 +67,7 @@
     cameraX:0,cameraY:0,cameraVx:0,cameraVy:0,cameraRot:0,cameraVr:0,flashAlpha:0,flashColor:0xffffff,
     worldIndex:0,worldCharge:0,nextWorldCharge:.96,lastWorldShiftAt:0,worldShiftCount:0,worldPulse:0,worldTransition:null,
     specialCooldowns:new Map(),lastAmbientAt:0,lastWorldRuleAt:0,lastWorldKickAt:0,ambientCounter:0,
-    frame:{fps:60,accMs:0,frames:0,lastLog:0}
+    lastTapPoint:null,lastTapVariants:{HIT:null,NEAR:null,AIR:null},frame:{fps:60,accMs:0,frames:0,lastLog:0}
   };
   const screen=()=>state.app.renderer.screen;
   const activePets=()=>state.pets.filter(p=>p.isActive&&p.isActive());
@@ -263,7 +274,7 @@
     if(primary&&primary.reaction==="HIT"){
       state.directHits++;state.hitCombo=Math.min(9,state.hitCombo+1);state.lastDirectHitAt=t;if(state.objectRuntime)state.objectRuntime.unlockForHits(state.directHits);
       state.toyEnergy+=.29+.09*Math.min(3,state.hitCombo)+Math.min(.12,state.streak*.006);
-      softBloom(primary.x,primary.y,FX_PALETTES[primary.type][0],1.0+.08*state.hitCombo);hitFx(primary,x,y);comboHalo(primary);spreadPanic(primary,.76);cameraKick(primary.x-x,primary.y-y,.72+state.hitCombo*.07);screenFlash(FX_PALETTES[primary.type][0],.10+.025*state.hitCombo);
+      const hitVariant=selectTapVariant("HIT",primary.type,impact);softBloom(primary.x,primary.y,FX_PALETTES[primary.type][0],1.0+.08*state.hitCombo);hitFx(primary,x,y,hitVariant);comboHalo(primary);spreadPanic(primary,.76);cameraKick(primary.x-x,primary.y-y,.72+state.hitCombo*.07);screenFlash(FX_PALETTES[primary.type][0],.10+.025*state.hitCombo);
       if(state.hitCombo>=3&&state.hitCombo%3===0&&t-state.lastComboBlastAt>260){state.lastComboBlastAt=t;comboBlast(primary);}
       if(state.hitCombo>=5&&activePets().length>=2&&t-state.lastFrenzyAt>5200)startPinballFrenzy(primary,"HIT_CHAIN");
       if(window.GameHaptics)window.GameHaptics.perform("IMPACT",clamp(.52+state.hitCombo*.055,.52,.88));
@@ -272,18 +283,19 @@
       triggerCharacterSpecial(primary);
     }else if(primary&&impact>=.55){
       state.nearMisses++;state.lastNearAt=t;state.toyEnergy+=.07+impact*.07;
-      softBloom(x,y,FX_PALETTES[primary.type][1],.30+impact*.32);nearMissFx(x,y,primary);if(impact>=.76)grazeWhipFx(x,y,primary);spreadPanic(primary,.28+impact*.25);cameraKick(primary.x-x,primary.y-y,.16+impact*.12);
+      const nearVariant=selectTapVariant("NEAR",primary.type,impact);softBloom(x,y,FX_PALETTES[primary.type][1],.30+impact*.32);nearMissFx(x,y,primary,nearVariant);if(impact>=.76)grazeWhipFx(x,y,primary);spreadPanic(primary,.28+impact*.25);cameraKick(primary.x-x,primary.y-y,.16+impact*.12);
       if(impact>=.84)state.toyEnergy+=.035;
       if(window.GameHaptics)window.GameHaptics.perform("SOFT_TAP",.18+impact*.18);
       if(state.audio)state.audio.playClick(primary.type==="SPARK"?"GLITCH":"ORGANIC",.20+impact*.20,Math.max(state.streak,Math.round(impact*16)));
       chargeWorld(.08+impact*.12,{x,y});
     }else{
-      airTapFx(x,y,primary&&impact>.08?primary.type:"NEUTRAL",impact);maybeTauntOnMiss(x,y,primary,impact,t);
+      const airType=primary&&impact>.08?primary.type:"NEUTRAL",airVariant=selectTapVariant("AIR",airType,impact);airTapFx(x,y,airType,impact,airVariant);maybeTauntOnMiss(x,y,primary,impact,t);
       if(window.GameHaptics&&!objectTap?.triggered)window.GameHaptics.perform("SOFT_TAP",.12);
       if(state.audio)state.audio.playClick("ORGANIC",.12,Math.min(8,state.streak));
       chargeWorld(.025+impact*.03,{x,y});
     }
 
+    state.lastTapPoint={x,y,time:t};
     maybeTriggerEnergyEvent(primary||closest,{x,y});
   }
 
@@ -430,24 +442,137 @@
     }
   }
 
-  function airTapFx(x,y,type,impact){
-    const style=impact>.08?type:"NEUTRAL",colors=FX_PALETTES[style]||FX_PALETTES.NEUTRAL,count=3+Math.floor(Math.min(.3,impact)*9);
+  function airTapFx(x,y,type,impact,variant){
+    const style=impact>.08?type:"NEUTRAL",colors=fxColors(style),count=3+Math.floor(Math.min(.3,impact)*9);
     for(let i=0;i<count;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/count+(Math.random()-.5),spd=35+Math.random()*55,c=colors[i%colors.length];drawFxShape(g,style,i,c,.62,.2);g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-18,.20+Math.random()*.08,40,3,.95));}
     const r=state.pools.ripples.acquire(state.fxLayer);if(r){r.circle(0,0,6).stroke({color:colors[0],width:1.4,alpha:.28});r.x=x;r.y=y;state.ripples.push({g:r,life:.16,max:.16,growth:1.0,alpha:.14});}
+    tapVariantFx("AIR",variant||selectTapVariant("AIR",style,impact),x,y,colors,clamp(.24+impact*.28,.18,.46),{type:style});
   }
 
-  function nearMissFx(x,y,primary){
-    const p=clamp(primary.impact,0,1),colors=FX_PALETTES[primary.type]||FX_PALETTES.NEUTRAL;
+  function nearMissFx(x,y,primary,variant){
+    const p=clamp(primary.impact,0,1),colors=fxColors(primary.type);
     const dx=primary.x-x,dy=primary.y-y,g=state.pools.particles.acquire(state.fxLayer);if(g){g.moveTo(0,0).lineTo(dx,dy).stroke({color:colors[1],width:1.4+p*1.8,alpha:.16+p*.28});g.x=x;g.y=y;state.particles.push({g,vx:0,vy:0,life:.14,max:.14,gravity:0,spin:0,scaleDecay:0});}
     spawnAssetFx("graze",x+dx*.24,y+dy*.24,{rotation:Math.atan2(dy,dx),scale:.40+p*.24,scaleTo:.82+p*.20,alpha:.56+p*.20,duration:.18});
     const count=5+Math.floor(p*6);for(let i=0;i<count;i++){const q=state.pools.particles.acquire(state.fxLayer);if(!q)break;const a=Math.atan2(dy,dx)+(Math.random()-.5)*1.4,spd=60+Math.random()*95;drawFxShape(q,primary.type,i,colors[i%colors.length],.66+p*.28,p);q.x=x;q.y=y;state.particles.push(particle(q,Math.cos(a)*spd,Math.sin(a)*spd-12,.22+Math.random()*.07,45,5,.78));}
+    tapVariantFx("NEAR",variant||selectTapVariant("NEAR",primary.type,p),x,y,colors,clamp(.38+p*.38,.28,.78),{type:primary.type,targetX:primary.x,targetY:primary.y});
   }
 
-  function hitFx(primary,tapX,tapY){
-    const combo=state.hitCombo,p=clamp(.78+combo*.055,0,1.25),colors=FX_PALETTES[primary.type]||FX_PALETTES.PEACH,count=Math.min(40,18+combo*3);
+  function hitFx(primary,tapX,tapY,variant){
+    const combo=state.hitCombo,p=clamp(.78+combo*.055,0,1.25),colors=fxColors(primary.type),count=Math.min(40,18+combo*3);
     spawnAssetFx("hit",primary.x,primary.y,{scale:.54+p*.26,scaleTo:1.06+p*.36,alpha:.72,duration:.22});
     for(let i=0;i<count;i++){const g=state.pools.particles.acquire(state.fxLayer);if(!g)break;const a=Math.PI*2*i/count+(Math.random()-.5)*.45,spd=145+Math.random()*210+combo*18,c=colors[i%colors.length];drawFxShape(g,primary.type,i,c,.94+p*.48,p);g.x=primary.x;g.y=primary.y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-56,.28+Math.random()*.18,95,8,.60));}
     rayBurst(primary.x,primary.y,primary.type,colors,combo);shockRing(primary.x,primary.y,colors[0],.82+combo*.05);shockRing(tapX,tapY,colors[1],.42);
+    tapVariantFx("HIT",variant||selectTapVariant("HIT",primary.type,p),primary.x,primary.y,colors,clamp(.72+p*.34,.72,1.32),{type:primary.type,targetX:tapX,targetY:tapY,combo});
+  }
+
+  function fxColors(type){
+    const base=(FX_PALETTES[type]||FX_PALETTES.NEUTRAL).slice(0,4),world=currentWorld(),extras=[];
+    if(world&&Number.isFinite(world.accentA))extras.push(world.accentA);
+    if(world&&Number.isFinite(world.accentB))extras.push(world.accentB);
+    return [...base,...extras];
+  }
+
+  function currentWorldMotif(){return WORLD_MOTIFS[currentWorld().id]||"STAR";}
+
+  function selectTapVariant(channel,type,impact){
+    const list=TAP_VARIANT_SETS[channel]||["NOVA"],worldBias=state.worldIndex*2,comboBias=state.hitCombo,streakBias=state.streak,impactBias=Math.round((Number(impact)||0)*10);
+    let idx=(state.totalTaps+worldBias+comboBias+streakBias+impactBias)%list.length;
+    let variant=list[idx],last=state.lastTapVariants[channel];
+    if(list.length>1&&variant===last)variant=list[(idx+1+((state.worldShiftCount+state.eventCount)%Math.max(1,list.length-1)))%list.length];
+    state.lastTapVariants[channel]=variant;
+    return variant;
+  }
+
+  function tapVariantFx(channel,variant,x,y,colors,intensity,info){
+    const motif=currentWorldMotif(),v=variant||"NOVA",p=clamp(Number(intensity)||.4,.16,1.4),o=info||{};
+    if(v==="NOVA")return variantNovaFx(x,y,colors,p,o);
+    if(v==="SPIRAL")return variantSpiralFx(x,y,colors,p,o,motif);
+    if(v==="PETALS")return variantPetalFx(x,y,colors,p,o,motif);
+    if(v==="COMET")return variantCometFx(x,y,colors,p,o);
+    if(v==="CROWN")return variantCrownFx(x,y,colors,p,o,motif);
+    if(v==="PRISM")return variantPrismFx(x,y,colors,p,o,motif);
+    if(v==="SWEEP")return variantSweepFx(x,y,colors,p,o);
+    if(v==="SPARKLE")return variantSparkleFx(x,y,colors,p,o,motif);
+    if(v==="ORBIT")return variantOrbitFx(x,y,colors,p,o);
+    if(v==="BUBBLE")return variantBubbleFx(x,y,colors,p,o);
+    if(v==="POOF")return variantPoofFx(x,y,colors,p,o,motif);
+    if(v==="TWINKLE")return variantTwinkleFx(x,y,colors,p,o,motif);
+    if(v==="PINWHEEL")return variantPinwheelFx(x,y,colors,p,o,motif);
+    if(v==="DRIFT")return variantDriftFx(x,y,colors,p,o,motif);
+    return variantNovaFx(x,y,colors,p,o);
+  }
+
+  function variantParticle(x,y,vx,vy,life,drawer){
+    const g=state.pools.particles.acquire(state.fxLayer);if(!g)return false;drawer(g);g.x=x;g.y=y;state.particles.push(particle(g,vx,vy,life,0,4,0.78));return true;
+  }
+
+  function drawVariantMotif(g,motif,index,color,size,alpha){
+    const a=alpha||.84,s=Math.max(2.2,Number(size)||5.2);
+    if(motif==="BUBBLE"){g.circle(0,0,s*.48).fill({color,alpha:a*.72}).stroke({color:0xffffff,width:1,alpha:.26});g.circle(-s*.10,-s*.12,s*.12).fill({color:0xffffff,alpha:.22});return;}
+    if(motif==="CANDY"){if(index%2===0){g.roundRect(-s*.52,-s*.24,s*1.04,s*.48,s*.18).fill({color,alpha:a});}else{g.circle(0,0,s*.34).fill({color,alpha:a});g.roundRect(-s*.88,-s*.10,s*.30,s*.14,s*.08).fill({color,alpha:a*.76});g.roundRect(s*.58,-s*.10,s*.30,s*.14,s*.08).fill({color,alpha:a*.76});}return;}
+    if(motif==="CRYSTAL"){g.moveTo(0,-s).lineTo(s*.55,-s*.15).lineTo(s*.20,s).lineTo(-s*.20,s).lineTo(-s*.55,-s*.15).closePath().fill({color,alpha:a});g.moveTo(0,-s*.58).lineTo(s*.16,-s*.10).lineTo(-s*.16,-s*.10).closePath().fill({color:0xffffff,alpha:.20});return;}
+    if(motif==="STAR"){g.moveTo(0,-s).lineTo(s*.28,-s*.28).lineTo(s,0).lineTo(s*.28,s*.28).lineTo(0,s).lineTo(-s*.28,s*.28).lineTo(-s,0).lineTo(-s*.28,-s*.28).closePath().fill({color,alpha:a});return;}
+    g.circle(0,0,s*.42).fill({color,alpha:a});
+  }
+
+  function variantNovaFx(x,y,colors,p,o){
+    const n=6+Math.floor(p*6);for(let i=0;i<n;i++){const a=Math.PI*2*i/n+(Math.random()-.5)*.20,spd=90+Math.random()*140+p*40,c=colors[i%colors.length],s=5+p*4;variantParticle(x,y,Math.cos(a)*spd,Math.sin(a)*spd-20,.18+Math.random()*.06,g=>drawVariantMotif(g,currentWorldMotif(),i,c,s,.82));}
+  }
+
+  function variantSpiralFx(x,y,colors,p,o,motif){
+    const n=8+Math.floor(p*5);for(let i=0;i<n;i++){const angle=i*.58+p*.7,rad=16+i*4,vx=Math.cos(angle)*(55+rad*2.2),vy=Math.sin(angle)*(55+rad*2.2)-20,c=colors[(i+1)%colors.length],s=4+p*3;variantParticle(x+Math.cos(angle)*rad*.25,y+Math.sin(angle)*rad*.25,vx,vy,.22+Math.random()*.08,g=>drawVariantMotif(g,motif,i,c,s,.80));}
+    shockRing(x,y,colors[0],.22+p*.18);
+  }
+
+  function variantPetalFx(x,y,colors,p,o,motif){
+    const n=5+Math.floor(p*4),base=Math.random()*Math.PI*2;for(let i=0;i<n;i++){const a=base+Math.PI*2*i/n,rad=14+p*8,c=colors[i%colors.length],s=6+p*4;variantParticle(x+Math.cos(a)*rad,y+Math.sin(a)*rad-6,Math.cos(a)*(35+p*25),Math.sin(a)*(35+p*25)-10,.24+Math.random()*.08,g=>{g.ellipse(0,0,s*.72,s*.36).fill({color:c,alpha:.80});g.ellipse(-s*.18,-s*.10,s*.22,s*.08).fill({color:0xffffff,alpha:.18});if(i%2===0)drawVariantMotif(g,motif,i,colors[(i+1)%colors.length],s*.55,.52);});}
+  }
+
+  function variantCometFx(x,y,colors,p,o){
+    const tx=Number.isFinite(o.targetX)?o.targetX:x+(Math.random()-.5)*80,ty=Number.isFinite(o.targetY)?o.targetY:y-60,dx=x-tx,dy=y-ty,len=Math.max(1,Math.hypot(dx,dy)),ux=dx/len,uy=dy/len,sideX=-uy,sideY=ux;
+    for(let i=0;i<5;i++){const off=(i-2)*6,c=colors[i%colors.length],life=.20+Math.random()*.05;variantParticle(x+sideX*off,y+sideY*off,ux*(120+p*120)+(Math.random()-.5)*20,uy*(120+p*120)-35,life,g=>{const h=10+p*10,w=3.4+i*.25;g.roundRect(-w*.5,-h,w,h,w*.35).fill({color:c,alpha:.86});g.ellipse(0,-h*.72,w*.45,w*.25).fill({color:0xffffff,alpha:.18});g.rotation=Math.atan2(uy,ux)+Math.PI/2;});}
+  }
+
+  function variantCrownFx(x,y,colors,p,o,motif){
+    const n=3+Math.floor(p*2),baseY=y-(20+p*10);for(let i=0;i<n;i++){const px=x+(i-(n-1)/2)*(16+p*8),py=baseY-Math.abs(i-(n-1)/2)*(3+p*1.5),c=colors[i%colors.length],s=7+p*4;variantParticle(px,py,(Math.random()-.5)*18,-30-Math.random()*18,.24+Math.random()*.05,g=>{g.moveTo(-s*.62,s*.35).lineTo(-s*.26,-s*.30).lineTo(0,s*.05).lineTo(s*.26,-s*.34).lineTo(s*.62,s*.35).closePath().fill({color:c,alpha:.88});g.roundRect(-s*.70,s*.24,s*1.40,s*.22,s*.10).fill({color:colors[(i+1)%colors.length],alpha:.72});if(i===1||n===1)drawVariantMotif(g,motif,i,0xffffff,s*.42,.30);});}
+  }
+
+  function variantPrismFx(x,y,colors,p,o,motif){
+    const n=6+Math.floor(p*5);for(let i=0;i<n;i++){const a=Math.PI*2*i/n,spd=70+Math.random()*120,c=colors[(i+2)%colors.length],s=6+p*3;variantParticle(x,y,Math.cos(a)*spd,Math.sin(a)*spd-18,.20+Math.random()*.08,g=>{drawVariantMotif(g,"CRYSTAL",i,c,s,.86);if(i%3===0)drawVariantMotif(g,motif,i,0xffffff,s*.36,.22);});}
+  }
+
+  function variantSweepFx(x,y,colors,p,o){
+    const tx=Number.isFinite(o.targetX)?o.targetX:x+40,ty=Number.isFinite(o.targetY)?o.targetY:y-25,dx=tx-x,dy=ty-y,len=Math.max(1,Math.hypot(dx,dy)),ux=dx/len,uy=dy/len,sideX=-uy,sideY=ux;
+    for(let i=-1;i<=1;i++){const off=i*(8+p*3),life=.14+Math.random()*.04,c=colors[(i+2)%colors.length];variantParticle(x+sideX*off,y+sideY*off,ux*(60+p*70),uy*(60+p*70),life,g=>{g.moveTo(0,0).lineTo(dx*.55,dy*.55).stroke({color:c,width:1.8+p*1.2,alpha:.22+p*.18});});}
+  }
+
+  function variantSparkleFx(x,y,colors,p,o,motif){
+    const n=7+Math.floor(p*5);for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,r=8+Math.random()*14,c=colors[i%colors.length],s=4+p*3;variantParticle(x+Math.cos(a)*r,y+Math.sin(a)*r,(Math.random()-.5)*70,(Math.random()-.5)*70-10,.18+Math.random()*.06,g=>{drawVariantMotif(g,motif,i,c,s,.88);g.moveTo(0,-s*.65).lineTo(0,s*.65).stroke({color:0xffffff,width:1,alpha:.18});g.moveTo(-s*.65,0).lineTo(s*.65,0).stroke({color:0xffffff,width:1,alpha:.18});});}
+  }
+
+  function variantOrbitFx(x,y,colors,p,o){
+    const n=5+Math.floor(p*3),radius=18+p*14;for(let i=0;i<n;i++){const a=Math.PI*2*i/n,c=colors[i%colors.length],s=4.5+p*2.5;variantParticle(x+Math.cos(a)*radius,y+Math.sin(a)*radius,Math.cos(a+Math.PI/2)*(40+p*22),Math.sin(a+Math.PI/2)*(40+p*22)-8,.24+Math.random()*.06,g=>drawVariantMotif(g,currentWorldMotif(),i,c,s,.80));}
+    shockRing(x,y,colors[1],.18+p*.12);
+  }
+
+  function variantBubbleFx(x,y,colors,p,o){
+    const n=4+Math.floor(p*4);for(let i=0;i<n;i++){const vx=(Math.random()-.5)*50,vy=-(45+Math.random()*65+p*18),r=4+Math.random()*5+p*2,c=colors[i%colors.length];variantParticle(x+(Math.random()-.5)*10,y+(Math.random()-.5)*10,vx,vy,.28+Math.random()*.10,g=>{g.circle(0,0,r).fill({color:c,alpha:.18+.12*p}).stroke({color:c,width:1,alpha:.36});g.circle(-r*.18,-r*.18,r*.16).fill({color:0xffffff,alpha:.18});});}
+  }
+
+  function variantPoofFx(x,y,colors,p,o,motif){
+    const n=5+Math.floor(p*4);for(let i=0;i<n;i++){const a=Math.random()*Math.PI*2,spd=28+Math.random()*40,c=colors[i%colors.length],s=7+p*4;variantParticle(x,y,Math.cos(a)*spd,Math.sin(a)*spd-8,.16+Math.random()*.06,g=>{g.circle(0,0,s*.34).fill({color:c,alpha:.20});g.circle(s*.22,-s*.10,s*.24).fill({color:c,alpha:.24});g.circle(-s*.26,s*.05,s*.28).fill({color:c,alpha:.18});if(i===0)drawVariantMotif(g,motif,i,c,s*.48,.46);});}
+  }
+
+  function variantTwinkleFx(x,y,colors,p,o,motif){
+    const n=4+Math.floor(p*4);for(let i=0;i<n;i++){const a=Math.PI*2*i/n,r=10+Math.random()*18,c=colors[(i+1)%colors.length],s=5+p*4;variantParticle(x+Math.cos(a)*r,y+Math.sin(a)*r,(Math.random()-.5)*35,(Math.random()-.5)*35-10,.16+Math.random()*.08,g=>drawVariantMotif(g,"STAR",i,c,s,.90));}
+  }
+
+  function variantPinwheelFx(x,y,colors,p,o,motif){
+    const n=4;for(let i=0;i<n;i++){const a=Math.PI*2*i/n,c=colors[i%colors.length],s=10+p*6;variantParticle(x,y,Math.cos(a)*(65+p*40),Math.sin(a)*(65+p*40)-12,.22+Math.random()*.04,g=>{g.moveTo(0,0).lineTo(s,0).lineTo(s*.30,s*.28).closePath().fill({color:c,alpha:.84});g.rotation=a;});}
+  }
+
+  function variantDriftFx(x,y,colors,p,o,motif){
+    const n=4+Math.floor(p*3);for(let i=0;i<n;i++){const vx=(Math.random()-.5)*26,vy=-(20+Math.random()*28),c=colors[i%colors.length],s=4+p*3;variantParticle(x+(Math.random()-.5)*14,y+(Math.random()-.5)*8,vx,vy,.28+Math.random()*.08,g=>drawVariantMotif(g,motif,i,c,s,.70));}
   }
 
   function rayBurst(x,y,type,colors,combo){
@@ -637,7 +762,6 @@
   function safeBounds(){const s=screen(),padX=Math.max(56,s.width*.085),padTop=Math.max(66,state.safe.top+44),padBottom=Math.max(84,state.safe.bottom+58);return {left:padX,top:padTop,right:Math.max(padX+1,s.width-padX),bottom:Math.max(padTop+1,s.height-padBottom)};}
 
   // Keep the Pixi scene, object runtime and cast aligned with WebView insets.
-  // This is intentionally called during boot and on every safe-area/resize event.
   function resizeScene(){
     if(!state.app)return;const s=screen();state.app.stage.hitArea=s;
     if(state.world){state.world.pivot.set(s.width/2,s.height/2);state.world.position.set(s.width/2+state.cameraX,s.height/2+state.cameraY);}
@@ -648,7 +772,7 @@
     const dt=Math.min(50,Number(ticker.deltaMS)||16.67),t=now();processPending(t);updateFrenzy(t);applyWorldRules(dt,t);spawnWorldAmbient(t);if(state.objectRuntime)state.objectRuntime.tick(dt,activePets());resolveCollisions();
     if(t-state.lastTapAt>900){state.streak=Math.max(0,state.streak-dt/500);state.toyEnergy=Math.max(0,state.toyEnergy-dt/18000);state.worldCharge=Math.max(0,state.worldCharge-dt/7000);}
     updateWorldTransition(t);updateCamera(dt);updateFx(dt);updateFlash(dt);
-    const f=state.frame;f.accMs+=dt;f.frames++;if(f.accMs>=500){f.fps=Math.round(f.frames*1000/f.accMs);f.accMs=0;f.frames=0;}if(DEBUG&&t-f.lastLog>1200){f.lastLog=t;console.log("[Object Polish v22]",JSON.stringify(diagnostics()));}
+    const f=state.frame;f.accMs+=dt;f.frames++;if(f.accMs>=500){f.fps=Math.round(f.frames*1000/f.accMs);f.accMs=0;f.frames=0;}if(DEBUG&&t-f.lastLog>1200){f.lastLog=t;console.log("[Tap Variety v23]",JSON.stringify(diagnostics()));}
   }
 
   function updateCamera(dt){
