@@ -7,6 +7,6 @@ for(const name of ['selectTapVariant','tapVariantFx','variantNovaFx','variantSpi
 assert(game.includes('hitFx(primary,x,y,hitVariant)'),'hit variant integration missing');
 assert(game.includes('nearMissFx(x,y,primary,nearVariant)'),'near variant integration missing');
 assert(game.includes('airTapFx(x,y,airType,impact,airVariant)'),'air variant integration missing');
-assert(/versionCode\s+(401|402)/.test(gradle),'v23+ versionCode missing');
-assert(/0\.(52\.0-tap-variety-v23|53\.0-action-button-v24)/.test(gradle),'v23+ versionName missing');
+assert(/versionCode\s+(401|402|403)/.test(gradle),'v23+ versionCode missing');
+assert(/0\.(52\.0-tap-variety-v23|53\.0-action-button-v24|54\.0-overdrive-scene-v25)/.test(gradle),'v23+ versionName missing');
 console.log('tap-variety-v23.test.js PASS');

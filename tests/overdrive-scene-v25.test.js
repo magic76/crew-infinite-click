@@ -1,0 +1,13 @@
+const fs=require('fs');const path=require('path');const assert=require('assert');
+const root=path.resolve(__dirname,'..');
+const game=fs.readFileSync(path.join(root,'app/src/main/assets/game/game.js'),'utf8');
+const gradle=fs.readFileSync(path.join(root,'app/build.gradle'),'utf8');
+assert(game.includes('OVERDRIVE_SCENE_V25'),'v25 renderer id missing');
+for(const token of ['beginActionButtonHold','releaseActionButtonHold','triggerButtonOverdrive','updateCinematicSceneFx','startSceneStorm','startSceneRain','startSceneWave','sceneImpactBurst','spawnSceneRainPiece','spawnSceneBubbleWave','renderSceneOverlay'])assert(game.includes('function '+token),'missing '+token);
+assert(game.includes('buttonHoldCharge'),'button hold charge missing');
+assert(game.includes('state.buttonHolding'),'long-press state missing');
+assert(game.includes('pointerup')&&game.includes('releaseActionButtonHold'),'release input hook missing');
+assert(game.includes('sceneQuakeUntil')&&game.includes('sceneStormUntil')&&game.includes('sceneRainUntil')&&game.includes('sceneWaveUntil'),'cinematic scene states missing');
+assert(/versionCode\s+403/.test(gradle),'v25 versionCode missing');
+assert(/0\.54\.0-overdrive-scene-v25/.test(gradle),'v25 versionName missing');
+console.log('overdrive-scene-v25.test.js PASS');
