@@ -1,0 +1,11 @@
+const fs=require('fs'),assert=require('assert');
+const game=fs.readFileSync('app/src/main/assets/game/game.js','utf8');
+const gradle=fs.readFileSync('app/build.gradle','utf8');
+assert(game.includes('VISIBLE_SHOOTING_V26'),'v26 renderer id missing');
+for(const token of ['fireButtonSalvo','spawnVisibleProjectile','updateButtonProjectiles','visibleProjectileImpact','screenMuzzleFx','screenImpactFx'])assert(game.includes('function '+token),'missing '+token);
+assert(game.includes('fireButtonSalvo(origin,power,{rapid:!!fromHold,bonus:action==="SHOOT"})'),'every button press should fire a visible projectile');
+assert(game.includes('state.projectileLayer=new PIXI.Container()'),'projectile layer missing');
+assert(game.includes('dx=tx-x,dy=ty-y'),'comet direction fix missing');
+assert(/versionCode\s+404/.test(gradle),'v26 versionCode missing');
+assert(/0\.55\.0-visible-shooting-v26/.test(gradle),'v26 versionName missing');
+console.log('visible-shooting-v26.test.js PASS');

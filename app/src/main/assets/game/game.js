@@ -3,8 +3,8 @@
 
   const A=window.AndroidGame;
   const DEBUG=!!window.__INFINITE_CLICK_DEBUG__;
-  const VERSION="OVERDRIVE_SCENE_V25";
-  const PREVIOUS_WORLD_RENDERER="ACTION_BUTTON_V24";
+  const VERSION="VISIBLE_SHOOTING_V26";
+  const PREVIOUS_WORLD_RENDERER="OVERDRIVE_SCENE_V25";
   const LEGACY_RENDERER_MARKER="PRODUCTION_ART_WORLD_V19";
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const now=()=>performance.now();
@@ -60,7 +60,7 @@
   };
   const BUTTON_ACTIONS=["SHOOT","QUAKE","THUNDER","CASCADE","PULSE","WORLD"];
   const state={
-    app:null,stageRoot:null,world:null,bgWorldCurrent:null,bgWorldNext:null,bgBackdrop:null,bgPlayfield:null,bgForeground:null,bgSprite:null,bgTexture:null,bg:null,toys:null,ambientLayer:null,objectLayer:null,objectRuntime:null,petLayer:null,fxLayer:null,uiLayer:null,buttonLayer:null,buttonShadow:null,buttonBase:null,buttonFace:null,buttonDeco:null,buttonBounds:null,sceneOverlay:null,flash:null,audio:null,pets:[],
+    app:null,stageRoot:null,world:null,bgWorldCurrent:null,bgWorldNext:null,bgBackdrop:null,bgPlayfield:null,bgForeground:null,bgSprite:null,bgTexture:null,bg:null,toys:null,ambientLayer:null,objectLayer:null,objectRuntime:null,petLayer:null,fxLayer:null,uiLayer:null,projectileLayer:null,buttonLayer:null,buttonShadow:null,buttonBase:null,buttonFace:null,buttonDeco:null,buttonBounds:null,sceneOverlay:null,flash:null,audio:null,pets:[],
     pools:null,particles:[],ripples:[],assetFx:[],safe:{left:0,top:0,right:0,bottom:0},
     lastTapAt:0,lastDirectHitAt:0,lastNearAt:0,lastCollisionAt:0,streak:0,hitCombo:0,totalTaps:0,directHits:0,nearMisses:0,
     collisionChain:0,lastCollisionChainAt:0,lastComboBlastAt:0,lastFrenzyAt:0,frenzyUntil:0,frenzyPower:0,nextFrenzyKickAt:0,lastTauntAt:0,lastTrails:new Map(),
@@ -68,7 +68,7 @@
     cameraX:0,cameraY:0,cameraVx:0,cameraVy:0,cameraRot:0,cameraVr:0,flashAlpha:0,flashColor:0xffffff,
     worldIndex:0,worldCharge:0,nextWorldCharge:.96,lastWorldShiftAt:0,worldShiftCount:0,worldPulse:0,worldTransition:null,
     specialCooldowns:new Map(),lastAmbientAt:0,lastWorldRuleAt:0,lastWorldKickAt:0,ambientCounter:0,
-    lastTapPoint:null,lastTapVariants:{HIT:null,NEAR:null,AIR:null},buttonPulse:0,buttonDown:0,buttonPresses:0,lastButtonActionAt:0,lastButtonAction:null,buttonHolding:false,buttonHoldStartedAt:0,buttonHoldCharge:0,buttonAutoFireAt:0,buttonOverdrives:0,sceneIntensity:0,sceneStormUntil:0,sceneStormNextAt:0,sceneQuakeUntil:0,sceneRainUntil:0,sceneRainNextAt:0,sceneWaveUntil:0,sceneWaveNextAt:0,
+    lastTapPoint:null,lastTapVariants:{HIT:null,NEAR:null,AIR:null},buttonPulse:0,buttonDown:0,buttonPresses:0,lastButtonActionAt:0,lastButtonAction:null,buttonProjectiles:[],buttonShots:0,buttonHolding:false,buttonHoldStartedAt:0,buttonHoldCharge:0,buttonAutoFireAt:0,buttonOverdrives:0,sceneIntensity:0,sceneStormUntil:0,sceneStormNextAt:0,sceneQuakeUntil:0,sceneRainUntil:0,sceneRainNextAt:0,sceneWaveUntil:0,sceneWaveNextAt:0,
     frame:{fps:60,accMs:0,frames:0,lastLog:0}
   };
   const screen=()=>state.app.renderer.screen;
@@ -117,6 +117,7 @@
     state.fxLayer=new PIXI.Container();state.fxLayer.label="fx-layer";state.world.addChild(state.fxLayer);
     state.sceneOverlay=new PIXI.Graphics();state.sceneOverlay.label="scene-overdrive-overlay";state.stageRoot.addChild(state.sceneOverlay);
     state.uiLayer=new PIXI.Container();state.uiLayer.label="ui-layer";state.stageRoot.addChild(state.uiLayer);
+    state.projectileLayer=new PIXI.Container();state.projectileLayer.label="button-projectiles";state.uiLayer.addChild(state.projectileLayer);
     state.buttonLayer=new PIXI.Container();state.buttonLayer.label="action-button";state.uiLayer.addChild(state.buttonLayer);
     state.buttonShadow=new PIXI.Graphics();state.buttonShadow.label="action-button-shadow";state.buttonLayer.addChild(state.buttonShadow);
     state.buttonBase=new PIXI.Graphics();state.buttonBase.label="action-button-base";state.buttonLayer.addChild(state.buttonBase);
@@ -277,7 +278,7 @@
     state.buttonPresses++;state.buttonPulse=1;state.buttonDown=1;state.lastButtonActionAt=t;
     const holdBoost=state.buttonHolding?state.buttonHoldCharge*.34:0,power=clamp(.42+Math.min(.34,state.streak*.03)+Math.min(.26,(state.buttonPresses%10)*.03)+holdBoost,.42,1.46),action=selectActionButtonMode(power);
     state.lastButtonAction=action;state.toyEnergy=Math.min(3,state.toyEnergy+.08+power*.06);
-    buttonPressFx(origin.x,origin.y,power,action);triggerActionButtonMode(action,origin,power);chargeWorld(.11+power*.05,origin);
+    buttonPressFx(origin.x,origin.y,power,action);fireButtonSalvo(origin,power,{rapid:!!fromHold,bonus:action==="SHOOT"});triggerActionButtonMode(action,origin,power);chargeWorld(.11+power*.05,origin);
     if((!fromHold&&state.buttonPresses%6===0)||power>1.18||(fromHold&&state.buttonPresses%10===0))maybeTriggerEnergyEvent({x:origin.x,y:origin.y,type:"NEUTRAL"},origin);
     if(window.GameHaptics&&(!fromHold||state.buttonPresses%3===0))window.GameHaptics.perform(action==="QUAKE"||action==="THUNDER"?"IMPACT":"SOFT_TAP",clamp((fromHold?.18:.28)+power*(fromHold?.22:.34),.18,.84));
     if(state.audio&&(!fromHold||state.buttonPresses%2===0))state.audio.playJackpot(action==="THUNDER"?"GLITCH":"ORGANIC",Math.min(4,1+Math.floor(power*2)));
@@ -337,10 +338,55 @@
   }
 
   function buttonShootMode(origin,power){
-    const pets=pickActionPets(Math.min(4,2+Math.floor(power*2))),colors=fxColors("SPARK");
-    if(!pets.length){variantCometFx(origin.x,origin.y,colors,power,{targetX:screen().width*.5,targetY:screen().height*.32});return;}
-    for(const pet of pets){const pos=pet.position();if(!pos)continue;variantCometFx(origin.x,origin.y,colors,power,{targetX:pos.x,targetY:pos.y});softBloom(pos.x,pos.y,colors[0],.32+power*.12);shockRing(pos.x,pos.y,colors[1],.18+power*.08);pet.nudgeFrom(origin.x,origin.y,.20+power*.18);if(Math.random()<.45)pet.synchronize("HOP",origin);}
-    eventBurst(origin.x,origin.y,pets[0].type||"SPARK","BOUNCE",.44+power*.20);cameraKick(0,-1,.18+power*.18);
+    fireButtonSalvo(origin,Math.min(1.5,power+.18),{rapid:true,bonus:true});
+    sceneImpactBurst(origin,.30+power*.12,currentWorld().accentA);cameraKick(0,-1,.16+power*.14);
+  }
+
+  function worldPointToScreen(pos){
+    if(!pos)return null;try{if(state.world&&state.world.toGlobal)return state.world.toGlobal(new PIXI.Point(pos.x,pos.y));}catch(_){}return {x:pos.x,y:pos.y};
+  }
+
+  function fireButtonSalvo(origin,power,options){
+    const o=options||{},pets=pickActionPets(o.bonus?Math.min(4,2+Math.floor(power*1.4)):(o.rapid?1:Math.min(2,1+Math.floor(power*.9))));
+    if(!pets.length){spawnVisibleProjectile(origin,null,{x:screen().width*.5,y:screen().height*.30},power,0);return;}
+    const count=o.bonus?Math.max(2,pets.length):pets.length;
+    for(let i=0;i<count;i++){const pet=pets[i%pets.length],pos=pet.position&&pet.position(),screenPos=worldPointToScreen(pos);if(screenPos)spawnVisibleProjectile(origin,pet,screenPos,power,i*46);}
+  }
+
+  function spawnVisibleProjectile(origin,pet,targetScreen,power,delay){
+    if(!state.projectileLayer)return;const theme=currentWorld(),root=new PIXI.Container();root.label="visible-button-projectile";root.visible=(delay||0)<=0;
+    const glow=new PIXI.Graphics(),trail=new PIXI.Graphics(),core=new PIXI.Graphics(),radius=8+power*5,tailLen=34+power*26;
+    try{glow.blendMode="add";trail.blendMode="add";core.blendMode="add";}catch(_){}
+    glow.circle(0,0,radius*2.2).fill({color:theme.accentA,alpha:.10});glow.circle(0,0,radius*1.45).fill({color:theme.accentB,alpha:.16});
+    trail.moveTo(-tailLen,0).lineTo(-radius*.2,0).stroke({color:theme.accentA,width:radius*.95,alpha:.20});trail.moveTo(-tailLen*.72,0).lineTo(-radius*.15,0).stroke({color:0xffffff,width:Math.max(2,radius*.30),alpha:.50});
+    core.circle(0,0,radius).fill({color:theme.accentB,alpha:.96}).stroke({color:0xffffff,width:2.2,alpha:.88});core.circle(-radius*.20,-radius*.24,radius*.28).fill({color:0xffffff,alpha:.72});
+    root.addChild(trail,glow,core);root.position.set(origin.x,origin.y-12);state.projectileLayer.addChild(root);
+    state.buttonProjectiles.push({root,pet,startX:origin.x,startY:origin.y-12,targetX:targetScreen.x,targetY:targetScreen.y,elapsed:0,duration:Math.max(.16,.26-power*.045),delay:(delay||0)/100,power,arc:(26+Math.random()*38)*(Math.random()<.5?-1:1)});state.buttonShots++;screenMuzzleFx(origin.x,origin.y-12,power,theme);
+  }
+
+  function updateButtonProjectiles(dt){
+    if(!state.buttonProjectiles.length)return;const step=dt/1000;
+    for(let i=state.buttonProjectiles.length-1;i>=0;i--){const shot=state.buttonProjectiles[i];if(shot.delay>0){shot.delay-=step;if(shot.delay<=0)shot.root.visible=true;else continue;}shot.elapsed+=step;
+      if(shot.pet&&shot.pet.isActive&&shot.pet.isActive()){const pos=shot.pet.position&&shot.pet.position(),sp=worldPointToScreen(pos);if(sp){shot.targetX=sp.x;shot.targetY=sp.y;}}
+      const q=clamp(shot.elapsed/shot.duration,0,1),ease=1-Math.pow(1-q,3),sx=shot.startX,sy=shot.startY,tx=shot.targetX,ty=shot.targetY,x=sx+(tx-sx)*ease,y=sy+(ty-sy)*ease+Math.sin(Math.PI*q)*shot.arc*(1-q*.25),q2=clamp(q+.025,0,1),e2=1-Math.pow(1-q2,3),nx=sx+(tx-sx)*e2,ny=sy+(ty-sy)*e2+Math.sin(Math.PI*q2)*shot.arc*(1-q2*.25);
+      shot.root.position.set(x,y);shot.root.rotation=Math.atan2(ny-y,nx-x);shot.root.scale.set(1+Math.sin(Math.PI*q)*.12);
+      if(q>=1){visibleProjectileImpact(shot,tx,ty);try{shot.root.parent&&shot.root.parent.removeChild(shot.root);shot.root.destroy({children:true});}catch(_){}state.buttonProjectiles.splice(i,1);}
+    }
+  }
+
+  function visibleProjectileImpact(shot,x,y){
+    const theme=currentWorld(),power=shot.power;screenImpactFx(x,y,power,theme);screenFlash(theme.flash,.025+power*.018);cameraKick(0,-1,.10+power*.10);
+    if(shot.pet&&shot.pet.isActive&&shot.pet.isActive()){try{let local={x:shot.startX,y:shot.startY};if(state.world&&state.world.toLocal)local=state.world.toLocal(new PIXI.Point(shot.startX,shot.startY));shot.pet.nudgeFrom(local.x,local.y,.28+power*.20);if(power>.82&&Math.random()<.42)shot.pet.synchronize("HOP",local);}catch(_){}}
+    if(window.GameHaptics&&state.buttonShots%3===0)window.GameHaptics.perform("SOFT_TAP",clamp(.16+power*.18,.16,.46));
+  }
+
+  function screenMuzzleFx(x,y,power,theme){
+    for(let i=0;i<6;i++){const g=state.pools.particles.acquire(state.uiLayer);if(!g)break;const a=-Math.PI*.5+(Math.random()-.5)*1.15,spd=55+Math.random()*105,r=3+Math.random()*4+power*1.4,c=i%2?theme.accentA:theme.accentB;g.moveTo(0,-r).lineTo(r*.52,0).lineTo(0,r).lineTo(-r*.52,0).closePath().fill({color:c,alpha:.86});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd,.16+Math.random()*.05,0,5,.86));}
+  }
+
+  function screenImpactFx(x,y,power,theme){
+    const n=10+Math.floor(power*5);for(let i=0;i<n;i++){const g=state.pools.particles.acquire(state.uiLayer);if(!g)break;const a=Math.PI*2*i/n+(Math.random()-.5)*.24,spd=85+Math.random()*155+power*45,c=i%3===0?0xffffff:(i%2?theme.accentA:theme.accentB),r=3+Math.random()*4+power*1.6;g.circle(0,0,r).fill({color:c,alpha:.88});g.x=x;g.y=y;state.particles.push(particle(g,Math.cos(a)*spd,Math.sin(a)*spd-16,.18+Math.random()*.08,45,5,.72));}
+    const ring=state.pools.ripples.acquire(state.uiLayer);if(ring){ring.circle(0,0,9+power*4).stroke({color:0xffffff,width:2.2+power,alpha:.52});ring.x=x;ring.y=y;state.ripples.push({g:ring,life:.18,max:.18,growth:1.45+power*.32,alpha:.52});}
   }
 
   function buttonQuakeMode(origin,power){
@@ -706,7 +752,7 @@
   }
 
   function variantCometFx(x,y,colors,p,o){
-    const tx=Number.isFinite(o.targetX)?o.targetX:x+(Math.random()-.5)*80,ty=Number.isFinite(o.targetY)?o.targetY:y-60,dx=x-tx,dy=y-ty,len=Math.max(1,Math.hypot(dx,dy)),ux=dx/len,uy=dy/len,sideX=-uy,sideY=ux;
+    const tx=Number.isFinite(o.targetX)?o.targetX:x+(Math.random()-.5)*80,ty=Number.isFinite(o.targetY)?o.targetY:y-60,dx=tx-x,dy=ty-y,len=Math.max(1,Math.hypot(dx,dy)),ux=dx/len,uy=dy/len,sideX=-uy,sideY=ux;
     for(let i=0;i<5;i++){const off=(i-2)*6,c=colors[i%colors.length],life=.20+Math.random()*.05;variantParticle(x+sideX*off,y+sideY*off,ux*(120+p*120)+(Math.random()-.5)*20,uy*(120+p*120)-35,life,g=>{const h=10+p*10,w=3.4+i*.25;g.roundRect(-w*.5,-h,w,h,w*.35).fill({color:c,alpha:.86});g.ellipse(0,-h*.72,w*.45,w*.25).fill({color:0xffffff,alpha:.18});g.rotation=Math.atan2(uy,ux)+Math.PI/2;});}
   }
 
@@ -979,8 +1025,8 @@
   function tick(ticker){
     const dt=Math.min(50,Number(ticker.deltaMS)||16.67),t=now();processPending(t);updateFrenzy(t);applyWorldRules(dt,t);spawnWorldAmbient(t);if(state.objectRuntime)state.objectRuntime.tick(dt,activePets());resolveCollisions();
     if(t-state.lastTapAt>900){state.streak=Math.max(0,state.streak-dt/500);state.toyEnergy=Math.max(0,state.toyEnergy-dt/18000);state.worldCharge=Math.max(0,state.worldCharge-dt/7000);}
-    updateWorldTransition(t);updateCinematicSceneFx(dt,t);updateCamera(dt);updateFx(dt);updateActionButton(dt,t);updateFlash(dt);
-    const f=state.frame;f.accMs+=dt;f.frames++;if(f.accMs>=500){f.fps=Math.round(f.frames*1000/f.accMs);f.accMs=0;f.frames=0;}if(DEBUG&&t-f.lastLog>1200){f.lastLog=t;console.log("[Overdrive Scene v25]",JSON.stringify(diagnostics()));}
+    updateWorldTransition(t);updateCinematicSceneFx(dt,t);updateCamera(dt);updateButtonProjectiles(dt);updateFx(dt);updateActionButton(dt,t);updateFlash(dt);
+    const f=state.frame;f.accMs+=dt;f.frames++;if(f.accMs>=500){f.fps=Math.round(f.frames*1000/f.accMs);f.accMs=0;f.frames=0;}if(DEBUG&&t-f.lastLog>1200){f.lastLog=t;console.log("[Visible Shooting v26]",JSON.stringify(diagnostics()));}
   }
 
   function updateCamera(dt){
@@ -1004,11 +1050,11 @@
 
   function updateFlash(dt){if(!state.flash)return;state.flashAlpha=Math.max(0,state.flashAlpha-dt/650);const s=screen();state.flash.clear();if(state.flashAlpha>.002)state.flash.rect(0,0,s.width,s.height).fill({color:state.flashColor,alpha:state.flashAlpha});}
 
-  function diagnostics(){const art=window.ProductionAssetArt&&window.ProductionAssetArt.status?window.ProductionAssetArt.status():null;return {version:VERSION,fps:state.frame.fps,totalTaps:state.totalTaps,directHits:state.directHits,nearMisses:state.nearMisses,hitCombo:state.hitCombo,collisionChain:state.collisionChain,frenzy:state.frenzyUntil>now(),toyEnergy:Math.round(state.toyEnergy*100)/100,nextEventEnergy:Math.round(state.nextEventEnergy*100)/100,eventCount:state.eventCount,objectEvents:state.objectEvents,objectHits:state.objectHits,world:currentWorld().id,worldCharge:Math.round(state.worldCharge*100)/100,nextWorldCharge:Math.round(state.nextWorldCharge*100)/100,worldShiftCount:state.worldShiftCount,buttonPresses:state.buttonPresses,lastButtonAction:state.lastButtonAction,buttonHolding:state.buttonHolding,buttonHoldCharge:Math.round(state.buttonHoldCharge*100)/100,buttonOverdrives:state.buttonOverdrives,objects:state.objectRuntime?state.objectRuntime.context():[],activePets:activePets().length,pets:state.pets.map(p=>p.context()),particlePool:state.pools&&state.pools.particles.stats(),ripplePool:state.pools&&state.pools.ripples.stats(),assetStatus:art,aiVoice:false,geminiGameplay:false,immersive:true};}
+  function diagnostics(){const art=window.ProductionAssetArt&&window.ProductionAssetArt.status?window.ProductionAssetArt.status():null;return {version:VERSION,fps:state.frame.fps,totalTaps:state.totalTaps,directHits:state.directHits,nearMisses:state.nearMisses,hitCombo:state.hitCombo,collisionChain:state.collisionChain,frenzy:state.frenzyUntil>now(),toyEnergy:Math.round(state.toyEnergy*100)/100,nextEventEnergy:Math.round(state.nextEventEnergy*100)/100,eventCount:state.eventCount,objectEvents:state.objectEvents,objectHits:state.objectHits,world:currentWorld().id,worldCharge:Math.round(state.worldCharge*100)/100,nextWorldCharge:Math.round(state.nextWorldCharge*100)/100,worldShiftCount:state.worldShiftCount,buttonPresses:state.buttonPresses,lastButtonAction:state.lastButtonAction,buttonHolding:state.buttonHolding,buttonHoldCharge:Math.round(state.buttonHoldCharge*100)/100,buttonOverdrives:state.buttonOverdrives,buttonShots:state.buttonShots,activeProjectiles:state.buttonProjectiles.length,objects:state.objectRuntime?state.objectRuntime.context():[],activePets:activePets().length,pets:state.pets.map(p=>p.context()),particlePool:state.pools&&state.pools.particles.stats(),ripplePool:state.pools&&state.pools.ripples.stats(),assetStatus:art,aiVoice:false,geminiGameplay:false,immersive:true};}
 
   function resetGame(){
     for(const p of state.particles)state.pools.particles.release(p.g);state.particles.length=0;for(const r of state.ripples)state.pools.ripples.release(r.g);state.ripples.length=0;for(const f of state.assetFx){try{f.s.parent&&f.s.parent.removeChild(f.s);f.s.destroy();}catch(_){}}state.assetFx.length=0;
-    state.streak=0;state.hitCombo=0;state.totalTaps=0;state.directHits=0;state.nearMisses=0;state.toyEnergy=0;state.objectEvents=0;state.objectHits=0;state.buttonPresses=0;state.buttonPulse=0;state.buttonDown=0;state.lastButtonAction=null;state.buttonHolding=false;state.buttonHoldStartedAt=0;state.buttonHoldCharge=0;state.buttonAutoFireAt=0;state.buttonOverdrives=0;state.sceneIntensity=0;state.sceneStormUntil=0;state.sceneRainUntil=0;state.sceneWaveUntil=0;state.sceneQuakeUntil=0;if(state.objectRuntime)state.objectRuntime.reset();state.nextEventEnergy=.90;state.eventCount=0;state.pending.length=0;state.lastBumps.clear();state.collisionChain=0;state.lastCollisionChainAt=0;state.lastComboBlastAt=0;state.lastFrenzyAt=0;state.frenzyUntil=0;state.frenzyPower=0;state.nextFrenzyKickAt=0;state.lastTauntAt=0;state.lastTrails.clear();
+    state.streak=0;state.hitCombo=0;state.totalTaps=0;state.directHits=0;state.nearMisses=0;state.toyEnergy=0;state.objectEvents=0;state.objectHits=0;state.buttonPresses=0;state.buttonPulse=0;state.buttonDown=0;state.lastButtonAction=null;for(const shot of state.buttonProjectiles){try{shot.root.parent&&shot.root.parent.removeChild(shot.root);shot.root.destroy({children:true});}catch(_){}}state.buttonProjectiles.length=0;state.buttonShots=0;state.buttonHolding=false;state.buttonHoldStartedAt=0;state.buttonHoldCharge=0;state.buttonAutoFireAt=0;state.buttonOverdrives=0;state.sceneIntensity=0;state.sceneStormUntil=0;state.sceneRainUntil=0;state.sceneWaveUntil=0;state.sceneQuakeUntil=0;if(state.objectRuntime)state.objectRuntime.reset();state.nextEventEnergy=.90;state.eventCount=0;state.pending.length=0;state.lastBumps.clear();state.collisionChain=0;state.lastCollisionChainAt=0;state.lastComboBlastAt=0;state.lastFrenzyAt=0;state.frenzyUntil=0;state.frenzyPower=0;state.nextFrenzyKickAt=0;state.lastTauntAt=0;state.lastTrails.clear();
     state.worldCharge=0;state.nextWorldCharge=.96;state.lastWorldShiftAt=0;state.worldShiftCount=0;state.worldPulse=0;state.worldTransition=null;state.specialCooldowns.clear();state.lastAmbientAt=0;state.lastWorldRuleAt=0;state.lastWorldKickAt=0;state.ambientCounter=0;setWorld(0,{immediate:true,fx:false});
     state.pets.forEach((pet,i)=>{const spec=SLOT_SPECS[i];pet.reset(i,state.pets.length);pet.setActive(true,{x:screen().width*(spec.initial?.x||.55),y:screen().height*(spec.initial?.y||.55),panic:i===0?0:.10});});
     const hero=state.pets[0];if(hero)hero.setSizeMultiplier(1.02);

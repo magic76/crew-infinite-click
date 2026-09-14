@@ -8,5 +8,5 @@ assert(view.includes('loadAssetData(String path)'),'native sprite bridge must re
 const onCreate=main.slice(main.indexOf('@Override protected void onCreate'),main.indexOf('private void onLanguageChanged'));
 assert(!onCreate.includes('connectLive('),'v15 must not auto-connect Gemini');
 for(const flag of ['SYSTEM_UI_FLAG_IMMERSIVE_STICKY','SYSTEM_UI_FLAG_FULLSCREEN','SYSTEM_UI_FLAG_HIDE_NAVIGATION'])assert(main.includes(flag),'missing immersive flag '+flag);
-assert(/versionCode\s+(395|396|397|398|399|400|401|402|403)/.test(gradle));assert(/0\.(46\.0-asset-art-v17|47\.0-production-v18|48\.0-world-cast-v19|49\.0-world-rules-v20|50\.0-world-visibility-v21|51\.0-object-polish-v22|52\.0-tap-variety-v23|53\.0-action-button-v24|54\.0-overdrive-scene-v25)/.test(gradle));
+assert(/versionCode\s+(395|396|397|398|399|400|401|402|403|404)/.test(gradle));assert(/0\.(46\.0-asset-art-v17|47\.0-production-v18|48\.0-world-cast-v19|49\.0-world-rules-v20|50\.0-world-visibility-v21|51\.0-object-polish-v22|52\.0-tap-variety-v23|53\.0-action-button-v24|54\.0-overdrive-scene-v25|55\.0-visible-shooting-v26)/.test(gradle));
 console.log('immersive-v17.test.js PASS');
