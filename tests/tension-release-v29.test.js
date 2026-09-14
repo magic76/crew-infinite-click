@@ -1,7 +1,7 @@
 const fs=require('fs'),assert=require('assert');
 const runtime=fs.readFileSync('app/src/main/assets/game/endless-chaos-runtime.js','utf8');
 const gradle=fs.readFileSync('app/build.gradle','utf8');
-assert(runtime.includes('TENSION_RELEASE_V29'),'v29 runtime id missing');
+assert(runtime.includes('TENSION_RELEASE_V29'),'v29 compatibility id missing');
 for(const fn of ['tensionStartFor','releaseTension','registerTap','enterQuietMoment','drawCalmLayer'])assert(runtime.includes('function '+fn),fn+' missing');
 assert(runtime.includes('data-tension')&&runtime.includes('data-tension-bar'),'tension HUD missing');
 assert(runtime.includes('state.tapTimes.length>=7'),'rapid-tap soft landing trigger missing');
@@ -11,6 +11,7 @@ assert(runtime.includes('state.recipe.mega||state.recipe.boss'),'quiet moment mu
 assert(runtime.includes('releaseTension(bp*3.1)')&&runtime.includes('releaseTension(hits*7.5)'),'player actions must reduce tension');
 assert(runtime.includes('e.shotCount*(cp.double?2:1)'),'v28 weapon evolution must remain intact');
 assert(runtime.includes('window.TensionReleaseV29'),'v29 diagnostics API missing');
-assert(/versionCode\s+407/.test(gradle),'v29 versionCode missing');
-assert(/0\.58\.0-tension-release-v29/.test(gradle),'v29 versionName missing');
+const code=Number((gradle.match(/versionCode\s+(\d+)/)||[])[1]);
+assert(code>=407,'versionCode must preserve v29 or later');
+assert(/0\.(58|59)\.0-(tension-release-v29|dual-trigger-v30)/.test(gradle),'v29+ versionName missing');
 console.log('tension-release-v29.test.js PASS');
