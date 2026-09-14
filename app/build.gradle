@@ -24,6 +24,10 @@ android {
         // legacy marker versionName '0.46.0-asset-art-v17'
     }
 
+    buildFeatures {
+        buildConfig true
+    }
+
     buildTypes {
         release {
             minifyEnabled false
