@@ -1,0 +1,15 @@
+const fs=require('fs'),assert=require('assert');
+const runtime=fs.readFileSync('app/src/main/assets/game/endless-chaos-runtime.js','utf8');
+const index=fs.readFileSync('app/src/main/assets/game/index.html','utf8');
+const gradle=fs.readFileSync('app/build.gradle','utf8');
+assert(index.includes('endless-chaos-runtime.js'),'v27 runtime must load from index');
+assert(runtime.includes('ENDLESS_CHAOS_V27'),'v27 runtime id missing');
+for(const token of ['WEAPONS','WORLD_MODS','PET_MODS','OBJECT_MODS','CLIMAXES'])assert(runtime.includes(token),token+' missing');
+for(const fn of ['recipeFor','startStage','updateStage','climax','realityBreak','registerChaos','stageWeapon','fireMulti','fireRicochet','updateHud'])assert(runtime.includes('function '+fn),fn+' missing');
+for(const weapon of ['MULTISHOT','RICOCHET','RAPID','LIGHTNING'])assert(runtime.includes('"'+weapon+'"'),'weapon missing '+weapon);
+assert(runtime.includes('mega=n%5===0'),'5-stage mega cadence missing');
+assert(runtime.includes('CHAOS ×'),'chaos multiplier HUD missing');
+assert(runtime.includes('window.InfiniteClick')&&runtime.includes('diagnostics'),'runtime must consume core diagnostics');
+assert(/versionCode\s+405/.test(gradle),'v27 versionCode missing');
+assert(/0\.56\.0-endless-chaos-v27/.test(gradle),'v27 versionName missing');
+console.log('endless-chaos-v27.test.js PASS');
