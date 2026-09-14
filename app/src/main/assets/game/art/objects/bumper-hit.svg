@@ -1,8 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 220">
- <ellipse cx="110" cy="184" rx="74" ry="20" fill="#000" opacity="0.16"/>
- <circle cx="110" cy="112" r="80" fill="#151621"/>
- <circle cx="110" cy="104" r="71" fill="#473242" stroke="#fff6ef" stroke-opacity="0.16" stroke-width="4"/>
- <circle cx="110" cy="99" r="57" fill="#f0c46f" stroke="#fff5c2" stroke-opacity="0.7" stroke-width="5"/>
- <circle cx="110" cy="90" r="40" fill="#f6a0a1"/>
- <ellipse cx="88" cy="68" rx="22" ry="10" fill="#fff" opacity="0.34"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240">
+<defs>
+ <radialGradient id="core" cx="36%" cy="24%" r="82%"><stop offset="0" stop-color="#ffffff"/><stop offset=".20" stop-color="#fff0a4"/><stop offset=".52" stop-color="#ffb0be"/><stop offset="1" stop-color="#d84f82"/></radialGradient>
+ <linearGradient id="ring" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fffde8"/><stop offset=".28" stop-color="#ffd879"/><stop offset=".66" stop-color="#df8a61"/><stop offset="1" stop-color="#6b405a"/></linearGradient>
+ <filter id="gl" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="8"/></filter>
+</defs>
+<ellipse cx="120" cy="202" rx="76" ry="18" fill="#070612" opacity=".25"/>
+<circle cx="120" cy="132" r="84" fill="#ffcc7e" opacity=".14" filter="url(#gl)"/>
+<ellipse cx="120" cy="170" rx="79" ry="58" fill="#20192f"/>
+<ellipse cx="120" cy="143" rx="68" ry="61" fill="url(#ring)" stroke="#fff5cf" stroke-opacity=".55" stroke-width="4"/>
+<ellipse cx="120" cy="131" rx="55" ry="48" fill="url(#core)" stroke="#fff" stroke-opacity=".65" stroke-width="4"/>
+<path d="M120 91 L132 121 L166 125 L140 146 L148 179 L120 161 L92 179 L100 146 L74 125 L108 121 Z" fill="#fffdf0"/>
+<g fill="#fff7be"><circle cx="53" cy="90" r="7"/><circle cx="191" cy="98" r="5"/><circle cx="177" cy="53" r="4"/><circle cx="73" cy="56" r="4"/></g>
+<g stroke="#fff5bd" stroke-width="5" stroke-linecap="round" opacity=".8"><path d="M40 132 h24"/><path d="M176 132 h24"/><path d="M120 43 v22"/></g>
 </svg>

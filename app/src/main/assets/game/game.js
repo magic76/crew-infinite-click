@@ -3,7 +3,7 @@
 
   const A=window.AndroidGame;
   const DEBUG=!!window.__INFINITE_CLICK_DEBUG__;
-  const VERSION="WORLD_MAP_VISIBILITY_V21";
+  const VERSION="OBJECT_POLISH_WORLD_V22";
   const PREVIOUS_WORLD_RENDERER="WORLD_RULES_CAST_V20";
   const LEGACY_RENDERER_MARKER="PRODUCTION_ART_WORLD_V19";
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -68,6 +68,7 @@
     if(window.ProductionAssetArt&&window.ProductionAssetArt.loadAll)await window.ProductionAssetArt.loadAll();
     document.body.appendChild(app.canvas);buildScene();wireInput();state.audio=new AudioMoodPlayer();
     state.objectRuntime=new ToyObjectRuntime(app,{parent:state.objectLayer,safeBounds,onEvent:handleObjectEvent});
+    state.objectRuntime.setWorldTheme(currentWorld());
 
     for(const spec of SLOT_SPECS){
       const pet=new SpritePetRuntime(app,{
@@ -123,6 +124,7 @@
   function setWorld(index,options){
     const o=options||{},nextIndex=((Number(index)||0)%WORLD_ROTATION.length+WORLD_ROTATION.length)%WORLD_ROTATION.length,next=worldDef(nextIndex);
     state.worldIndex=nextIndex;
+    if(state.objectRuntime&&state.objectRuntime.setWorldTheme)state.objectRuntime.setWorldTheme(next);
     if(!state.bgWorldCurrent)return false;
     const immediate=!!o.immediate||!state.bgWorldCurrent.texture||state.bgWorldCurrent.texture===PIXI.Texture.WHITE||!state.bgWorldCurrent.width;
     if(immediate){
@@ -634,6 +636,8 @@
 
   function safeBounds(){const s=screen(),padX=Math.max(56,s.width*.085),padTop=Math.max(66,state.safe.top+44),padBottom=Math.max(84,state.safe.bottom+58);return {left:padX,top:padTop,right:Math.max(padX+1,s.width-padX),bottom:Math.max(padTop+1,s.height-padBottom)};}
 
+  // Keep the Pixi scene, object runtime and cast aligned with WebView insets.
+  // This is intentionally called during boot and on every safe-area/resize event.
   function resizeScene(){
     if(!state.app)return;const s=screen();state.app.stage.hitArea=s;
     if(state.world){state.world.pivot.set(s.width/2,s.height/2);state.world.position.set(s.width/2+state.cameraX,s.height/2+state.cameraY);}
@@ -644,7 +648,7 @@
     const dt=Math.min(50,Number(ticker.deltaMS)||16.67),t=now();processPending(t);updateFrenzy(t);applyWorldRules(dt,t);spawnWorldAmbient(t);if(state.objectRuntime)state.objectRuntime.tick(dt,activePets());resolveCollisions();
     if(t-state.lastTapAt>900){state.streak=Math.max(0,state.streak-dt/500);state.toyEnergy=Math.max(0,state.toyEnergy-dt/18000);state.worldCharge=Math.max(0,state.worldCharge-dt/7000);}
     updateWorldTransition(t);updateCamera(dt);updateFx(dt);updateFlash(dt);
-    const f=state.frame;f.accMs+=dt;f.frames++;if(f.accMs>=500){f.fps=Math.round(f.frames*1000/f.accMs);f.accMs=0;f.frames=0;}if(DEBUG&&t-f.lastLog>1200){f.lastLog=t;console.log("[World Visibility v21]",JSON.stringify(diagnostics()));}
+    const f=state.frame;f.accMs+=dt;f.frames++;if(f.accMs>=500){f.fps=Math.round(f.frames*1000/f.accMs);f.accMs=0;f.frames=0;}if(DEBUG&&t-f.lastLog>1200){f.lastLog=t;console.log("[Object Polish v22]",JSON.stringify(diagnostics()));}
   }
 
   function updateCamera(dt){

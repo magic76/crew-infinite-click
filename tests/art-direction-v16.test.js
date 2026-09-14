@@ -13,5 +13,5 @@ assert(!game.slice(game.indexOf('function drawFxShape'),game.indexOf('function c
 for(const token of ['Premium arcade puck','Designer capsule gift','Glassy resin bubble','Polished launch pad'])assert(objects.includes(token),'missing premium object art: '+token);
 assert(pets.includes('this.aura=new global.PIXI.Graphics()'),'pet grounding aura missing');
 assert(pets.includes('PET_GLOW'),'pet material glow palette missing');
-assert(/versionCode\s+(395|396|397|398|399)/.test(gradle),'v16+ version missing');
+assert(/versionCode\s+(395|396|397|398|399|400)/.test(gradle),'v16+ version missing');
 console.log('art-direction-v17-compat.test.js PASS');

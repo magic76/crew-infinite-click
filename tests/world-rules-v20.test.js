@@ -11,5 +11,5 @@ assert(pets.includes('warpTo(x,y,options)'),'warp hook missing');
 assert(game.includes('ambientLayer'), 'ambient layer missing');
 assert(game.includes('triggerCharacterSpecial(primary)'), 'direct-hit special integration missing');
 assert(game.includes('applyWorldRules(dt,t);spawnWorldAmbient(t);'), 'tick world integration missing');
-assert(/versionCode\s+(398|399)/.test(gradle)&&(/0.49.0-world-rules-v20/.test(gradle)||/0.50.0-world-visibility-v21/.test(gradle)),'v20+ gradle version missing');
+assert(/versionCode\s+(398|399|400)/.test(gradle)&&(/0.49.0-world-rules-v20/.test(gradle)||/0.50.0-world-visibility-v21/.test(gradle)||/0.51.0-object-polish-v22/.test(gradle)),'v20+ gradle version missing');
 console.log('world-rules-v20.test.js PASS');

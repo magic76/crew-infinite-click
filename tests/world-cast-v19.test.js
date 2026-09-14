@@ -9,5 +9,5 @@ assert((game.match(/atlasIndex:/g)||[]).length===10,'v19 should define 10 atlas 
 assert(game.includes('WORLD_ROTATION')&&game.includes('worldCharge')&&game.includes('setWorld(0,{immediate:true})'),'v19 world rotation system missing');
 assert(art.includes('CANDY_TOY_ROOM')&&art.includes('CRYSTAL_SKY_GARDEN')&&art.includes('UNDERWATER_BUBBLE_PALACE')&&art.includes('STARLIGHT_CARNIVAL'),'v19 world art paths missing');
 assert(pets.includes('SpritePetAtlasGrid')&&pets.includes('ATLAS_DEFAULT={columns:5,rows:2}')&&pets.includes('ATLAS_FRAME_COUNT=8'),'v19 atlas runtime missing');
-assert(/versionCode\s+(397|398|399)/.test(gradle),'v19+ gradle version missing');
+assert(/versionCode\s+(397|398|399|400)/.test(gradle),'v19+ gradle version missing');
 console.log('world-cast-v19.test.js PASS');
