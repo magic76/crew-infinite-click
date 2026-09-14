@@ -10,10 +10,12 @@ android {
         applicationId 'com.magic76.aiclicker'
         minSdk 26
         targetSdk 35
-        versionCode 405
+        versionCode 406
+        // v27 marker versionCode 405
         // v26 marker versionCode 404
         // legacy marker versionCode 395
-        versionName '0.56.0-endless-chaos-v27'
+        versionName '0.57.0-run-evolution-v28'
+        // v27 marker versionName '0.56.0-endless-chaos-v27'
         // v26 marker versionName '0.55.0-visible-shooting-v26'
         // legacy marker versionName '0.46.0-asset-art-v17'
     }
