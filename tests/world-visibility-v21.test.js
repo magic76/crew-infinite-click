@@ -1,0 +1,12 @@
+const fs=require('fs'),assert=require('assert');
+const game=fs.readFileSync('app/src/main/assets/game/game.js','utf8');
+const art=fs.readFileSync('app/src/main/assets/game/production-asset-art.js','utf8');
+const gradle=fs.readFileSync('app/build.gradle','utf8');
+assert(game.includes('WORLD_MAP_VISIBILITY_V21'),'v21 renderer id missing');
+assert((game.match(/start:true/g)||[]).length===10,'all 10 cast members should start active');
+assert(game.includes('bgWorldCurrent.alpha=1'),'world background should be fully visible');
+assert(game.includes('activePets().length'),'active pet diagnostics missing');
+assert(art.includes('new Image()'),'v21 art loader should use manual image loading');
+assert(art.includes('status(){')||art.includes('function status()'),'v21 art diagnostics missing');
+assert(gradle.includes('versionCode 399')&&gradle.includes("versionName '0.50.0-world-visibility-v21'"),'v21 gradle version missing');
+console.log('world-visibility-v21.test.js PASS');

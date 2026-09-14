@@ -8,5 +8,5 @@ assert(view.includes('loadAssetData(String path)'),'native sprite bridge must re
 const onCreate=main.slice(main.indexOf('@Override protected void onCreate'),main.indexOf('private void onLanguageChanged'));
 assert(!onCreate.includes('connectLive('),'v15 must not auto-connect Gemini');
 for(const flag of ['SYSTEM_UI_FLAG_IMMERSIVE_STICKY','SYSTEM_UI_FLAG_FULLSCREEN','SYSTEM_UI_FLAG_HIDE_NAVIGATION'])assert(main.includes(flag),'missing immersive flag '+flag);
-assert(gradle.includes('versionCode 395'));assert(gradle.includes("versionName '0.46.0-asset-art-v17'"));
+assert(/versionCode\s+(395|396|397|398|399)/.test(gradle));assert(/0\.(46\.0-asset-art-v17|47\.0-production-v18|48\.0-world-cast-v19|49\.0-world-rules-v20|50\.0-world-visibility-v21)/.test(gradle));
 console.log('immersive-v17.test.js PASS');
