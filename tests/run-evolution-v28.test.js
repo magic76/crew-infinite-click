@@ -1,0 +1,15 @@
+const fs=require('fs'),assert=require('assert');
+const runtime=fs.readFileSync('app/src/main/assets/game/endless-chaos-runtime.js','utf8');
+const gradle=fs.readFileSync('app/build.gradle','utf8');
+assert(runtime.includes('RUN_EVOLUTION_V28'),'v28 runtime id missing');
+for(const fn of ['evolutionFor','chaosPowerFor','bossEntryFx','bossBreak','drawBoss','missileRain','chainLightning'])assert(runtime.includes('function '+fn),fn+' missing');
+for(const stage of ['n>=3','n>=5','n>=8','n>=12','n>=15'])assert(runtime.includes(stage),'weapon evolution milestone missing '+stage);
+for(const power of ['m>=10','m>=20','m>=30','m>=50','m>=75','m>=100'])assert(runtime.includes(power),'chaos threshold missing '+power);
+assert(runtime.includes('boss=n%10===0'),'10-stage boss cadence missing');
+assert(runtime.includes('BOSS STAGE')&&runtime.includes('BOSS DESTROYED'),'boss lifecycle HUD missing');
+assert(runtime.includes('data-boss-hp'),'boss health bar missing');
+assert(runtime.includes('EVOLUTION_STACK'),'weapon progression must be run-level, not recipe rotation');
+assert(runtime.includes('window.RunEvolutionV28'),'v28 diagnostics API missing');
+assert(/versionCode\s+406/.test(gradle),'v28 versionCode missing');
+assert(/0\.57\.0-run-evolution-v28/.test(gradle),'v28 versionName missing');
+console.log('run-evolution-v28.test.js PASS');
