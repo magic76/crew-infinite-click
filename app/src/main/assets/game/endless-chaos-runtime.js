@@ -90,8 +90,8 @@
 
   function thresholdFor(m){return m>=100?100:m>=75?75:m>=50?50:m>=30?30:m>=20?20:m>=10?10:1;}
   function registerChaos(amount){
-    const previous=state.multiplier;state.chaos=clamp(state.chaos+Math.max(0,Number(amount)||0),0,100);state.lastChaosAt=now();state.multiplier=Math.max(1,Math.round(1+state.chaos*.99));state.peak=Math.max(state.peak,state.multiplier);
-    const before=thresholdFor(previous),after=thresholdFor(state.multiplier);if(after>before){state.lastThreshold=after;const p=chaosPowerFor(state.multiplier);showBanner(`CHAOS ×${after}`,p.label,700);burst(innerWidth*.5,innerHeight*.53,18,"#fff");}
+    state.chaos=clamp(state.chaos+Math.max(0,Number(amount)||0),0,100);state.lastChaosAt=now();state.multiplier=Math.max(1,Math.round(1+state.chaos*.99));state.peak=Math.max(state.peak,state.multiplier);
+    const after=thresholdFor(state.multiplier);if(after>state.lastThreshold){state.lastThreshold=after;const p=chaosPowerFor(state.multiplier);showBanner(`CHAOS ×${after}`,p.label,700);burst(innerWidth*.5,innerHeight*.53,18,"#fff");}
     if(state.multiplier>=100&&!state.realityUsed){state.realityUsed=true;realityBreak(1.12);}
   }
 
@@ -107,7 +107,8 @@
     if(state.phase==="BOOT"){startStage(1);return;}
     if(t-state.lastChaosAt>650){state.chaos=Math.max(0,state.chaos-dt*(state.recipe&&state.recipe.boss?.0022:state.recipe&&state.recipe.mega?.0028:.0048));state.multiplier=Math.max(1,Math.round(1+state.chaos*.99));}
     state.progress=readProgress(d);state.bossHp=state.recipe&&state.recipe.boss?1-state.progress:1;stageModifiers(t,d);
-    if(state.phase==="RUN"&&((state.progress>=1&&t>=state.minEndAt)||t>=state.endAt))climax(t);
+    const progressClear=state.progress>=1&&((state.recipe&&state.recipe.boss)||t>=state.minEndAt);
+    if(state.phase==="RUN"&&(progressClear||t>=state.endAt))climax(t);
     else if(state.phase==="CLIMAX"&&t>=state.climaxUntil){state.phase="CLEAR";state.nextAt=t+700;registerChaos(state.recipe.boss?20:state.recipe.mega?14:7);showBanner(state.recipe.boss?"BOSS DESTROYED":state.recipe.mega?"MEGA CLEAR":"STAGE CLEAR",`CHAOS ×${state.multiplier}`,700);burst(innerWidth*.5,innerHeight*.40,state.recipe.boss?60:state.recipe.mega?42:24,WORLD_COLORS[state.recipe.world]);}
     else if(state.phase==="CLEAR"&&t>=state.nextAt)startStage(state.stage+1);
   }
@@ -129,10 +130,13 @@
   function onUp(){state.holding=false;}
 
   function stageWeapon(x,y,auto){
-    const r=state.recipe,e=state.evolution;if(!r||!e)return;const origin=buttonOrigin(),cp=chaosPowerFor(state.multiplier),count=Math.max(e.shotCount,cp.double?2:1),scale=cp.big?1.65:1;
+    const r=state.recipe,e=state.evolution;if(!r||!e)return;
+    const origin=buttonOrigin(),cp=chaosPowerFor(state.multiplier),count=e.shotCount*(cp.double?2:1),scale=cp.big?1.65:1;
+    const ricochetCount=(e.ricochet?3:0)+(cp.ricochet?2:0)+(r.boss&&e.ricochet?2:0);
+    const lightningCount=(e.lightning?2:0)+(cp.lightning?2:0)+(r.boss&&(e.lightning||cp.lightning)?1:0);
     fireMulti(origin,count,scale,e.spread);
-    if(e.ricochet||cp.ricochet)fireRicochet(origin,r.boss?5:3,scale);
-    if(e.lightning||cp.lightning)chainLightning(r.boss?3:2);
+    if(ricochetCount)fireRicochet(origin,ricochetCount,scale);
+    if(lightningCount)chainLightning(lightningCount);
     if(e.missileRain&&!auto)missileRain(r.boss?6:4,scale);
     if((r.mega||r.boss)&&!auto&&state.multiplier>=50)impactExplosion(r.boss?bossPoint():randomTarget(),WORLD_COLORS[r.world],r.boss?1.3:1);
   }
@@ -182,7 +186,7 @@
   function drawBoss(c){
     if(!state.recipe||!state.recipe.boss||state.phase==="CLEAR")return;const p=bossPoint(),hp=clamp(state.bossHp,0,1),phase=hp>.75?0:hp>.5?1:hp>.25?2:3,col=WORLD_COLORS[state.recipe.world],r=Math.min(innerWidth,innerHeight)*(.105+phase*.006);
     c.save();c.translate(p.x,p.y);c.globalAlpha=state.phase==="CLIMAX"?.35:.92;c.shadowBlur=28;c.shadowColor=col;const g=c.createRadialGradient(-r*.25,-r*.3,r*.12,0,0,r);g.addColorStop(0,"#fff");g.addColorStop(.25,col);g.addColorStop(1,"rgba(20,15,38,.92)");c.fillStyle=g;c.strokeStyle="#fff";c.lineWidth=3;c.beginPath();
-    if(state.recipe.world===1){for(let i=0;i<6;i++){const a=-Math.PI/2+i*Math.PI/3,rr=i%2?r*.78:r;c.lineTo(Math.cos(a)*rr,Math.sin(a)*rr);}c.closePath();}
+    if(state.recipe.world===1){for(let i=0;i<6;i++){const a=-Math.PI/2+i*Math.PI/3,rr=i%2?r*.78:r,x=Math.cos(a)*rr,y=Math.sin(a)*rr;i?c.lineTo(x,y):c.moveTo(x,y);}c.closePath();}
     else {c.arc(0,0,r,0,Math.PI*2);}
     c.fill();c.stroke();
     c.globalAlpha=.8;c.strokeStyle="#fff";c.lineWidth=2;for(let i=0;i<phase+1;i++){c.beginPath();c.moveTo((i-1.5)*r*.14,-r*.15);c.lineTo((i-1.2)*r*.25,r*.10);c.lineTo((i-1.6)*r*.38,r*.40);c.stroke();}
