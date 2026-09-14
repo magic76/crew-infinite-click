@@ -12,5 +12,5 @@ assert(runtime.includes('CHAOS ×'),'chaos multiplier HUD missing');
 assert(runtime.includes('window.InfiniteClick')&&runtime.includes('diagnostics'),'runtime must consume core diagnostics');
 const code=Number((gradle.match(/versionCode\s+(\d+)/)||[])[1]);
 assert(code>=405,'versionCode must preserve v27 or later');
-assert(/0\.(56|57|58)\.0-(endless-chaos-v27|run-evolution-v28|tension-release-v29)/.test(gradle),'v27+ versionName missing');
+assert(/0\.(56|57|58|59)\.0-(endless-chaos-v27|run-evolution-v28|tension-release-v29|dual-trigger-v30)/.test(gradle),'v27+ versionName missing');
 console.log('endless-chaos-v27.test.js PASS');
