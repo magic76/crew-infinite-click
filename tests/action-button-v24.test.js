@@ -1,0 +1,12 @@
+const fs=require('fs');const path=require('path');const assert=require('assert');
+const root=path.resolve(__dirname,'..');
+const game=fs.readFileSync(path.join(root,'app/src/main/assets/game/game.js'),'utf8');
+const gradle=fs.readFileSync(path.join(root,'app/build.gradle'),'utf8');
+assert(game.includes('ACTION_BUTTON_V24'),'v24 renderer id missing');
+assert(game.includes('BUTTON_ACTIONS=['),'button action registry missing');
+for(const token of ['renderActionButton','isActionButtonHit','handleActionButtonPress','selectActionButtonMode','triggerActionButtonMode','buttonPressFx','buttonShootMode','buttonQuakeMode','buttonThunderMode','buttonCascadeMode','buttonPulseMode','buttonWorldMode','spawnLightningStrike'])assert(game.includes('function '+token)||game.includes(token),'missing '+token);
+assert(game.includes('if(isActionButtonHit(x,y)){handleActionButtonPress(x,y,t);'),'button input hook missing');
+assert(game.includes('buttonPresses:state.buttonPresses'),'button diagnostics missing');
+assert(/versionCode\s+402/.test(gradle),'v24 versionCode missing');
+assert(/0\.53\.0-action-button-v24/.test(gradle),'v24 versionName missing');
+console.log('action-button-v24.test.js PASS');

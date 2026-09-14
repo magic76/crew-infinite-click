@@ -3,7 +3,7 @@ const game=fs.readFileSync('app/src/main/assets/game/game.js','utf8');
 const runtime=fs.readFileSync('app/src/main/assets/game/toy-object-runtime.js','utf8');
 const index=fs.readFileSync('app/src/main/assets/game/index.html','utf8');
 assert(index.includes('toy-object-runtime.js'),'object runtime must load before game.js');
-assert(game.includes('ASSET_ART_V17')||game.includes('WORLD_MAP_VISIBILITY_V21')||game.includes('OBJECT_POLISH_WORLD_V22')||game.includes('WORLD_RULES_CAST_V20'),'v15+ renderer lineage missing');
+assert(game.includes('ASSET_ART_V17')||game.includes('WORLD_MAP_VISIBILITY_V21')||game.includes('OBJECT_POLISH_WORLD_V22')||game.includes('TAP_VARIETY_V23')||game.includes('ACTION_BUTTON_V24')||game.includes('WORLD_RULES_CAST_V20'),'v15+ renderer lineage missing');
 for(const fn of ['handleObjectEvent','giftReward','radialObjectPush','springTapAssist','bumperObjectFx','giftObjectFx','balloonObjectFx','springObjectFx','objectUnlockFx'])assert(game.includes('function '+fn),fn+' missing');
 for(const token of ['state.objectRuntime.tick(dt,activePets())','state.objectRuntime.unlockForHits(state.directHits)','state.objectRuntime.handleTap(x,y','objectEvents:0','objectHits:0'])assert(game.includes(token),'missing object integration '+token);
 for(const type of ['BUMPER','GIFT','BALLOON','SPRING'])assert(runtime.includes('type:"'+type+'"'),'missing object type '+type);

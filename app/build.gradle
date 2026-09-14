@@ -10,9 +10,9 @@ android {
         applicationId 'com.magic76.aiclicker'
         minSdk 26
         targetSdk 35
-        versionCode 401
+        versionCode 402
         // legacy marker versionCode 395
-        versionName '0.52.0-tap-variety-v23'
+        versionName '0.53.0-action-button-v24'
         // legacy marker versionName '0.46.0-asset-art-v17'
     }
 
