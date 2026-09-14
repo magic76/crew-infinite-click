@@ -16,5 +16,5 @@ assert(runtime.includes('after>state.lastThreshold'),'CHAOS threshold unlock ban
 assert(runtime.includes('window.RunEvolutionV28'),'v28 diagnostics API missing');
 const code=Number((gradle.match(/versionCode\s+(\d+)/)||[])[1]);
 assert(code>=406,'versionCode must preserve v28 or later');
-assert(/0\.(57|58)\.0-(run-evolution-v28|tension-release-v29)/.test(gradle),'v28+ versionName missing');
+assert(/0\.(57|58|59)\.0-(run-evolution-v28|tension-release-v29|dual-trigger-v30)/.test(gradle),'v28+ versionName missing');
 console.log('run-evolution-v28.test.js PASS');
