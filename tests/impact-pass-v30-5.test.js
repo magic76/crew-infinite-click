@@ -1,0 +1,24 @@
+const fs=require('fs');
+const assert=require('assert');
+const layer=fs.readFileSync('app/src/main/assets/game/tap-rush-v30-4.js','utf8');
+const gradle=fs.readFileSync('app/build.gradle','utf8');
+
+assert(layer.includes('IMPACT_PASS_V30_5'),'v30.5 marker missing');
+assert.doesNotThrow(()=>new Function(layer),'v30.5 controller has invalid JS syntax');
+assert(layer.includes('nextHeroAt'),'Hero Shot cadence missing');
+assert(layer.includes('8+Math.floor(Math.random()*6)'),'Hero Shot 8-13 tap reschedule missing');
+assert(layer.includes('hero_shot'),'Hero Shot semantic event missing');
+assert(layer.includes('hero_impact'),'Hero impact semantic event missing');
+assert(layer.includes('hitStopUntil'),'hit-stop state missing');
+assert(layer.includes('state.quality==="LOW"?28:52'),'Hero hit-stop timing missing');
+assert(layer.includes('focusSlash'),'FOCUS slash impact missing');
+assert(layer.includes('"shock"'),'BURST shockwave impact missing');
+assert(layer.includes('drawTrail'),'projectile trail pass missing');
+assert(layer.includes('drawSurgeField'),'SURGE field missing');
+assert(layer.includes('petCombo'),'Pet combo missing');
+assert(layer.includes('pet_combo'),'Pet combo semantic event missing');
+assert(layer.includes('window.ImpactPassV305'),'v30.5 public API missing');
+assert(layer.includes('window.TapRushV304'),'v30.4 compatibility API missing');
+assert(gradle.includes('versionCode 412'),'v30.5 versionCode missing');
+assert(gradle.includes("versionName '0.62.0-impact-pass-v30-5'"),'v30.5 versionName missing');
+console.log('impact-pass-v30-5.test.js PASS');
