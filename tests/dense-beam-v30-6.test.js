@@ -1,0 +1,25 @@
+const fs=require('fs');
+const assert=require('assert');
+const flood=fs.readFileSync('app/src/main/assets/game/beam-flood-v30-6.js','utf8');
+const index=fs.readFileSync('app/src/main/assets/game/index.html','utf8');
+const gradle=fs.readFileSync('app/build.gradle','utf8');
+
+assert(flood.includes('DENSE_BEAM_FLOOD_V30_6'),'dense beam marker missing');
+assert.doesNotThrow(()=>new Function(flood),'dense beam controller has invalid JS syntax');
+assert(index.includes('beam-flood-v30-6.js'),'dense beam flood not loaded');
+assert(index.indexOf('beam-flood-v30-6.js')<index.indexOf('pixi-loader.js'),'dense beam patch must run before game runtime');
+assert(index.indexOf('beam-flood-v30-6.js')<index.indexOf('pure-beam-v30-6.js'),'dense beam listener must register before pure beam input owner');
+assert(flood.includes('base=[3,6,10,15,22]'),'dense visual escalation missing');
+assert(flood.includes('streakCap()'),'adaptive streak cap missing');
+assert(flood.includes('globalCompositeOperation="lighter"'),'dense light streak renderer missing');
+assert(flood.includes('t-state.lastTapAt<220'),'tap-driven SURGE barrage missing');
+assert(flood.includes('setHype(42)'),'42 percent reset floor override missing');
+assert(flood.includes('s.active=false'),'persistent toy objects should be disabled before runtime construction');
+assert(flood.includes('__rareOnlyPatched'),'rare-only object runtime patch missing');
+assert(flood.includes('this.rng()>.28'),'world object probability gate missing');
+assert(flood.includes('this.rng()<.45'),'ambient rare object probability missing');
+assert(flood.includes('transientUntil=now()+3200+rt.rng()*2200'),'rare object transient lifetime missing');
+assert(flood.includes('window.DenseBeamFloodV306'),'dense beam public API missing');
+assert(gradle.includes('versionCode 414'),'dense v30.6 versionCode missing');
+assert(gradle.includes("versionName '0.63.1-dense-beam-v30-6'"),'dense v30.6 versionName missing');
+console.log('dense-beam-v30-6.test.js PASS');

@@ -12,7 +12,7 @@ assert(index.indexOf('pure-beam-v30-6.js')<index.indexOf('endless-chaos-runtime.
 assert(layer.includes('dual-trigger-v30-hud'),'legacy HUD hide missing');
 assert(layer.includes('dual-trigger-v30-overlay'),'legacy trigger overlay hide missing');
 assert(layer.includes('PATTERNS=["STRAIGHT","TWIN","SWEEP","HEAVY"]'),'beam cycle patterns missing');
-assert(layer.includes('state.hype=28'),'partial intensity reset floor missing');
+assert(layer.includes('state.hype=28'),'base partial reset implementation missing');
 assert(layer.includes('state.cycle=(state.cycle+1)%PATTERNS.length'),'cycle rotation missing');
 assert(layer.includes('state.surgeUntil=t+2600'),'SURGE reset window missing');
 assert(layer.includes('nextOverchargeAt'),'overcharge cadence missing');
@@ -21,6 +21,7 @@ assert(layer.includes('const cadence=360'),'slow hold-fire cadence missing');
 assert(layer.includes('globalCompositeOperation="lighter"'),'light beam renderer missing');
 assert(layer.includes('window.PureBeamV306'),'v30.6 public API missing');
 assert(layer.includes('window.ImpactPassV305'),'v30.5 compatibility API missing');
-assert(gradle.includes('versionCode 413'),'v30.6 versionCode missing');
-assert(gradle.includes("versionName '0.63.0-pure-beam-cycle-v30-6'"),'v30.6 versionName missing');
+assert(gradle.includes('versionCode 414'),'dense v30.6 versionCode missing');
+assert(gradle.includes('// v30.6 pure beam marker versionCode 413'),'pure-beam version marker missing');
+assert(gradle.includes("versionName '0.63.1-dense-beam-v30-6'"),'dense v30.6 versionName missing');
 console.log('pure-beam-v30-6.test.js PASS');
