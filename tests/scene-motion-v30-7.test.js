@@ -1,0 +1,26 @@
+const fs=require('fs');
+const assert=require('assert');
+const layer=fs.readFileSync('app/src/main/assets/game/scene-motion-v30-7.js','utf8');
+const index=fs.readFileSync('app/src/main/assets/game/index.html','utf8');
+const gradle=fs.readFileSync('app/build.gradle','utf8');
+
+assert(layer.includes('SCENE_MOTION_V30_7'),'v30.7 scene marker missing');
+assert.doesNotThrow(()=>new Function(layer),'scene motion controller has invalid JS syntax');
+assert(index.includes('scene-motion-v30-7.js'),'scene motion controller not loaded');
+assert(index.indexOf('scene-motion-v30-7.js')<index.indexOf('beam-flood-v30-6.js'),'scene motion must register before flood input');
+assert(index.indexOf('scene-motion-v30-7.js')<index.indexOf('pure-beam-v30-6.js'),'scene motion must register before pure beam input owner');
+assert(layer.includes('c.style.translate='),'camera translate motion missing');
+assert(layer.includes('c.style.scale='),'camera zoom motion missing');
+assert(layer.includes('c.style.rotate='),'camera rotation motion missing');
+assert(layer.includes('pendingHits'),'delayed hit reaction queue missing');
+assert(layer.includes('hitReaction'),'world recoil reaction missing');
+assert(layer.includes('CHOREOS=["FAN","CROSS","CONVERGE","SWEEP"]'),'beam choreography set missing');
+assert(layer.includes('drawBackgroundMotion'),'background motion layer missing');
+assert(layer.includes('BLACKOUT_BARRAGE')&&layer.includes('CROSS_STORM')&&layer.includes('FOCUS_LOCK'),'rare scene events missing');
+assert(layer.includes('20000+Math.random()*20000'),'20-40 second rare scene schedule missing');
+assert(layer.includes('d.type==="beam_surge"'),'SURGE scene integration missing');
+assert(layer.includes('scene_event'),'scene semantic event missing');
+assert(layer.includes('window.SceneMotionV307'),'v30.7 public API missing');
+assert(gradle.includes('versionCode 415'),'v30.7 versionCode missing');
+assert(gradle.includes("versionName '0.64.0-motion-scene-v30-7'"),'v30.7 versionName missing');
+console.log('scene-motion-v30-7.test.js PASS');
