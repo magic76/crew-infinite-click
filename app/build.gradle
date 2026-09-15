@@ -10,7 +10,8 @@ android {
         applicationId 'com.magic76.aiclicker'
         minSdk 26
         targetSdk 35
-        versionCode 412
+        versionCode 413
+        // v30.5 marker versionCode 412
         // v30.4 marker versionCode 411
         // v30.3 marker versionCode 410
         // v30.2 marker versionCode 409
@@ -20,7 +21,8 @@ android {
         // v27 marker versionCode 405
         // v26 marker versionCode 404
         // legacy marker versionCode 395
-        versionName '0.62.0-impact-pass-v30-5'
+        versionName '0.63.0-pure-beam-cycle-v30-6'
+        // v30.5 marker versionName '0.62.0-impact-pass-v30-5'
         // v30.4 marker versionName '0.61.0-tap-rush-v30-4'
         // v30.3 marker versionName '0.60.1-core-throttle-v30-3'
         // v30.2 marker versionName '0.60.0-excitement-pet-v30-2'
