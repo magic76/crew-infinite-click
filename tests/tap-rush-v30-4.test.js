@@ -1,0 +1,24 @@
+const fs=require('fs');
+const assert=require('assert');
+const layer=fs.readFileSync('app/src/main/assets/game/tap-rush-v30-4.js','utf8');
+const index=fs.readFileSync('app/src/main/assets/game/index.html','utf8');
+const gradle=fs.readFileSync('app/build.gradle','utf8');
+
+assert(layer.includes('TAP_RUSH_V30_4'),'v30.4 marker missing');
+assert.doesNotThrow(()=>new Function(layer),'v30.4 controller has invalid JS syntax');
+assert(index.includes('tap-rush-v30-4.js'),'v30.4 controller not loaded');
+assert(index.indexOf('tap-rush-v30-4.js')<index.indexOf('endless-chaos-runtime.js'),'v30.4 must own input before heavy runtime');
+assert(layer.includes('held:new Map()'),'hold state missing');
+assert(layer.includes('t-h.startedAt<310'),'hold delay missing');
+assert(layer.includes('cadence=state.hype>=75?320:380'),'slow hold-fire cadence missing');
+assert(layer.includes('tier>=4?4:tier>=3?3:tier>=1?2:1'),'tap volley escalation missing');
+assert(layer.includes('virtualPresses'),'virtual diagnostics progress bridge missing');
+assert(layer.includes('api.diagnostics=function()'),'diagnostics bridge missing');
+assert(layer.includes('maybeSurgeVolley'),'SURGE barrage missing');
+assert(layer.includes('heavyAccent'),'heavy accent gating missing');
+assert(layer.includes('pet_assist'),'pet assist integration missing');
+assert(layer.includes('window.TapRushV304'),'v30.4 public API missing');
+assert(layer.includes('window.ExcitementPetV303'),'v30.3 compatibility API missing');
+assert(gradle.includes('versionCode 411'),'v30.4 versionCode missing');
+assert(gradle.includes("versionName '0.61.0-tap-rush-v30-4'"),'v30.4 versionName missing');
+console.log('tap-rush-v30-4.test.js PASS');
