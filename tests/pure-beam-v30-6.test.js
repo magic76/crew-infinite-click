@@ -1,0 +1,26 @@
+const fs=require('fs');
+const assert=require('assert');
+const layer=fs.readFileSync('app/src/main/assets/game/pure-beam-v30-6.js','utf8');
+const index=fs.readFileSync('app/src/main/assets/game/index.html','utf8');
+const gradle=fs.readFileSync('app/build.gradle','utf8');
+
+assert(layer.includes('PURE_BEAM_V30_6'),'v30.6 marker missing');
+assert.doesNotThrow(()=>new Function(layer),'v30.6 controller has invalid JS syntax');
+assert(index.includes('pure-beam-v30-6.js'),'v30.6 controller not loaded');
+assert(!index.includes('tap-rush-v30-4.js'),'legacy impact controller should not be loaded in v30.6');
+assert(index.indexOf('pure-beam-v30-6.js')<index.indexOf('endless-chaos-runtime.js'),'v30.6 must own input before heavy runtime');
+assert(layer.includes('dual-trigger-v30-hud'),'legacy HUD hide missing');
+assert(layer.includes('dual-trigger-v30-overlay'),'legacy trigger overlay hide missing');
+assert(layer.includes('PATTERNS=["STRAIGHT","TWIN","SWEEP","HEAVY"]'),'beam cycle patterns missing');
+assert(layer.includes('state.hype=28'),'partial intensity reset floor missing');
+assert(layer.includes('state.cycle=(state.cycle+1)%PATTERNS.length'),'cycle rotation missing');
+assert(layer.includes('state.surgeUntil=t+2600'),'SURGE reset window missing');
+assert(layer.includes('nextOverchargeAt'),'overcharge cadence missing');
+assert(layer.includes('state.stats.physicalTaps+9+Math.floor(Math.random()*5)'),'9-13 tap overcharge cadence missing');
+assert(layer.includes('const cadence=360'),'slow hold-fire cadence missing');
+assert(layer.includes('globalCompositeOperation="lighter"'),'light beam renderer missing');
+assert(layer.includes('window.PureBeamV306'),'v30.6 public API missing');
+assert(layer.includes('window.ImpactPassV305'),'v30.5 compatibility API missing');
+assert(gradle.includes('versionCode 413'),'v30.6 versionCode missing');
+assert(gradle.includes("versionName '0.63.0-pure-beam-cycle-v30-6'"),'v30.6 versionName missing');
+console.log('pure-beam-v30-6.test.js PASS');

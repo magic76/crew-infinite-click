@@ -6,8 +6,9 @@ const gradle=fs.readFileSync('app/build.gradle','utf8');
 
 assert(layer.includes('TAP_RUSH_V30_4'),'v30.4 marker missing');
 assert.doesNotThrow(()=>new Function(layer),'v30.4 controller has invalid JS syntax');
-assert(index.includes('tap-rush-v30-4.js'),'v30.4 controller not loaded');
-assert(index.indexOf('tap-rush-v30-4.js')<index.indexOf('endless-chaos-runtime.js'),'v30.4 must own input before heavy runtime');
+const activeInput=index.includes('pure-beam-v30-6.js')?'pure-beam-v30-6.js':'tap-rush-v30-4.js';
+assert(index.includes(activeInput),'tap input controller not loaded');
+assert(index.indexOf(activeInput)<index.indexOf('endless-chaos-runtime.js'),'active tap controller must own input before heavy runtime');
 assert(layer.includes('held:new Map()'),'hold state missing');
 assert(layer.includes('t-h.startedAt<310'),'hold delay missing');
 assert(layer.includes('cadence=state.hype>=75?320:380'),'slow hold-fire cadence missing');
