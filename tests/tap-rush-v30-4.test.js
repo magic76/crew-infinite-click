@@ -8,7 +8,7 @@ assert(layer.includes('TAP_RUSH_V30_4'),'v30.4 marker missing');
 assert.doesNotThrow(()=>new Function(layer),'v30.4 controller has invalid JS syntax');
 assert(index.includes('tap-rush-v30-4.js'),'v30.4 controller not loaded');
 assert(index.indexOf('tap-rush-v30-4.js')<index.indexOf('endless-chaos-runtime.js'),'v30.4 must own input before heavy runtime');
-assert(layer.includes('state.held=new Map()'),'hold state missing');
+assert(layer.includes('held:new Map()'),'hold state missing');
 assert(layer.includes('t-h.startedAt<310'),'hold delay missing');
 assert(layer.includes('cadence=state.hype>=75?320:380'),'slow hold-fire cadence missing');
 assert(layer.includes('tier>=4?4:tier>=3?3:tier>=1?2:1'),'tap volley escalation missing');
