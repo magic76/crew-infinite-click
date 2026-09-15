@@ -10,7 +10,8 @@ android {
         applicationId 'com.magic76.aiclicker'
         minSdk 26
         targetSdk 35
-        versionCode 414
+        versionCode 415
+        // dense v30.6 marker versionCode 414
         // v30.6 pure beam marker versionCode 413
         // v30.5 marker versionCode 412
         // v30.4 marker versionCode 411
@@ -22,7 +23,8 @@ android {
         // v27 marker versionCode 405
         // v26 marker versionCode 404
         // legacy marker versionCode 395
-        versionName '0.63.1-dense-beam-v30-6'
+        versionName '0.64.0-motion-scene-v30-7'
+        // dense v30.6 marker versionName '0.63.1-dense-beam-v30-6'
         // v30.6 pure beam marker versionName '0.63.0-pure-beam-cycle-v30-6'
         // v30.5 marker versionName '0.62.0-impact-pass-v30-5'
         // v30.4 marker versionName '0.61.0-tap-rush-v30-4'
